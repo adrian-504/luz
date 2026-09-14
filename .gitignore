@@ -1,0 +1,46 @@
+# --- OS / editors ---
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/*
+!.idea/codeStyles/
+
+# --- Secrets: never commit (see docs/SECURITY.md) ---
+.env
+.env.*
+*.secrets
+*.secret.json
+local-credentials*
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+signing.properties
+
+# --- Gradle / Kotlin / Android ---
+.gradle/
+.kotlin/
+build/
+local.properties
+captures/
+*.apk
+*.aab
+*.hprof
+
+# --- Apple / Xcode / SwiftPM ---
+DerivedData/
+xcuserdata/
+*.xcuserstate
+.build/
+.swiftpm/
+*.xcframework
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# --- Tooling ---
+# Large stress fixtures are generated deterministically, never committed.
+tooling/fixtures/generated/
+__pycache__/
+*.pyc

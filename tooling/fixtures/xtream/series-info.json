@@ -1,0 +1,24 @@
+{
+  "seasons": [
+    {"air_date": "2025-01-01", "episode_count": 2, "id": 501, "name": "Season 1", "season_number": 1, "cover": "https://img.example.com/poster/series-s1.jpg"}
+  ],
+  "info": {
+    "name": "Example Series",
+    "cover": "https://img.example.com/poster/series.jpg",
+    "plot": "A synthetic series used only for parser tests.",
+    "genre": "Drama, Mystery",
+    "releaseDate": "2025-01-01",
+    "rating": "8",
+    "category_id": "20",
+    "backdrop_path": ["https://img.example.com/backdrop/series.jpg"]
+  },
+  "episodes": {
+    "1": [
+      {"id": "30001", "episode_num": 1, "title": "Example Series - S01E01", "container_extension": "mkv", "info": {"duration_secs": 2700, "plot": "Episode one.", "movie_image": "https://img.example.com/still/s01e01.jpg"}, "season": 1},
+      {"id": 30002, "episode_num": "2", "title": "Example Series - S01E02", "container_extension": "mp4", "info": [], "season": "1"}
+    ],
+    "2": [
+      {"id": "30003", "episode_num": 1, "title": "Example Series - S02E01", "container_extension": "mkv", "info": {"duration": "00:44:00"}, "season": 2}
+    ]
+  }
+}

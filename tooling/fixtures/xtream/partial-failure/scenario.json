@@ -1,0 +1,18 @@
+{
+  "description": "Xtream partial endpoint failure: authentication and live content succeed, VOD list returns HTTP 500, series list returns truncated JSON. Paths are relative to this file.",
+  "requests": [
+    {"action": null, "status": 200, "body": "../auth-success.json"},
+    {"action": "get_live_categories", "status": 200, "body": "../live-categories.json"},
+    {"action": "get_live_streams", "status": 200, "body": "../live-streams.json"},
+    {"action": "get_vod_categories", "status": 200, "body": "vod-categories.json"},
+    {"action": "get_vod_streams", "status": 500, "body": "server-error.html"},
+    {"action": "get_series_categories", "status": 200, "body": "series-categories.json"},
+    {"action": "get_series", "status": 200, "body": "truncated-series.json"}
+  ],
+  "expected_units": {
+    "LIVE": "PUBLISHED",
+    "MOVIES": "FAILED_PREVIOUS_SNAPSHOT_RETAINED",
+    "SERIES": "FAILED_PREVIOUS_SNAPSHOT_RETAINED"
+  },
+  "expected_playlist_state": "PARTIAL"
+}

@@ -1,0 +1,26 @@
+{
+  "user_info": {
+    "username": "canary-user",
+    "password": "CANARY-PW-7f3a9c-DO-NOT-LOG",
+    "message": "",
+    "auth": 1,
+    "status": "Active",
+    "exp_date": "1798761600",
+    "is_trial": "0",
+    "active_cons": "0",
+    "created_at": "1767225600",
+    "max_connections": "1",
+    "allowed_output_formats": ["m3u8", "ts"]
+  },
+  "server_info": {
+    "url": "provider.example.com",
+    "port": "80",
+    "https_port": "443",
+    "server_protocol": "http",
+    "rtmp_port": "25462",
+    "timezone": "Europe/London",
+    "timestamp_now": 1789387200,
+    "time_now": "2026-09-14 13:00:00",
+    "process": true
+  }
+}

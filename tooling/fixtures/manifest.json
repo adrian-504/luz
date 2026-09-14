@@ -1,0 +1,306 @@
+{
+  "version": 1,
+  "description": "Registry of synthetic test fixtures. Every file under tooling/fixtures (except README.md, manifest.json and generated/) must be listed. 'checks' are validated now by tooling/scripts/check_fixtures.py; 'expected' documents the behavior parser/pipeline tests must assert from Phase 2 onward.",
+  "policy": {
+    "canary_username": "canary-user",
+    "canary_password": "CANARY-PW-7f3a9c-DO-NOT-LOG",
+    "allowed_host_suffixes": ["example.com", "example.net", "example.org", ".invalid", ".test", ".example", "localhost"],
+    "allowed_ip_prefixes": ["192.0.2.", "198.51.100.", "203.0.113.", "127.0.0.1"]
+  },
+  "fixtures": [
+    {
+      "path": "m3u/small-valid.m3u",
+      "format": "m3u",
+      "expect": "valid",
+      "spec": "§17.2 Small valid M3U",
+      "purpose": "Clean baseline playlist: header EPG URL, live channels, catch-up attributes, one VOD entry.",
+      "checks": {"extinf_count": 5},
+      "expected": {
+        "entries": 5,
+        "classification": {"LIVE": 4, "MOVIE": 1},
+        "header_epg_urls": ["https://epg.example.org/small-valid.xml"],
+        "groups": ["News", "Sports", "Kids", "Movies"],
+        "diagnostics": 0
+      }
+    },
+    {
+      "path": "m3u/unusual-attributes.m3u",
+      "format": "m3u",
+      "expect": "valid",
+      "spec": "§6.1, §17.2 M3U with unusual attributes",
+      "purpose": "UTF-8 BOM, CRLF line endings, unordered/unquoted/single-quoted/uppercase attributes, comma in title, URL-encoded values, multiple groups, EXTGRP, EXTVLCOPT, EXTHTTP, pipe headers, KODIPROP DRM, catch-up templates, float duration, radio, non-ASCII, credential-bearing Xtream-style URLs (canary).",
+      "checks": {"extinf_count": 9, "starts_with_bom": true, "line_ending": "CRLF"},
+      "expected": {
+        "entries": 9,
+        "titles_include": ["Demo Sports 1, Live", "Ünïcødé Kanal — 東京 テスト"],
+        "kids_logo_decoded": "https://img.example.com/logo/kids channel.png",
+        "kids_groups": ["Kids", "Family"],
+        "docs_group_from_extgrp": "Documentary",
+        "docs_extras_preserved": {"x-custom-flag": "yes", "provider-quality": "fhd"},
+        "sports1_headers": {"User-Agent": "ExamplePlayer/1.0", "Referer": "https://www.example.com/"},
+        "kids_headers_from_pipe": {"User-Agent": "ExampleUA/2.0", "Referer": "https://www.example.com/"},
+        "premium_drm_scheme": "WIDEVINE",
+        "premium_cookie_header_is_sensitive": true,
+        "credential_values_must_be_templated": ["canary-user", "CANARY-PW-7f3a9c-DO-NOT-LOG"]
+      }
+    },
+    {
+      "path": "m3u/malformed.m3u",
+      "format": "m3u",
+      "expect": "malformed",
+      "spec": "§6.1, §17.2 Malformed M3U",
+      "purpose": "EXTINF without URL, bare URL, unterminated quote, missing title, bad duration, invalid UTF-8 bytes, javascript: and file: schemes, empty name, duplicates, 70 KiB line, whitespace lines, trailing EXTINF at EOF without newline.",
+      "checks": {"extinf_count": 14},
+      "expected": {
+        "import_must_not_abort": true,
+        "names_must_include": ["Valid Channel One", "Valid Channel Two", "Duplicate Channel"],
+        "duplicate_channel_collapsed_to": 1,
+        "urls_rejected_by_scheme": ["javascript", "file"],
+        "over_long_line_rejected_with_limit_diagnostic": true,
+        "diagnostic_codes_include": ["M3U_EXTINF_WITHOUT_URL", "M3U_UNSUPPORTED_SCHEME", "M3U_INVALID_UTF8", "M3U_LINE_TOO_LONG"]
+      }
+    },
+    {
+      "path": "m3u/hls-disguised.m3u",
+      "format": "hls",
+      "expect": "valid",
+      "spec": "IPTV_PROTOCOLS.md §3.1 rule 12",
+      "purpose": "An HLS media playlist supplied where a channel list is expected; VALIDATE must reject it with a 'single stream' message.",
+      "checks": {},
+      "expected": {"validation_error": "SOURCE_IS_HLS_PLAYLIST"}
+    },
+    {
+      "path": "xtream/auth-success.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "§17.2 Xtream success",
+      "purpose": "player_api.php success; mixed string/number types; response echoes canary credentials (response bodies are secret, never logged).",
+      "checks": {"json_keys": ["user_info", "server_info"]},
+      "expected": {"auth": true, "status": "Active", "max_connections": 1, "expires_at_epoch": 1798761600, "stream_formats": ["m3u8", "ts"], "server_timezone": "Europe/London"}
+    },
+    {
+      "path": "xtream/auth-failure.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "§17.2 Xtream authentication failure",
+      "purpose": "HTTP 200 with auth 0.",
+      "checks": {"json_keys": ["user_info"]},
+      "expected": {"error": "Auth(INVALID_CREDENTIALS)", "retry": false}
+    },
+    {
+      "path": "xtream/auth-expired.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "§6.2",
+      "purpose": "auth '1' as string but status Expired with past exp_date; null https_port; empty output formats.",
+      "checks": {"json_keys": ["user_info", "server_info"]},
+      "expected": {"error": "Auth(ACCOUNT_EXPIRED)", "retry": false}
+    },
+    {
+      "path": "xtream/html-error-body.html",
+      "format": "html",
+      "expect": "valid",
+      "spec": "IPTV_PROTOCOLS.md §4.3",
+      "purpose": "HTML error page returned with HTTP 200 where JSON is expected.",
+      "checks": {},
+      "expected": {"validation_error": "UNEXPECTED_CONTENT_TYPE_HTML"}
+    },
+    {
+      "path": "xtream/live-categories.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "§6.2",
+      "purpose": "category_id as string and number; HTML entity and extra whitespace in name.",
+      "checks": {"json_array_length": 3},
+      "expected": {"groups": 3, "group_3_title": "Kids & Family"}
+    },
+    {
+      "path": "xtream/live-streams.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "§6.2",
+      "purpose": "stream_id number/string, epg_channel_id null/empty, tv_archive variants, category_ids array, invalid added timestamp, empty name.",
+      "checks": {"json_array_length": 4},
+      "expected": {
+        "channels": 3,
+        "rejected": [{"stream_id": 1004, "reason": "EMPTY_NAME"}],
+        "catch_up": {"1001": 3},
+        "tvg_ids": {"1001": "news.example", "1002": null, "1003": null},
+        "stream_1003_groups": ["3", "2"],
+        "diagnostic_codes_include": ["XTREAM_FIELD_TYPE_MISMATCH"]
+      }
+    },
+    {
+      "path": "xtream/vod-streams.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "§6.2",
+      "purpose": "container_extension mkv/mp4/null, rating types, missing fields.",
+      "checks": {"json_array_length": 3},
+      "expected": {"movies": 3, "protocol_hints": {"2001": "MATROSKA", "2002": "PROGRESSIVE_MP4", "2003": "UNKNOWN"}}
+    },
+    {
+      "path": "xtream/series-info.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "§6.2",
+      "purpose": "get_series_info with episodes keyed by season number; info as [] on one episode; id/episode_num type variation.",
+      "checks": {"json_keys": ["seasons", "info", "episodes"]},
+      "expected": {"seasons": 2, "episodes": 3}
+    },
+    {
+      "path": "xtream/series-info-episodes-array.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "§6.2",
+      "purpose": "Panel variant: episodes as array of arrays, info as empty array.",
+      "checks": {"json_keys": ["seasons", "info", "episodes"]},
+      "expected": {"seasons": 1, "episodes": 1}
+    },
+    {
+      "path": "xtream/short-epg.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "§6.2 EPG retrieval",
+      "purpose": "Base64 titles/descriptions, local-time strings versus UTC epoch timestamps (server timezone Europe/London), invalid base64.",
+      "checks": {"json_keys": ["epg_listings"]},
+      "expected": {
+        "programmes": 3,
+        "first_title": "Example Morning News",
+        "first_start_utc": "2026-09-14T05:00:00Z",
+        "timestamps_authoritative_over_local_strings": true,
+        "invalid_base64_title_kept_raw_with_diagnostic": true
+      }
+    },
+    {
+      "path": "xtream/partial-failure/scenario.json",
+      "format": "scenario",
+      "expect": "valid",
+      "spec": "§17.2 Xtream partial endpoint failure",
+      "purpose": "Scripted fake-transport responses for a partial import.",
+      "checks": {},
+      "expected": {"see": "expected_units in file"}
+    },
+    {"path": "xtream/partial-failure/vod-categories.json", "format": "json", "expect": "valid", "spec": "§17.2", "purpose": "Part of partial-failure scenario.", "checks": {"json_array_length": 2}, "expected": {}},
+    {"path": "xtream/partial-failure/series-categories.json", "format": "json", "expect": "valid", "spec": "§17.2", "purpose": "Part of partial-failure scenario.", "checks": {"json_array_length": 1}, "expected": {}},
+    {"path": "xtream/partial-failure/server-error.html", "format": "html", "expect": "valid", "spec": "§17.2", "purpose": "HTTP 500 body in partial-failure scenario.", "checks": {}, "expected": {}},
+    {"path": "xtream/partial-failure/truncated-series.json", "format": "json", "expect": "malformed", "spec": "§17.2", "purpose": "Truncated JSON body in partial-failure scenario.", "checks": {}, "expected": {"unit_status": "FAILED"}},
+    {
+      "path": "xmltv/small-valid.xml",
+      "format": "xmltv",
+      "expect": "valid",
+      "spec": "§17.2 Small XMLTV",
+      "purpose": "DOCTYPE with external DTD reference (must not be fetched), multi-language names/titles, icons, categories, rating, episode-num systems, flags, CDATA, numeric character references, programme for undefined channel.",
+      "checks": {"channel_count": 3, "programme_count": 8},
+      "expected": {
+        "programmes_normalized": 8,
+        "sports1_first_start_utc": "2026-09-14T17:00:00Z",
+        "kids_first_episode": {"season": 2, "episode": 5},
+        "cdata_title": "Example <Special> Report",
+        "numeric_refs_desc": "Numeric character reference: café — done.",
+        "unlinked_channel_programmes_retained": 1
+      }
+    },
+    {
+      "path": "xmltv/small-valid.xml.gz",
+      "format": "gzip",
+      "expect": "valid",
+      "spec": "§6.3, IPTV_PROTOCOLS.md §5.2",
+      "purpose": "gzip-compressed XMLTV detected by magic bytes.",
+      "checks": {"decompresses_to": "xmltv/small-valid.xml"},
+      "expected": {"same_result_as": "xmltv/small-valid.xml"}
+    },
+    {
+      "path": "xmltv/timezone-variants.xml",
+      "format": "xmltv",
+      "expect": "valid",
+      "spec": "§6.3 timezone normalization, EPG.md §2",
+      "purpose": "Offsets, missing offset, missing seconds, missing stop, overlap, zero duration, DST-boundary offsets.",
+      "checks": {"channel_count": 2, "programme_count": 12},
+      "expected": {
+        "tz.example_utc": [
+          ["P01", "2026-09-14T06:00:00Z", "2026-09-14T07:00:00Z"],
+          ["P02", "2026-09-14T07:00:00Z", "2026-09-14T08:00:00Z"],
+          ["P03", "2026-09-14T08:00:00Z", "2026-09-14T09:00:00Z"],
+          ["P04", "2026-09-14T09:00:00Z", "2026-09-14T10:00:00Z"],
+          ["P05", "2026-09-14T10:00:00Z", "2026-09-14T11:00:00Z"],
+          ["P06", "2026-09-14T11:00:00Z", "2026-09-14T12:00:00Z"],
+          ["P07", "2026-09-14T12:00:00Z", "2026-09-14T12:30:00Z"],
+          ["P08", "2026-09-14T12:30:00Z", "2026-09-14T13:30:00Z"],
+          ["P10", "2026-09-14T14:30:00Z", "2026-09-14T15:30:00Z"],
+          ["P11", "2026-10-25T00:00:00Z", "2026-10-25T01:00:00Z"]
+        ],
+        "dropped": ["P09", "P12"],
+        "diagnostic_codes_include": ["XMLTV_NON_POSITIVE_DURATION", "XMLTV_OVERLAP_TRUNCATED", "XMLTV_MISSING_STOP"]
+      }
+    },
+    {
+      "path": "xmltv/malformed.xml",
+      "format": "xmltv",
+      "expect": "malformed",
+      "spec": "§6.3 malformed XML recovery, §17.2 Malformed XMLTV",
+      "purpose": "Invalid timestamp, missing channel attribute, unescaped ampersand, mismatched tag, truncated document.",
+      "checks": {},
+      "expected": {
+        "unit_status": "PARTIAL",
+        "titles_must_include": ["M01 valid before errors", "M05 valid after errors", "M07 valid"],
+        "titles_must_exclude": ["M02 invalid timestamp format, reject", "M03 missing channel attribute, reject"],
+        "truncated_last_programme_dropped": true
+      }
+    },
+    {
+      "path": "xmltv/xxe-external-entity.xml",
+      "format": "xmltv",
+      "expect": "attack",
+      "spec": "§14.1 Safe XML parsing, SECURITY.md §7",
+      "purpose": "External general and parameter entities (file and network). Must never be resolved or fetched.",
+      "checks": {"contains": "<!ENTITY"},
+      "expected": {"no_file_access": true, "no_network_access": true, "entity_text_not_present_in_output": true, "import_completes_or_fails_safely": true}
+    },
+    {
+      "path": "xmltv/entity-expansion.xml",
+      "format": "xmltv",
+      "expect": "attack",
+      "spec": "§14.1, §14.2 Malicious/huge EPG",
+      "purpose": "Billion-laughs internal entity expansion. Must not expand; bounded memory.",
+      "checks": {"contains": "<!ENTITY"},
+      "expected": {"no_expansion": true, "peak_memory_bounded": true}
+    },
+    {
+      "path": "hls/master-multi-audio-subs.m3u8",
+      "format": "hls",
+      "expect": "valid",
+      "spec": "§17.2 Subtitle/audio-track fixture",
+      "purpose": "Master playlist with three renditions, two audio languages (+5.1), WebVTT subtitles incl. forced. Manifest only; media generated in Phase 6.",
+      "checks": {},
+      "expected": {"audio_tracks": 3, "subtitle_tracks": 2, "variants": 3}
+    },
+    {
+      "path": "hls/live-media.m3u8",
+      "format": "hls",
+      "expect": "valid",
+      "spec": "§17.2 HLS live stream fixture",
+      "purpose": "Live media playlist (no ENDLIST). Manifest only.",
+      "checks": {},
+      "expected": {"live": true}
+    },
+    {
+      "path": "hls/vod-media.m3u8",
+      "format": "hls",
+      "expect": "valid",
+      "spec": "§17.2 VOD fixture",
+      "purpose": "fMP4 VOD media playlist with ENDLIST. Manifest only.",
+      "checks": {},
+      "expected": {"live": false, "duration_seconds": 16}
+    },
+    {
+      "path": "playback/state-machine.json",
+      "format": "state-machine",
+      "expect": "valid",
+      "spec": "§7.5, PLAYBACK.md §3, ADR-0019",
+      "purpose": "Authoritative playback transition table and conformance vectors.",
+      "checks": {"total_table": true},
+      "expected": {}
+    }
+  ]
+}

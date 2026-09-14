@@ -1,0 +1,37 @@
+[
+  {
+    "num": 1,
+    "name": "Example Film",
+    "stream_type": "movie",
+    "stream_id": 2001,
+    "stream_icon": "https://img.example.com/poster/film.jpg",
+    "rating": "7.5",
+    "rating_5based": 3.75,
+    "added": "1788264000",
+    "category_id": "10",
+    "container_extension": "mkv",
+    "custom_sid": "",
+    "direct_source": ""
+  },
+  {
+    "num": "2",
+    "name": "Example Documentary (2024)",
+    "stream_type": "movie",
+    "stream_id": "2002",
+    "stream_icon": "",
+    "rating": 0,
+    "rating_5based": "0",
+    "added": 1789065000,
+    "category_id": 11,
+    "container_extension": "mp4"
+  },
+  {
+    "num": 3,
+    "name": "Example Short",
+    "stream_type": "movie",
+    "stream_id": 2003,
+    "rating": "",
+    "category_id": "10",
+    "container_extension": null
+  }
+]

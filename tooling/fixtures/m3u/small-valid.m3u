@@ -1,0 +1,11 @@
+#EXTM3U url-tvg="https://epg.example.org/small-valid.xml"
+#EXTINF:-1 tvg-id="news.example" tvg-name="Example News" tvg-logo="https://img.example.com/logo/news.png" group-title="News" tvg-country="GB" tvg-language="English",Example News
+https://cdn.example.net/live/news/index.m3u8
+#EXTINF:-1 tvg-id="sports1.example" tvg-name="Demo Sports 1" tvg-logo="https://img.example.com/logo/sports1.png" group-title="Sports" tvg-chno="10",Demo Sports 1
+https://cdn.example.net/live/sports1/index.m3u8
+#EXTINF:-1 tvg-id="kids.example" tvg-name="Example Kids" tvg-logo="https://img.example.com/logo/kids.png" group-title="Kids",Example Kids
+https://cdn.example.net/live/kids/stream.ts
+#EXTINF:-1 tvg-id="replay.example" tvg-name="Example Replay" group-title="News" catchup="default" catchup-days="2" catchup-source="https://cdn.example.net/archive/replay/{utc}/{duration}.m3u8",Example Replay
+https://cdn.example.net/live/replay/index.m3u8
+#EXTINF:-1 tvg-name="Example Movie" tvg-logo="https://img.example.com/poster/movie.jpg" group-title="Movies",Example Movie (2025)
+https://cdn.example.net/vod/movie/example-movie.mp4

@@ -1,0 +1,57 @@
+{
+  "description": "Authoritative playback state machine (docs/PLAYBACK.md section 3). Every (state, event) pair must be defined exactly once: a target state, a per-mode object {live, vod}, or \"ignore\" (state unchanged, event dropped). Native PlaybackController implementations must pass every vector.",
+  "version": 1,
+  "modes": ["live", "vod"],
+  "initial": "IDLE",
+  "states": ["IDLE", "PREPARING", "PLAYING", "PAUSED", "BUFFERING", "ERROR", "ENDED"],
+  "events": ["prepare", "first_frame", "pause", "play", "buffer_start", "buffer_end", "error", "timeout_prepare", "stall_timeout", "ended", "retry", "stop", "seek"],
+  "transitions": {
+    "IDLE": {
+      "prepare": "PREPARING", "first_frame": "ignore", "pause": "ignore", "play": "ignore",
+      "buffer_start": "ignore", "buffer_end": "ignore", "error": "ignore", "timeout_prepare": "ignore",
+      "stall_timeout": "ignore", "ended": "ignore", "retry": "ignore", "stop": "IDLE", "seek": "ignore"
+    },
+    "PREPARING": {
+      "prepare": "PREPARING", "first_frame": "PLAYING", "pause": "ignore", "play": "ignore",
+      "buffer_start": "ignore", "buffer_end": "ignore", "error": "ERROR", "timeout_prepare": "ERROR",
+      "stall_timeout": "ignore", "ended": {"live": "ERROR", "vod": "ENDED"}, "retry": "ignore", "stop": "IDLE", "seek": "ignore"
+    },
+    "PLAYING": {
+      "prepare": "PREPARING", "first_frame": "ignore", "pause": "PAUSED", "play": "ignore",
+      "buffer_start": "BUFFERING", "buffer_end": "ignore", "error": "ERROR", "timeout_prepare": "ignore",
+      "stall_timeout": "ignore", "ended": {"live": "ERROR", "vod": "ENDED"}, "retry": "ignore", "stop": "IDLE", "seek": "PLAYING"
+    },
+    "PAUSED": {
+      "prepare": "PREPARING", "first_frame": "ignore", "pause": "ignore", "play": "PLAYING",
+      "buffer_start": "ignore", "buffer_end": "ignore", "error": "ERROR", "timeout_prepare": "ignore",
+      "stall_timeout": "ignore", "ended": "ignore", "retry": "ignore", "stop": "IDLE", "seek": "PAUSED"
+    },
+    "BUFFERING": {
+      "prepare": "PREPARING", "first_frame": "ignore", "pause": "PAUSED", "play": "ignore",
+      "buffer_start": "ignore", "buffer_end": "PLAYING", "error": "ERROR", "timeout_prepare": "ignore",
+      "stall_timeout": "ERROR", "ended": {"live": "ERROR", "vod": "ENDED"}, "retry": "ignore", "stop": "IDLE", "seek": "BUFFERING"
+    },
+    "ERROR": {
+      "prepare": "PREPARING", "first_frame": "ignore", "pause": "ignore", "play": "ignore",
+      "buffer_start": "ignore", "buffer_end": "ignore", "error": "ignore", "timeout_prepare": "ignore",
+      "stall_timeout": "ignore", "ended": "ignore", "retry": "PREPARING", "stop": "IDLE", "seek": "ignore"
+    },
+    "ENDED": {
+      "prepare": "PREPARING", "first_frame": "ignore", "pause": "ignore", "play": "ignore",
+      "buffer_start": "ignore", "buffer_end": "ignore", "error": "ignore", "timeout_prepare": "ignore",
+      "stall_timeout": "ignore", "ended": "ignore", "retry": "ignore", "stop": "IDLE", "seek": {"live": "ignore", "vod": "BUFFERING"}
+    }
+  },
+  "vectors": [
+    {"name": "live_happy_path", "mode": "live", "steps": [["prepare", "PREPARING"], ["first_frame", "PLAYING"], ["stop", "IDLE"]]},
+    {"name": "live_rebuffer_recovers", "mode": "live", "steps": [["prepare", "PREPARING"], ["first_frame", "PLAYING"], ["buffer_start", "BUFFERING"], ["buffer_end", "PLAYING"]]},
+    {"name": "live_stall_timeout_then_retry", "mode": "live", "steps": [["prepare", "PREPARING"], ["first_frame", "PLAYING"], ["buffer_start", "BUFFERING"], ["stall_timeout", "ERROR"], ["retry", "PREPARING"], ["first_frame", "PLAYING"]]},
+    {"name": "live_prepare_timeout", "mode": "live", "steps": [["prepare", "PREPARING"], ["timeout_prepare", "ERROR"], ["stop", "IDLE"]]},
+    {"name": "live_stream_ends_unexpectedly_is_error", "mode": "live", "steps": [["prepare", "PREPARING"], ["first_frame", "PLAYING"], ["ended", "ERROR"]]},
+    {"name": "channel_zap_during_prepare_restarts_preparation", "mode": "live", "steps": [["prepare", "PREPARING"], ["prepare", "PREPARING"], ["first_frame", "PLAYING"], ["prepare", "PREPARING"], ["first_frame", "PLAYING"]]},
+    {"name": "vod_pause_resume_end_replay", "mode": "vod", "steps": [["prepare", "PREPARING"], ["first_frame", "PLAYING"], ["pause", "PAUSED"], ["seek", "PAUSED"], ["play", "PLAYING"], ["ended", "ENDED"], ["seek", "BUFFERING"], ["buffer_end", "PLAYING"]]},
+    {"name": "pause_while_buffering", "mode": "vod", "steps": [["prepare", "PREPARING"], ["first_frame", "PLAYING"], ["buffer_start", "BUFFERING"], ["pause", "PAUSED"], ["play", "PLAYING"]]},
+    {"name": "events_before_prepare_are_ignored", "mode": "live", "steps": [["play", "IDLE"], ["error", "IDLE"], ["first_frame", "IDLE"], ["prepare", "PREPARING"]]},
+    {"name": "pause_ignored_while_preparing", "mode": "vod", "steps": [["prepare", "PREPARING"], ["pause", "PREPARING"], ["first_frame", "PLAYING"]]}
+  ]
+}

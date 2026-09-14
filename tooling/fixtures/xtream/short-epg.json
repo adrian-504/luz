@@ -1,0 +1,40 @@
+{
+  "epg_listings": [
+    {
+      "id": "9001",
+      "epg_id": "1",
+      "title": "RXhhbXBsZSBNb3JuaW5nIE5ld3M=",
+      "lang": "en",
+      "start": "2026-09-14 06:00:00",
+      "end": "2026-09-14 09:00:00",
+      "description": "U3ludGhldGljIGRlc2NyaXB0aW9uIGZvciBhIGZpeHR1cmUgcHJvZ3JhbW1lLg==",
+      "channel_id": "news.example",
+      "start_timestamp": "1789362000",
+      "stop_timestamp": "1789372800"
+    },
+    {
+      "id": "9002",
+      "epg_id": "1",
+      "title": "RXhhbXBsZSBNaWRkYXkgQnVsbGV0aW4=",
+      "lang": "en",
+      "start": "2026-09-14 09:00:00",
+      "end": "2026-09-14 12:00:00",
+      "description": "U2Vjb25kIHN5bnRoZXRpYyBkZXNjcmlwdGlvbi4=",
+      "channel_id": "news.example",
+      "start_timestamp": 1789372800,
+      "stop_timestamp": 1789383600
+    },
+    {
+      "id": "9003",
+      "epg_id": "1",
+      "title": "%%not-base64%%",
+      "lang": "en",
+      "start": "2026-09-14 12:00:00",
+      "end": "2026-09-14 13:00:00",
+      "description": "",
+      "channel_id": "news.example",
+      "start_timestamp": "1789383600",
+      "stop_timestamp": "1789387200"
+    }
+  ]
+}

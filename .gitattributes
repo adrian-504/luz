@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+# Fixtures must stay byte-exact: several deliberately contain CRLF line endings,
+# a UTF-8 BOM, invalid UTF-8 or trailing whitespace that parsers must tolerate.
+tooling/fixtures/** -text
+
+*.docx binary
+*.png binary
+*.jpg binary
+*.gz binary

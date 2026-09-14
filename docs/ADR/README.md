@@ -1,0 +1,41 @@
+# Architecture Decision Records
+
+Every material architectural choice has a short ADR (§19.4, §24). Baseline decisions are not irreversible
+doctrine: any change requires a new ADR that supersedes the old one and is evaluated against performance,
+maintainability, security and product scope (§24.1).
+
+## Process
+
+1. Copy [0000-template.md](0000-template.md) to `NNNN-short-title.md` (next free number).
+2. Fill Context, Decision, Alternatives considered, Consequences, Status, Date.
+3. Status values: `Proposed` → `Accepted` | `Rejected`; later `Superseded by ADR-NNNN` or `Deprecated`.
+4. Add the ADR to the index below (checked by `tooling/scripts/check_docs.py`).
+5. Never edit the decision of an Accepted ADR; supersede it.
+
+**Accepted (specification baseline)** = decided by the master specification §24. **Proposed** = engineering
+decision made in Phase 0 that requires owner review.
+
+## Index
+
+| ADR | Title | Status |
+|---|---|---|
+| [0001](0001-native-ui-per-platform.md) | Native UI per platform | Accepted |
+| [0002](0002-native-playback-per-platform.md) | Native playback per platform | Accepted |
+| [0003](0003-shared-domain-protocol-layer.md) | Shared domain and protocol layer where stable | Accepted |
+| [0004](0004-local-first-v1.md) | Local-first V1 | Accepted |
+| [0005](0005-initial-protocols-m3u-xtream-xmltv.md) | M3U, Xtream Codes and XMLTV as initial protocols | Accepted |
+| [0006](0006-epg-first-class-subsystem.md) | EPG as a first-class subsystem | Accepted |
+| [0007](0007-playback-diagnostics-first-class-subsystem.md) | Playback diagnostics as a first-class subsystem | Accepted |
+| [0008](0008-recording-deferred.md) | Recording deferred | Accepted |
+| [0009](0009-multiview-deferred.md) | Multiview deferred | Accepted |
+| [0010](0010-no-bundled-content.md) | No bundled content | Accepted |
+| [0011](0011-kotlin-multiplatform-shared-core.md) | Kotlin Multiplatform for the shared core | Proposed |
+| [0012](0012-monorepo-layout-and-build.md) | Monorepo layout and build systems | Proposed |
+| [0013](0013-sqlite-shared-schema.md) | SQLite with a shared schema for local persistence | Proposed |
+| [0014](0014-native-http-transport.md) | Native HTTP transport behind a shared interface | Proposed |
+| [0015](0015-credentials-never-in-domain-or-database.md) | Credentials never in domain entities or the database | Proposed |
+| [0016](0016-cleartext-http-policy.md) | Cleartext HTTP policy for user-configured sources | Proposed |
+| [0017](0017-stable-deterministic-ids.md) | Stable deterministic content IDs | Proposed |
+| [0018](0018-streaming-xml-parsing-without-dtd.md) | Streaming XMLTV parsing without DTD or entity expansion | Proposed |
+| [0019](0019-playback-contract-as-spec-and-vectors.md) | Playback contract shared as specification and vectors, not runtime | Proposed |
+| [0020](0020-no-remote-telemetry-v1.md) | No remote analytics or crash reporting in V1 | Proposed |

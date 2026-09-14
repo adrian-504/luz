@@ -1,0 +1,32 @@
+﻿#EXTM3U url-tvg="https://epg.example.org/guide.xml.gz" x-tvg-url="https://epg.example.org/alt.xml" tvg-shift="+1" catchup="shift" catchup-days="3"
+#EXTINF:-1 group-title="News" tvg-logo="https://img.example.com/logo/news.png" tvg-id="news.example",Example News HD
+http://provider.example.com/live/canary-user/CANARY-PW-7f3a9c-DO-NOT-LOG/1001.ts
+# comment: attribute order reversed, single quotes, unquoted value, comma inside title
+#EXTINF:0 tvg-id=sports1.example group-title='Sports' tvg-name="Demo Sports 1",Demo Sports 1, Live
+#EXTVLCOPT:http-user-agent=ExamplePlayer/1.0
+#EXTVLCOPT:http-referrer=https://www.example.com/
+https://cdn.example.net/hls/sports1/index.m3u8
+# comment: uppercase key, URL-encoded logo, multiple groups, channel number, multi-value language, pipe headers
+#EXTINF:-1 TVG-ID="kids.example" group-title="Kids;Family" tvg-logo="https%3A%2F%2Fimg.example.com%2Flogo%2Fkids%20channel.png" tvg-chno="42" tvg-language="English,Spanish" tvg-country="GB",Example Kids
+https://cdn.example.net/live/kids.m3u8|User-Agent=ExampleUA/2.0&Referer=https%3A%2F%2Fwww.example.com%2F
+# comment: EXTGRP instead of group-title; unknown attributes must be preserved
+#EXTINF:-1 tvg-id="docs.example" x-custom-flag="yes" provider-quality="fhd",Example Docs
+#EXTGRP:Documentary
+https://cdn.example.net/live/docs.m3u8
+# comment: EXTHTTP headers (Cookie is sensitive) and KODIPROP DRM
+#EXTINF:-1 tvg-id="premium.example" group-title="Premium",Example Premium
+#EXTHTTP:{"User-Agent":"ExampleUA/3.0","Cookie":"session=canary-cookie-value"}
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=https://license.example.com/widevine
+https://cdn.example.net/dash/premium/manifest.mpd
+# comment: catch-up template attributes
+#EXTINF:-1 tvg-id="replay.example" group-title="News" catchup="append" catchup-days="7" catchup-source="?utc={utc}&lutc={lutc}",Example Replay
+https://cdn.example.net/live/replay.m3u8
+# comment: float duration and tvg-type movie with credential-bearing URL
+#EXTINF:5400.5 tvg-type="movie" group-title="Movies",Example Film (2024)
+https://provider.example.com/movie/canary-user/CANARY-PW-7f3a9c-DO-NOT-LOG/2001.mkv
+#EXTINF:-1 radio="true" group-title="Radio",Example Radio
+http://192.0.2.10:8000/radio.mp3
+# comment: non-ASCII names and groups
+#EXTINF:-1 tvg-id="unicode.example" group-title="Intérnational",Ünïcødé Kanal — 東京 テスト
+https://cdn.example.net/live/unicode.m3u8

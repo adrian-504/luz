@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tv>
+  <channel id="bad.example"><display-name>Malformed Test</display-name></channel>
+  <programme start="20260914060000 +0000" stop="20260914070000 +0000" channel="bad.example"><title>M01 valid before errors</title></programme>
+  <programme start="2026-09-14T07:00:00Z" stop="20260914080000 +0000" channel="bad.example"><title>M02 invalid timestamp format, reject</title></programme>
+  <programme start="20260914080000 +0000" stop="20260914090000 +0000"><title>M03 missing channel attribute, reject</title></programme>
+  <programme start="20260914090000 +0000" stop="20260914100000 +0000" channel="bad.example"><title>M04 unescaped ampersand Tom & Jerry</title></programme>
+  <programme start="20260914100000 +0000" stop="20260914110000 +0000" channel="bad.example"><title>M05 valid after errors</title></programme>
+  <programme start="20260914110000 +0000" stop="20260914120000 +0000" channel="bad.example"><title>M06 mismatched closing tag</titel></programme>
+  <programme start="20260914120000 +0000" stop="20260914130000 +0000" channel="bad.example"><title>M07 valid</title></programme>
+  <programme start="20260914130000 +0000" stop="20260914140000 +0000" channel="bad.example"><title>M08 truncated document

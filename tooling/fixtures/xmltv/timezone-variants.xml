@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tv>
+  <channel id="tz.example"><display-name>Timezone Test</display-name></channel>
+  <channel id="tz-nostop.example"><display-name>Missing Stop On Last Programme</display-name></channel>
+  <programme start="20260914060000 +0000" stop="20260914070000 +0000" channel="tz.example"><title>P01 explicit UTC</title></programme>
+  <programme start="20260914020000 -0500" stop="20260914030000 -0500" channel="tz.example"><title>P02 negative offset</title></programme>
+  <programme start="20260914133000 +0530" stop="20260914143000 +0530" channel="tz.example"><title>P03 half-hour offset</title></programme>
+  <programme start="20260914090000" stop="20260914100000" channel="tz.example"><title>P04 no offset means UTC</title></programme>
+  <programme start="202609141000 +0000" stop="202609141100 +0000" channel="tz.example"><title>P05 no seconds</title></programme>
+  <programme start="20260914110000 +0000" channel="tz.example"><title>P06 missing stop, derive from next start</title></programme>
+  <programme start="20260914120000 +0000" stop="20260914130000 +0000" channel="tz.example"><title>P07 overlaps next, truncate</title></programme>
+  <programme start="20260914123000 +0000" stop="20260914133000 +0000" channel="tz.example"><title>P08 normal</title></programme>
+  <programme start="20260914133000 +0000" stop="20260914133000 +0000" channel="tz.example"><title>P09 zero duration, drop</title></programme>
+  <programme start="20260914153000 +0100" stop="20260914163000 +0100" channel="tz.example"><title>P10 positive offset</title></programme>
+  <programme start="20261025010000 +0100" stop="20261025010000 +0000" channel="tz.example"><title>P11 offset changes between start and stop (DST end)</title></programme>
+  <programme start="20260914060000 +0000" channel="tz-nostop.example"><title>P12 last programme without stop, drop</title></programme>
+</tv>

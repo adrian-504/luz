@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE tv SYSTEM "xmltv.dtd">
+<tv generator-info-name="synthetic-fixture" source-info-name="IPTV Player test fixtures">
+  <channel id="news.example">
+    <display-name lang="en">Example News</display-name>
+    <display-name lang="fr">Exemple Infos</display-name>
+    <icon src="https://img.example.com/logo/news.png"/>
+  </channel>
+  <channel id="sports1.example">
+    <display-name>Demo Sports 1</display-name>
+  </channel>
+  <channel id="kids.example">
+    <display-name>Example Kids</display-name>
+    <icon src="https://img.example.com/logo/kids.png" width="200" height="200"/>
+  </channel>
+  <programme start="20260914050000 +0000" stop="20260914080000 +0000" channel="news.example">
+    <title lang="en">Example Morning News</title>
+    <title lang="fr">Exemple Matin</title>
+    <desc lang="en">Synthetic description for a fixture programme &amp; nothing more.</desc>
+    <category lang="en">News</category>
+    <icon src="https://img.example.com/programme/morning.jpg"/>
+    <new/>
+    <live/>
+  </programme>
+  <programme start="20260914080000 +0000" stop="20260914110000 +0000" channel="news.example">
+    <title>Example Midday Bulletin</title>
+    <category>News</category>
+    <category>Current Affairs</category>
+    <rating system="GB"><value>U</value></rating>
+  </programme>
+  <programme start="20260914110000 +0000" stop="20260914120000 +0000" channel="news.example">
+    <title><![CDATA[Example <Special> Report]]></title>
+    <desc>Numeric character reference: caf&#233; &#x2014; done.</desc>
+    <previously-shown start="20260913110000 +0000"/>
+  </programme>
+  <programme start="20260914180000 +0100" stop="20260914200000 +0100" channel="sports1.example">
+    <title>Example Football Live</title>
+    <sub-title>Matchday 5</sub-title>
+    <category>Sports</category>
+    <premiere/>
+  </programme>
+  <programme start="20260914200000 +0100" stop="20260914210000 +0100" channel="sports1.example">
+    <title>Example Highlights</title>
+  </programme>
+  <programme start="20260914070000 +0000" stop="20260914073000 +0000" channel="kids.example">
+    <title>Example Cartoon</title>
+    <sub-title>The Synthetic Episode</sub-title>
+    <episode-num system="xmltv_ns">1.4.0/1</episode-num>
+    <episode-num system="onscreen">S02E05</episode-num>
+    <date>2025</date>
+  </programme>
+  <programme start="20260914073000 +0000" stop="20260914080000 +0000" channel="kids.example">
+    <title>Example Cartoon</title>
+    <sub-title>Another Synthetic Episode</sub-title>
+    <episode-num system="xmltv_ns">1.5.0/1</episode-num>
+  </programme>
+  <programme start="20260914080000 +0000" stop="20260914090000 +0000" channel="unlinked.example">
+    <title>Programme For Channel Without Definition</title>
+  </programme>
+</tv>
