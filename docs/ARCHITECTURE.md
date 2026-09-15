@@ -42,7 +42,7 @@ platform behavior.
 | Ingestion pipeline orchestration, limits, diagnostics records | **Shared** | Same behavior and same diagnostics on all platforms |
 | EPG normalization, channel matching, now/next computation | **Shared** | Deterministic, fixture-testable |
 | Search normalization and ranking | **Shared** | Same results for same query everywhere |
-| Database schema, migrations, queries, repositories | **Shared** (Proposed, ADR-0013) | EPG window and search queries are core logic; one schema for future sync |
+| Database schema, migrations, queries, repositories | **Shared** (ADR-0013, SQLDelight) | EPG window and search queries are core logic; one schema for future sync |
 | Redaction, URL validation/scheme policy | **Shared** | Security logic tested once with canary tests |
 | Playback **contract**: states, events, error taxonomy, diagnostics schema, preparation-window policy | **Shared** (types + pure policy) | Consistent diagnostics and recovery semantics |
 | Playback **engine and controller** | **Native** | Reliability; direct access to Media3 / AVFoundation events, lifecycle, audio session (ADR-0002, ADR-0019) |
@@ -133,8 +133,9 @@ state/event model → diagnostics recorder. See [PLAYBACK.md](PLAYBACK.md).
 - Secrets never enter SQLite (ADR-0015).
 - Cache tiers (§13.2): memory (hot now/next, visible pages, image memory cache) → disk (SQLite, image disk cache) → network.
 - Invalidation (§13.4): refresh policy per playlist/EPG source, ETag/Last-Modified, versioned unit snapshots, manual refresh.
-- Library choice (SQLDelight vs Room KMP vs shared schema with native drivers) is decided by a Phase 1 spike
-  against hard gates: tvOS targets published, FTS support, streaming inserts, migration tooling.
+- Library: **SQLDelight 2.3.2** (ADR-0013, accepted after the Phase 4 spike). Schema and queries live in `.sq` files
+  in `shared:storage`; full-text search uses an FTS5 table built per snapshot. FTS5 on Android and Apple system SQLite
+  is not yet verified.
 
 ## 8. Networking
 
@@ -213,3 +214,13 @@ Versions are pinned (Gradle version catalog + dependency verification metadata; 
 committed). Candidate dependencies already named in docs (kotlinx.coroutines, kotlinx.serialization, Okio or
 kotlinx-io, SQLDelight or Room KMP, OkHttp, Media3, Coil) are **not yet approved** — each passes this policy
 when first introduced.
+
+**Current dependency set (Phase 4):** runtime — Kotlin 2.4.20 standard library; `shared:protocols` adds
+`kotlinx-coroutines-core` and `kotlinx-serialization-json` 1.11.0 (ADR-0022); `shared:storage` adds SQLDelight 2.3.2
+`runtime`, `sqlite-driver` (JVM) and `native-driver` (Apple) with the SQLDelight Gradle plugin and SQLite 3.38 dialect
+(ADR-0013; evaluation: maintained by Cash App, Apache-2.0, publishes all required targets, exit plan = same SQL on
+another driver); tests use `kotlin-test` and `kotlinx-coroutines-test`;
+build-time — Gradle `kotlin-dsl` for `build-logic`, Spotless 8.10.2 + ktlint 1.8.0 for formatting (TESTING.md §6), built with the Gradle
+9.7.1 wrapper (distribution and wrapper-JAR SHA-256 verified against gradle.org) and the Kotlin Multiplatform
+Gradle plugin. `gradle/verification-metadata.xml` pins SHA-256 for every resolved artifact; after an intentional
+dependency change regenerate it with `./gradlew --write-verification-metadata sha256 check` and review the diff.

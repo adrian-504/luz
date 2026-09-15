@@ -1,6 +1,6 @@
 # ADR-0019: Playback contract shared as specification and vectors, not runtime
 
-- **Status:** Proposed
+- **Status:** Accepted (delegated technical decision, 2026-09-14 — transition table and vectors implemented (Phase 1))
 - **Date:** 2026-09-14
 - **Spec:** §7.3, §7.5, §15
 

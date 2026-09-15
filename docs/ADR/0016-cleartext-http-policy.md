@@ -1,6 +1,6 @@
 # ADR-0016: Cleartext HTTP policy for user-configured sources
 
-- **Status:** Proposed
+- **Status:** Accepted (approved by product owner in Phase 0 review, 2026-09-14)
 - **Date:** 2026-09-14
 - **Spec:** §14.1 ("TLS for network communication", "URL validation and scheme restrictions"), §14.2
 
@@ -27,6 +27,6 @@ policy would make the app unusable for many users; an unrestricted policy weaken
 
 ## Consequences
 
-- Deviation from spec §14.1 recorded in SPEC_REVIEW §1.2; requires owner approval.
+- Deviation from spec §14.1 recorded in SPEC_REVIEW §1.2; approved by the product owner on 2026-09-14.
 - App Review risk for broad ATS exceptions on Apple platforms.
 - Diagnostics must report transport security per session.

@@ -1,6 +1,6 @@
 # ADR-0015: Credentials never in domain entities or the database
 
-- **Status:** Proposed
+- **Status:** Accepted (delegated technical decision, 2026-09-14 — templating, resolver and canary tests implemented (Phases 1-3))
 - **Date:** 2026-09-14
 - **Spec:** §5.1, §11.4, §14.1, §14.2, §15.3
 

@@ -119,5 +119,8 @@ Same tools in warm mode (process alive, activity/scene recreated or resumed). En
 |---|---|
 | Targets and definitions | Documented (Phase 0) |
 | Stress fixture generator (10k M3U, 100k XMLTV) | Implemented and run — see `tooling/scripts/generate_large_fixtures.py` |
-| Benchmark modules, tracing, metrics recorder | NOT YET IMPLEMENTED (Phases 2–6) |
-| Any measured number | NONE — no app exists |
+| M3U import host stress test (10k / 100k channels) | Runs in `jvmTest`; JVM host timings printed, informational only (not a device gate) |
+| XMLTV import host stress test (100k / 1M programmes, gzip bomb) | Runs in `jvmTest`; 1M programmes in ~5.9 s with flat heap (~45 MiB) — informational (ADR-0018) |
+| Guide storage host benchmark (1M programmes) | Runs in `jvmTest`; window P95 2.3 ms, now/next P95 1.5 ms, search P95 13 ms — informational (ADR-0013) |
+| Benchmark modules, tracing, metrics recorder | NOT YET IMPLEMENTED (Phases 5–6) |
+| Any device measurement | NONE — no app exists; host numbers above are not device results |

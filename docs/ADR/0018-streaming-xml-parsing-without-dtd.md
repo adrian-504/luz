@@ -1,6 +1,6 @@
 # ADR-0018: Streaming XMLTV parsing without DTD or entity expansion
 
-- **Status:** Proposed
+- **Status:** Accepted (delegated technical decision, 2026-09-14 — shared tokenizer implemented and measured on JVM (Phase 4); Apple targets not yet verified)
 - **Date:** 2026-09-14
 - **Spec:** §6.3, §8.3, §14.1 ("Safe XML parsing"), §14.2 (malicious/huge EPG)
 
@@ -26,6 +26,23 @@ multiplatform XML parser in the Kotlin standard library.
 - **Platform parsers via expect/actual** (Android `XmlPullParser`, Apple `XMLParser`/libxml2) — mature and fast, but two behaviors to secure and test, different recovery semantics, and diagnostics diverge. Kept as fallback if the shared tokenizer underperforms; must pass the same attack fixtures.
 - **Third-party KMP XML library (e.g. xmlutil)** — broader XML support than needed, larger attack surface, tvOS artifact availability to verify. Rejected unless benchmarks justify.
 - **DOM parsing** — memory infeasible. Rejected.
+
+## Phase 4 results (2026-09-14)
+
+Implemented as `XmlTokenizer` + `XmltvParser` + `XmltvImporter` in `shared:protocols`, with gzip over platform zlib
+(expect/actual). JVM host, informational:
+
+| Measurement | Result | Budget (EPG.md §6) |
+|---|---|---|
+| 100k programmes (import, normalization) | 1.1 s, sampled heap growth ~45 MiB | < 60 s, < 64 MB |
+| 1M programmes | 5.9 s (~170k/s), sampled heap growth ~46 MiB (flat: streaming) | — |
+| XXE and billion-laughs fixtures | Import safely; no entity text or file content in output | — |
+| Gzip bomb | Stopped by the compression-ratio limit | — |
+| Malformed fixture | Valid programmes before and after errors kept; unit PARTIAL | — |
+
+The platform-parser alternative was not benchmarked: the shared tokenizer meets the ingest budget with a wide margin on
+the host, keeps one set of diagnostics and attack tests, and memory stays flat as input grows. The fallback remains
+available if device measurements (Phase 6/9 on Android, Phase 10 on Apple) miss the budget.
 
 ## Consequences
 

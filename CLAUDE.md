@@ -12,8 +12,8 @@ diagnostics and low perceived latency — not feature count.
 
 ## Current phase
 
-**Phase 0 complete, awaiting architecture review.** Do not start Phase 1 until the review in
-[docs/ROADMAP.md](docs/ROADMAP.md) is signed off. Work strictly phase by phase.
+**Phase 4 (XMLTV/EPG) complete on JVM 2026-09-14 — awaiting review.** Next: Phase 5 (Android TV shell; needs the Android SDK). Open review items are tracked in
+[docs/ROADMAP.md](docs/ROADMAP.md). Work strictly phase by phase.
 
 ## Non-negotiable rules
 
@@ -33,6 +33,18 @@ diagnostics and low perceived latency — not feature count.
     and use reserved domains only (`example.com`, `.invalid`, `.test`, RFC 5737 addresses).
 12. Do not suppress compiler/linter errors without a documented reason.
 13. Do not invent API behavior (Xtream panels, platform APIs). Verify against fixtures and docs.
+
+## Build and verify
+
+```bash
+tooling/scripts/verify.sh
+```
+
+Runs docs/fixture/secret/source-text checks, reference vectors, `./gradlew check` and `spotlessCheck` (format with
+`./gradlew spotlessApply`). Needs JDK 21 (`JAVA_HOME`, or Homebrew
+`openjdk@21`, which the script finds). Apple Kotlin/Native targets run only when Xcode is installed
+(`iptv.appleTargets=auto|true|false` in `gradle.properties`). After an intentional dependency change, regenerate
+`gradle/verification-metadata.xml` with `./gradlew --write-verification-metadata sha256 check` and review the diff.
 
 ## Standard task loop (§19.2)
 

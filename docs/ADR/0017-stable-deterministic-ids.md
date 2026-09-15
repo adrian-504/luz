@@ -1,6 +1,6 @@
 # ADR-0017: Stable deterministic content IDs
 
-- **Status:** Proposed
+- **Status:** Accepted (delegated technical decision, 2026-09-14 — implemented with cross-checked reference vectors (Phase 1))
 - **Date:** 2026-09-14
 - **Spec:** §5.3, §2.3 (unified favorites/history), §22.1
 

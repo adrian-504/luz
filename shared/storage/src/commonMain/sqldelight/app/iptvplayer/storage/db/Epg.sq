@@ -1,0 +1,54 @@
+-- Guide programmes per EPG source and import snapshot (docs/DOMAIN_MODEL.md §9, docs/EPG.md §4).
+-- A snapshot is written completely, then activated in one statement; readers filter on the active snapshot.
+CREATE TABLE epg_program (
+    row_id INTEGER PRIMARY KEY,
+    source_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    id TEXT NOT NULL,
+    channel_key TEXT NOT NULL,
+    start_utc INTEGER NOT NULL,
+    end_utc INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    subtitle TEXT,
+    description TEXT
+);
+
+CREATE UNIQUE INDEX epg_program_identity ON epg_program(source_id, snapshot, id);
+
+-- Window queries: equality on source/snapshot/channel, range on start (bounded below by window start - 24 h).
+CREATE INDEX epg_program_window ON epg_program(source_id, snapshot, channel_key, start_utc);
+
+CREATE TABLE epg_active_snapshot (
+    source_id TEXT PRIMARY KEY NOT NULL,
+    snapshot INTEGER NOT NULL
+);
+
+insertProgram:
+INSERT INTO epg_program(source_id, snapshot, id, channel_key, start_utc, end_utc, title, subtitle, description)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+lastRowId:
+SELECT last_insert_rowid();
+
+activate:
+INSERT OR REPLACE INTO epg_active_snapshot(source_id, snapshot) VALUES (?, ?);
+
+activeSnapshot:
+SELECT snapshot FROM epg_active_snapshot WHERE source_id = ?;
+
+window:
+SELECT id, channel_key, start_utc, end_utc, title
+FROM epg_program
+WHERE source_id = :sourceId
+  AND snapshot = :snapshot
+  AND channel_key IN :channelKeys
+  AND start_utc >= :earliestStart
+  AND start_utc < :windowEnd
+  AND end_utc > :windowStart
+ORDER BY channel_key, start_utc;
+
+deleteSnapshot:
+DELETE FROM epg_program WHERE source_id = ? AND snapshot = ?;
+
+countSnapshot:
+SELECT count(*) FROM epg_program WHERE source_id = ? AND snapshot = ?;

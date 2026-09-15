@@ -1,0 +1,23 @@
+[versions]
+# Kotlin 2.4.20: latest stable release on 2026-09-14 (Maven Central metadata).
+kotlin = "2.4.20"
+# Evaluated in ADR-0022 (2026-09-14): JetBrains, Apache-2.0, tvOS artifacts published.
+kotlinx-coroutines = "1.11.0"
+kotlinx-serialization = "1.11.0"
+# Storage spike for ADR-0013 (2026-09-14): Cash App, Apache-2.0, tvOS native driver published.
+sqldelight = "2.3.2"
+
+[libraries]
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
+sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
+sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
+sqldelight-dialect-sqlite338 = { module = "app.cash.sqldelight:sqlite-3-38-dialect", version.ref = "sqldelight" }
+kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+# On the build-logic classpath so it shares one Kotlin Gradle plugin instance with the convention plugins.
+sqldelight-gradle-plugin = { module = "app.cash.sqldelight:gradle-plugin", version.ref = "sqldelight" }
+
+[plugins]
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

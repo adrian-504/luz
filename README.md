@@ -12,7 +12,10 @@ The app ships **no channels, subscriptions, playlists or content of any kind**.
 
 ## Status
 
-**Phase 0 — Product & architecture baseline.** No application code exists yet. See
+**Phase 4 — XMLTV/EPG** complete on JVM (awaiting review): `shared/domain` (entities, stable IDs, capabilities,
+credential redaction, URL policy, playback state machine), `shared/protocols` (streaming M3U import, Xtream Codes
+discovery/import, streaming XMLTV import, HTTP policy layer, playback-time URL resolution), `shared/epg` (channel
+matching, now/next, guide geometry) and `shared/storage` (SQLDelight guide storage with full-text search). No app UI yet. See
 [docs/ROADMAP.md](docs/ROADMAP.md) for the phase plan and the next milestone.
 
 ## Source of truth
@@ -48,8 +51,8 @@ tooling/
 tooling/scripts/verify.sh
 ```
 
-Runs documentation link/ADR checks, fixture validation, the secret scanner and the large-fixture
-generator. Requires only Python 3.8+ (standard library).
+Runs documentation link/ADR checks, fixture validation, the secret scanner, the large-fixture generator,
+the reference ID vectors and `./gradlew check`. Requires Python 3.8+ and JDK 21.
 
 ## Working in this repository
 

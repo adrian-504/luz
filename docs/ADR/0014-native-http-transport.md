@@ -1,6 +1,6 @@
 # ADR-0014: Native HTTP transport behind a shared interface
 
-- **Status:** Proposed
+- **Status:** Accepted (delegated technical decision, 2026-09-14 — interface and policy layer implemented and tested (Phase 3))
 - **Date:** 2026-09-14
 - **Spec:** §6.2 (timeouts/retry), §14.1 (TLS), §7 (playback)
 

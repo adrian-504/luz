@@ -42,7 +42,7 @@ No requirement is implemented yet. Status tracking starts in Phase 1.
 | FR-SER-001 | Series → seasons → episodes; next-episode continuation | V1 | §9.5 | UI, PL |
 | FR-VOD-002 | Library works without third-party metadata; enrichment is additive | V1 | §9.5 | I |
 | FR-HOME-001 | Home: continue watching, favorites, live now, tonight, recently added (if metadata permits), movies, series, per-playlist shortcuts | V1 | §9.2 | UI |
-| FR-CATCHUP-001 | Play archived programmes where source supports it (scope to confirm, see SPEC_REVIEW) | V1? | §1.1, §3.2 | PL |
+| FR-CATCHUP-001 | Play archived programmes where source supports it (owner decision 2026-09-14: post-beta; V1 ships model, capability and guide indicator only) | PB | §1.1, §3.2 | PL |
 
 ## Functional — user state and search
 

@@ -17,7 +17,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[2]
-EXCLUDED_DIRS = {".git", "generated", "build", ".gradle", "DerivedData", ".build", "node_modules", "__pycache__"}
+EXCLUDED_DIRS = {".git", "generated", "build", ".gradle", "DerivedData", ".kotlin", ".build", "node_modules", "__pycache__"}
 BINARY_SUFFIXES = {".docx", ".gz", ".png", ".jpg", ".jpeg", ".webp", ".ico", ".jar", ".zip", ".mp4", ".ts", ".m4s"}
 CANARY_MARKERS = ("canary", "CANARY")
 REDACTION_MARKERS = ("‹redacted›", "redacted", "REDACTED", "***")

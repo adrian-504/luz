@@ -13,4 +13,4 @@ apps/android/
 Stack and rules: [ARCHITECTURE.md §11](../../docs/ARCHITECTURE.md#11-android-implementation-architecture-phase-5),
 [PLATFORM_STRATEGY.md](../../docs/PLATFORM_STRATEGY.md). No Google Play Services dependencies (Fire TV compatibility).
 
-Toolchain status (Phase 0): JDK and Android SDK **not installed** on the development machine.
+Toolchain status (2026-09-14): JDK 21 installed; Android SDK **not installed** (Phase 5 prerequisite, see docs/ROADMAP.md).

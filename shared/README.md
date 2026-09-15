@@ -3,7 +3,7 @@
 Protocol parsing, normalization and deterministic domain logic shared by all platforms (ADR-0003, ADR-0011).
 **No UI. No playback engine. No platform networking or secret storage implementations.**
 
-No source code exists yet — Phase 1 creates the Gradle build and `domain`. Module boundaries and dependency
+`domain` (Phase 1), `protocols` (M3U Phase 2, Xtream Phase 3, XMLTV Phase 4), `epg` (Phase 4) and the guide slice of `storage` (Phase 4) are implemented; `search` and `ingestion` are specified but not created (current `storage` depends on `domain` only). Module boundaries and dependency
 rules: [docs/ARCHITECTURE.md §4](../docs/ARCHITECTURE.md#4-module-map-and-dependency-rules).
 
 | Module | Phase | Depends on |

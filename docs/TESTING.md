@@ -99,14 +99,32 @@ the current development machine (verified Phase 0). No third-party or copyrighte
 
 Playback codec behavior, performance and soak results are only accepted from physical devices.
 
-## 6. CI (planned, not created)
+## 6. Static analysis (current)
+
+- Kotlin compiler in strict mode for `shared/*`: `explicitApi()` (every public declaration is deliberate, which
+  also keeps the Swift-exported surface small), `allWarningsAsErrors`, `progressiveMode`.
+- Formatter/linter (Phase 2 decision): **Spotless 8.10.2 running ktlint 1.8.0**, `intellij_idea` style (matches
+  `kotlin.code.style=official`), 140-column limit, `./gradlew spotlessCheck` in `verify.sh`. Evaluated on this codebase:
+  the default `ktlint_official` style rewrote ~2,260 lines (braces on every `when` branch, one parameter per line) and
+  was rejected; six rules that re-wrap expressions without adding clarity are disabled (list and rationale in
+  `build.gradle.kts`). Spotless does not read `.editorconfig` for these rules, so they are configured in Gradle.
+  Build-time only; no runtime dependency.
+- detekt: **not adopted** — 2.0 is still alpha and 1.23.8 predates Kotlin 2.4; re-evaluate when 2.0 is stable.
+- `tooling/scripts/check_source_text.py` rejects raw invisible/control characters in sources (they must be escapes),
+  after tooling silently converted `\u` escapes into raw characters twice during Phase 1–2.
+- Mutation spot-checks: the Phase 1 suite was verified to fail when a SHA-256 constant, a state transition, a
+  Redactor rule or the whitespace set was deliberately broken; the Phase 2 suite when CRLF handling, stream URL
+  credential templating, duplicate collapsing or over-long-line URL dropping was broken; the Phase 3 suite when `auth=0` acceptance,
+  truncated-list failure, 5xx retries, the Apple HLS live-output choice or `category_ids` handling was broken.
+
+## 7. CI (planned, not created)
 
 Planned gates once code exists: `verify.sh` · Gradle `check` (unit + parser tests on JVM, detekt/ktlint — evaluate) ·
 Kotlin/Native tests on macOS runner · Android lint · build Android debug/release · Xcode build + tests (Phase 10+) ·
 dependency verification · secret scan. No CI service is configured in Phase 0 (no remote repository; ADR-0020
 scope avoids cloud infrastructure until needed).
 
-## 7. Definition of done (§17.3)
+## 8. Definition of done (§17.3)
 
 A change is done only when all apply:
 
@@ -123,7 +141,7 @@ A change is done only when all apply:
 
 Verification reports use two explicit lists: **VERIFIED** (with the command/device) and **NOT YET VERIFIED**.
 
-## 8. Before release (§25.3)
+## 9. Before release (§25.3)
 
 Clean install · upgrade install · fresh playlist import · large playlist import · bad credentials · provider
 unavailable · EPG unavailable · stream unavailable · subtitle/audio switching · long playback session ·

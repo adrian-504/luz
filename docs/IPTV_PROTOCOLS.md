@@ -44,6 +44,9 @@ interface Normalizer<R> {                   // protocol record → domain entiti
 }
 ```
 
+Phase 1 implemented these contracts minimally in `shared/domain` (`ports/Ingestion.kt`); `UnitSpec` and request
+planning are added with the first real adapter in Phase 2 so the contract is shaped by an implementation.
+
 **Adding a protocol** = new `SourceAdapter` + parser + normalizer + fixtures + `ProtocolId` value. The pipeline
 stages after NORMALIZE, the storage schema, the UI and the capability resolver are untouched (NFR-PORT-001).
 Candidate future adapters (§22.2): local files, SMB, WebDAV, UPnP/DLNA, Stalker-style portals (would need legal/product review).
@@ -95,11 +98,57 @@ Order: explicit attribute (`tvg-type`) → URL path (`/movie/`, `/series/`) → 
 
 ### 3.3 Catch-up modes
 
-`catchup="default|append|shift|flussonic|xc"` with `catchup-source` template placeholders (`{utc}`, `{start}`, `{end}`, `{duration}`, `{offset}`, `${start}`…). Stored as `CatchUpInfo`; template expansion is shared and unit-tested. Playback of catch-up is subject to the V1 scope decision (SPEC_REVIEW §3).
+`catchup="default|append|shift|flussonic|xc"` with `catchup-source` template placeholders (`{utc}`, `{start}`, `{end}`, `{duration}`, `{offset}`, `${start}`…). Stored as `CatchUpInfo`; template expansion is shared and unit-tested. Catch-up playback is post-beta (owner decision 2026-09-14, SPEC_REVIEW §3); V1 parses and stores catch-up data and shows the guide indicator.
 
 ### 3.4 Xtream-generated M3U detection
 
 URLs of the form `…/get.php?username=…&password=…&type=m3u_plus` are detected; the user is offered Xtream API mode (richer data, lazy series, EPG). Detection never logs the URL.
+
+### 3.5 Implementation (Phase 2) and diagnostic codes
+
+Implemented in `shared/protocols` (`io/Utf8LineReader`, `sniff/ContentSniffer`, `m3u/*`). Decisions made while
+implementing, beyond §3.1–3.4:
+
+- **Pipeline slice**: `M3uImporter` performs VALIDATE (sniffing) → PARSE → NORMALIZE → MATCH/DEDUPLICATE and emits
+  `M3uImportItem`s incrementally; FETCH and PERSIST/INDEX/PUBLISH stay with the ingestion pipeline (Phase 3–4).
+- **Validation matrix**: `M3U` and `UNKNOWN` bodies are parsed (a bare list of URLs is a valid playlist); `UNKNOWN`
+  with zero accepted items → `UNRECOGNIZED_FORMAT`. HLS → `SOURCE_IS_HLS_PLAYLIST`; HTML → `UNEXPECTED_CONTENT_TYPE_HTML`;
+  empty → `EMPTY_RESPONSE`; XML, JSON, gzip → `UNRECOGNIZED_FORMAT`.
+- **Names**: title → `tvg-name` → last URL path segment without extension; whitespace collapsed; truncated to 512.
+- **Classification promotion**: an entry classified MOVIE whose name contains explicit `SxxEyy` numbering is imported as
+  an episode (VOD paths such as `/vod/show-s01e02.mkv` are otherwise movies). The looser `1x02` pattern only applies to
+  entries already classified SERIES; series entries without numbering become movies (diagnostic).
+- **Duplicates**: same (tvg-id, name) key and same credential-free URL → one channel plus a `GroupMembership` item; same
+  key with a different URL → next collision ordinal.
+- **URLs**: stream URLs pass `UrlPolicy` (STREAM context) and are templated with the source credentials before any
+  entity is created. URL-encoded artwork values are decoded once when the raw value is not already a URL; spaces are
+  re-encoded as `%20`.
+- **Headers**: precedence `#EXTVLCOPT` < `#EXTHTTP` < pipe headers. `Cookie`, `Authorization` and other sensitive headers
+  become `SensitiveHeader` items (value in `Secret`, deterministic `CredentialRef` from media source ID + header name, so
+  refreshes overwrite rather than accumulate secrets). Other custom headers are allowlisted (`Origin`, `Accept`,
+  `Accept-Language`, `X-Forwarded-For`).
+- **Catch-up**: `catchup`, `catchup-days`, `catchup-source` fall back to header defaults; `catchup="xc"` maps to
+  Xtream timeshift; relative `catchup-source` templates (e.g. `?utc={utc}`) are stored as templates.
+- **EPG hints**: comma-separated `url-tvg` / `x-tvg-url` values, each policy-checked; `tvg-shift` hours → minutes.
+- **Memory**: identity state per import is proportional to entries (keys and URL fingerprints). JVM host measurement:
+  100k channels imported in ~1.6 s with ~140 MiB heap delta (informational; device measurement in Phase 9).
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `M3U_MISSING_HEADER` | warning | No `#EXTM3U`; parsing continues |
+| `M3U_EXTINF_WITHOUT_URL` | warning | `#EXTINF` followed by another `#EXTINF` or end of file |
+| `M3U_URL_WITHOUT_EXTINF` | info | Bare URL accepted, name derived from URL |
+| `M3U_MISSING_TITLE` / `M3U_INVALID_DURATION` | info | Recovered |
+| `M3U_INVALID_UTF8` | warning | Replaced with U+FFFD |
+| `M3U_LINE_TOO_LONG` / `M3U_URL_OF_DROPPED_ENTRY` | error / info | Line over limit skipped; its URL is dropped too |
+| `M3U_UNTERMINATED_QUOTE` / `M3U_MALFORMED_ATTRIBUTE` / `M3U_DUPLICATE_ATTRIBUTE` / `M3U_TOO_MANY_ATTRIBUTES` | warning / info | Attribute recovery |
+| `M3U_INVALID_EXTHTTP` | warning | `#EXTHTTP` not a flat JSON object |
+| `M3U_HLS_PLAYLIST` | error | Parsing stopped: HLS media playlist |
+| `M3U_BYTE_LIMIT` / `M3U_RECORD_LIMIT` | error | Parsing stopped at a limit; earlier items remain valid |
+| `M3U_UNSUPPORTED_SCHEME` / `M3U_INVALID_URL` | warning | Entry rejected by URL policy |
+| `M3U_INVALID_ARTWORK_URL` / `M3U_INVALID_EPG_URL` | info | Optional URL ignored |
+| `M3U_NO_USABLE_NAME` / `M3U_NAME_TRUNCATED` / `M3U_EXTRAS_TRUNCATED` | warning / info | Normalization limits |
+| `M3U_DUPLICATE_COLLAPSED` / `M3U_SERIES_WITHOUT_EPISODE_NUMBER` | info | Matching decisions |
 
 ## 4. Xtream Codes (§6.2)
 
@@ -163,6 +212,48 @@ A failing unit (e.g. `get_series` returns 500) marks that unit `FAILED` with its
 other units publish normally. The playlist shows a partial-import state with diagnostics (fixture:
 `xtream/partial-failure`).
 
+### 4.6 Implementation (Phase 3) and diagnostic codes
+
+Implemented in `shared/protocols` (`net/HttpFetcher`, `json/*`, `xtream/*`, `media/MediaSourceResolver`):
+
+- **Endpoint**: `XtreamEndpoint.parse` requires `http(s)://`, strips pasted `player_api.php`/`get.php`/`xmltv.php` and
+  trailing slashes, and rejects embedded userinfo. API and stream URLs are built only as `SensitiveUrl`s with
+  percent-encoded credentials; `xmltv.php` is exposed as a credential-placeholder `UrlTemplate` for the EPG source.
+- **Fetching**: `HttpFetcher` applies `UrlPolicy` to every hop, follows redirects manually (max 5, no HTTPS→HTTP),
+  retries only timeouts/resets/refusals and 408/429/5xx (not 501) per request class, honours `Retry-After` up to 30 s,
+  and closes every non-success body.
+- **Discovery**: authentication classification as in §4.2 (401/403 → invalid credentials); `Active` accounts whose
+  expiry has passed and saturated connection counts produce warnings, not failures; capability probes (three category
+  lists) set live/movies/series to SUPPORTED/UNSUPPORTED/UNKNOWN; server host mismatch and available HTTPS are surfaced
+  and never acted on automatically.
+- **Lists**: category list first (groups), then the stream list, streamed element by element (ADR-0022). Truncated or
+  broken list JSON **fails the unit** (publishing part of a list would delete the rest from the snapshot); an object
+  body with `user_info.auth = 0` during a list call fails the unit with an auth error. Duplicate ids within a list are
+  skipped with a diagnostic.
+- **Live protocol hint**: MPEG-TS if the account allows `ts`, else HLS if it allows `m3u8`, else unknown. The concrete
+  output is chosen at playback by `MediaSourceResolver.liveOutput`: TS where the platform plays it, otherwise HLS —
+  the Apple mitigation from SPEC_REVIEW §1.1 — with explicit user preference honoured when the account allows it.
+- **Series info** (lazy): seasons are the union of the `seasons` array and seasons that have episodes; episodes keyed by
+  season or listed as arrays; `info: []` tolerated; duration from `duration_secs` or `HH:MM:SS`.
+- **Short EPG**: base64 title/description (invalid base64 kept as received, with diagnostic); UTC epoch timestamps are
+  authoritative over local time strings.
+- Timeshift/catch-up URLs are not built (catch-up playback is post-beta); the resolver returns `UNSUPPORTED_LOCATOR`.
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `XTREAM_FIELD_TYPE_MISMATCH` | info | A read field could not be coerced; field name recorded, value never |
+| `XTREAM_MISSING_ID` / `XTREAM_NO_USABLE_NAME` / `XTREAM_DUPLICATE_ID` | warning / info | Element skipped |
+| `XTREAM_UNKNOWN_CATEGORY` | info | Element references a category absent from the category list |
+| `XTREAM_ELEMENT_NOT_AN_OBJECT` | info | List element is not an object |
+| `XTREAM_INVALID_ARTWORK_URL` | info | Artwork rejected by URL policy |
+| `XTREAM_INVALID_BASE64` / `XTREAM_INVALID_PROGRAMME_TIME` | info | Short EPG decoding issues |
+| `XTREAM_SERVER_HOST_MISMATCH` / `XTREAM_HTTPS_AVAILABLE` | warning / info | Surfaced to the user, never applied automatically |
+| `XTREAM_EXPIRY_IN_PAST` / `XTREAM_CONNECTION_LIMIT_REACHED` | warning | Account state warnings |
+| `XTREAM_CAPABILITY_PROBE_FAILED` | info | Capability left UNKNOWN |
+
+Unit errors are `DomainError`s: `Http(status)`, `Network(kind)`, `Auth(reason)`, `Validation(reason)`,
+`Parse("XTREAM_INVALID_JSON")`, `Limit(kind)`.
+
 ## 5. XMLTV (§6.3)
 
 ### 5.1 Elements handled
@@ -182,6 +273,36 @@ other units publish normally. The playlist shows a partial-import state with dia
 Format `YYYYMMDDhhmmss ±hhmm` (seconds optional, offset optional). Missing offset → UTC per XMLTV convention,
 then `EPGSource.timeShiftMinutes` applied. Invalid timestamp → programme rejected + diagnostic. Missing `stop`
 → derived from the next programme's start on the same channel (or dropped if last). Details: [EPG.md](EPG.md).
+
+### 5.4 Implementation (Phase 4) and diagnostic codes
+
+Implemented in `shared/protocols` (`xml/XmlTokenizer`, `io/Gzip`, `xmltv/*`):
+
+- **Tokenizer** (ADR-0018): streaming over bytes; DOCTYPE and internal subsets skipped; only the five predefined entities
+  and numeric references expanded — any other entity reference (external, parameter or custom) produces no text and a
+  diagnostic, so XXE and entity-expansion documents are harmless; leading whitespace of text nodes is never buffered;
+  UTF-8 by default, Latin-1/Windows-1252 declarations transcoded; mismatched end tags recovered by closing inner
+  elements; a stray `<` or bare `&` kept as text. Limits: depth, attribute count, text length, total bytes.
+- **gzip**: detected by magic bytes; platform zlib (`java.util.zip` on JVM/Android; libz on Apple, NOT YET VERIFIED).
+  Compressed size, decompressed size and a 100:1 ratio limit (enforced after 64 MiB of output) stop gzip bombs.
+- **Streaming normalization** keeps one pending programme per EPG channel: missing stops are filled from the next
+  programme, overlaps truncated, zero/negative durations dropped, >24 h clamped, exact duplicates collapsed. Programmes
+  arriving out of chronological order for a channel are kept only if complete on their own (overlap correction skipped,
+  diagnostic).
+- **Status**: `PUBLISHED`; `PARTIAL` for a truncated document or corrupt compressed data after some programmes (programmes
+  so far kept); `FAILED` for limits, non-guide bodies and empty input.
+- **Options**: per-source time shift, preferred languages for titles/descriptions, retention window.
+- JVM host measurement (informational): ~170,000 programmes/s; 1,000,000 programmes streamed with ~45 MiB sampled heap growth.
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `XMLTV_BAD_TIMESTAMP` / `XMLTV_MISSING_TITLE` / `XMLTV_MISSING_PROGRAMME_CHANNEL` / `XMLTV_MISSING_CHANNEL_ID` | warning | Record skipped |
+| `XMLTV_MISSING_STOP` | info / warning | Stop derived from next programme; last programme without stop skipped |
+| `XMLTV_OVERLAP_TRUNCATED` / `XMLTV_DURATION_CLAMPED` / `XMLTV_OUT_OF_ORDER` | info | Normalization decisions |
+| `XMLTV_NON_POSITIVE_DURATION` / `XMLTV_DUPLICATE_PROGRAMME` | warning | Programme skipped |
+| `XMLTV_INVALID_ICON_URL` | info | Icon rejected by URL policy |
+| `XMLTV_TRUNCATED_DOCUMENT` / `XMLTV_CORRUPT_COMPRESSED_DATA` | error | Unit PARTIAL or FAILED |
+| `XMLTV_XML_*` (`DOCTYPE_SKIPPED`, `UNDEFINED_ENTITY`, `BARE_AMPERSAND`, `MISMATCHED_END_TAG`, `MALFORMED_TAG`, `INVALID_UTF8`, `INVALID_CHARACTER_REFERENCE`, `UNSUPPORTED_ENCODING`) | info / warning | Tokenizer findings |
 
 ## 6. Ingestion pipeline
 

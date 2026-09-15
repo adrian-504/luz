@@ -1,0 +1,36 @@
+[
+  {
+    "num": 1,
+    "name": "Example Series",
+    "series_id": 401,
+    "cover": "https://img.example.com/poster/series.jpg",
+    "plot": "A synthetic series used only for parser tests.",
+    "genre": "Drama, Mystery",
+    "releaseDate": "2025-01-01",
+    "last_modified": "1788264000",
+    "rating": "8",
+    "rating_5based": 4,
+    "backdrop_path": ["https://img.example.com/backdrop/series.jpg"],
+    "episode_run_time": "45",
+    "category_id": "20"
+  },
+  {
+    "num": "2",
+    "name": "Another &amp; Example",
+    "series_id": "402",
+    "cover": "",
+    "plot": null,
+    "genre": null,
+    "release_date": "2024",
+    "last_modified": 1789065000,
+    "rating": 0,
+    "backdrop_path": [],
+    "category_ids": [20, 21]
+  },
+  {
+    "num": 3,
+    "name": "Series Without Id",
+    "cover": "https://img.example.com/poster/no-id.jpg",
+    "category_id": "20"
+  }
+]

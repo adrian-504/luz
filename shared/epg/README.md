@@ -1,6 +1,14 @@
 # shared:epg
 
-**Phase 4.** Depends on `domain`.
+**Phase 4 — implemented (JVM verified; Apple targets not yet verified).** Depends on `domain` only.
 
-Owns: timezone and programme normalization, channel↔EPG matching, window query types, now/next computation,
-guide geometry precomputation. Spec: [EPG.md](../../docs/EPG.md).
+| File | Contents |
+|---|---|
+| `EpgMatcher.kt` | Channel ↔ EPG channel matching in the order of [EPG.md §3](../../docs/EPG.md): user override, tvg-id / Xtream EPG id, exact name, normalized name; ambiguous and unmatched channels reported; multi-source priority merge |
+| `GuideMath.kt` | `TimeWindow`, `nowNext` (with the instant the answer stops being valid, for cache invalidation), guide grid cell geometry |
+
+XMLTV parsing and programme normalization live in `shared/protocols` (format-specific); persistence in `shared/storage`.
+
+```bash
+./gradlew :shared:epg:check
+```

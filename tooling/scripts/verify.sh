@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Repository verification entry point. Phase 0: documentation, fixtures, secrets, stress-fixture generation.
+# Repository verification entry point: documentation, fixtures, secrets, stress fixtures, reference vectors, Gradle check.
 # Later phases append Gradle and Xcode build/test steps here; never remove a step to make this pass.
 set -euo pipefail
 
@@ -15,19 +15,20 @@ done
 if [ -z "$PY" ]; then echo "verify.sh: no working Python 3.8+ found (set PYTHON=...)"; exit 1; fi
 echo "Using $("$PY" -c 'import sys; print(sys.executable, sys.version.split()[0])')"
 
-echo "== 1/5 Documentation (links, anchors, ADRs, placeholders)"
+echo "== 1/7 Documentation (links, anchors, ADRs, placeholders)"
 "$PY" tooling/scripts/check_docs.py
 
-echo "== 2/5 Fixtures (manifest, formats, reserved hosts, canary credentials, state machine)"
+echo "== 2/7 Fixtures (manifest, formats, reserved hosts, canary credentials, state machine)"
 "$PY" tooling/scripts/check_fixtures.py
 
-echo "== 3/5 Secret scan"
+echo "== 3/7 Secret scan and source text"
 "$PY" tooling/scripts/scan_secrets.py
+"$PY" tooling/scripts/check_source_text.py
 
-echo "== 4/5 Large stress fixtures (generate + streaming verify)"
+echo "== 4/7 Large stress fixtures (generate + streaming verify)"
 "$PY" tooling/scripts/generate_large_fixtures.py --verify
 
-echo "== 5/5 Stress fixture determinism"
+echo "== 5/7 Stress fixture determinism"
 CHECK_DIR="tooling/fixtures/generated/.determinism-check"
 "$PY" tooling/scripts/generate_large_fixtures.py --out "$CHECK_DIR" > /dev/null
 if "$PY" - "$CHECK_DIR" <<'PYCHECK'
@@ -43,8 +44,23 @@ else
   echo "determinism: FAILED (outputs differ between runs)"; exit 1
 fi
 
-echo "== Build systems"
-if [ -f settings.gradle.kts ]; then ./gradlew check; else echo "SKIPPED: no Gradle build yet (Phase 1)"; fi
+echo "== 6/7 Reference ID vectors (Python reference implementation)"
+"$PY" tooling/scripts/generate_id_vectors.py --check
+
+echo "== 7/7 Gradle build, tests and formatting (shared core)"
+if [ -z "${JAVA_HOME:-}" ]; then
+  for candidate in /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home /usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home; do
+    if [ -x "$candidate/bin/java" ]; then export JAVA_HOME="$candidate"; break; fi
+  done
+fi
+if [ -z "${JAVA_HOME:-}" ]; then echo "verify.sh: JDK 21 not found (set JAVA_HOME)"; exit 1; fi
+echo "Using JAVA_HOME=$JAVA_HOME"
+./gradlew check spotlessCheck --console=plain
+if xcrun --sdk iphonesimulator --show-sdk-path >/dev/null 2>&1; then
+  echo "Apple Kotlin/Native targets: ENABLED (Xcode SDK found) and included in check"
+else
+  echo "Apple Kotlin/Native targets: SKIPPED — no Xcode SDK; iOS/tvOS compile and tests NOT YET VERIFIED"
+fi
 if ls apps/apple/*.xcodeproj >/dev/null 2>&1; then echo "Xcode project present: add xcodebuild step"; else echo "SKIPPED: no Xcode project yet (Phase 10)"; fi
 
 echo "verify.sh: ALL CHECKS PASSED"

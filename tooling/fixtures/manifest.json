@@ -33,7 +33,7 @@
       "expected": {
         "entries": 9,
         "titles_include": ["Demo Sports 1, Live", "Ünïcødé Kanal — 東京 テスト"],
-        "kids_logo_decoded": "https://img.example.com/logo/kids channel.png",
+        "kids_logo_url": "https://img.example.com/logo/kids%20channel.png",
         "kids_groups": ["Kids", "Family"],
         "docs_group_from_extgrp": "Documentary",
         "docs_extras_preserved": {"x-custom-flag": "yes", "provider-quality": "fhd"},
@@ -127,7 +127,8 @@
         "catch_up": {"1001": 3},
         "tvg_ids": {"1001": "news.example", "1002": null, "1003": null},
         "stream_1003_groups": ["3", "2"],
-        "diagnostic_codes_include": ["XTREAM_FIELD_TYPE_MISMATCH"]
+        "diagnostic_codes_include": ["XTREAM_NO_USABLE_NAME"],
+        "note": "'added' is not part of the Channel entity, so its invalid value is not read or reported (Phase 3)"
       }
     },
     {
@@ -156,6 +157,15 @@
       "purpose": "Panel variant: episodes as array of arrays, info as empty array.",
       "checks": {"json_keys": ["seasons", "info", "episodes"]},
       "expected": {"seasons": 1, "episodes": 1}
+    },
+    {
+      "path": "xtream/series.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "§6.2",
+      "purpose": "get_series list: numeric and string ids, HTML entity in name, null/empty fields, category_ids array with an unknown category, missing series_id.",
+      "checks": {"json_array_length": 3},
+      "expected": {"series": 2, "rejected": 1, "second_title": "Another & Example", "diagnostic_codes_include": ["XTREAM_MISSING_ID", "XTREAM_UNKNOWN_CATEGORY"]}
     },
     {
       "path": "xtream/short-epg.json",
@@ -292,6 +302,15 @@
       "purpose": "fMP4 VOD media playlist with ENDLIST. Manifest only.",
       "checks": {},
       "expected": {"live": false, "duration_seconds": 16}
+    },
+    {
+      "path": "ids/id-vectors.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "§5.3, DOMAIN_MODEL.md §4, ADR-0017",
+      "purpose": "Stable-ID derivation, normKey/matchNormalize and SHA-256 vectors from the Python reference implementation (tooling/scripts/generate_id_vectors.py). Kotlin shared:domain must reproduce every value.",
+      "checks": {"json_keys": ["versionTag", "text", "ids", "sha256"]},
+      "expected": {"regenerates_identically": "tooling/scripts/generate_id_vectors.py --check"}
     },
     {
       "path": "playback/state-machine.json",

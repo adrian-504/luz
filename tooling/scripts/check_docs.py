@@ -19,7 +19,7 @@ import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-EXCLUDED_DIRS = {".git", "generated", "node_modules", "build", ".gradle", "DerivedData"}
+EXCLUDED_DIRS = {".git", "generated", "node_modules", "build", ".gradle", "DerivedData", ".kotlin"}
 
 REQUIRED_DOCS = [
     "README.md",

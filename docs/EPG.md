@@ -92,7 +92,20 @@ SELECT … FROM program
 | Now/next bulk query (visible 20 channels) | P95 < 20 ms |
 | Guide scroll | no frame > 2× frame budget in benchmark (FrameTimingMetric), see PERFORMANCE.md |
 
-## 7. Test fixtures
+## 7. Implementation status (Phase 4)
+
+| Part | Where | Status |
+|---|---|---|
+| Streaming parser, gzip, normalization rules §2 | `shared/protocols` `xmltv/*` | Implemented, JVM verified against all XMLTV fixtures and 1M-programme stress |
+| Channel matching §3 (+ priority merge across sources) | `shared/epg` `EpgMatcher` | Implemented, JVM verified |
+| Now/next with invalidation time, grid cell geometry §4 | `shared/epg` `GuideMath` | Implemented, JVM verified |
+| Storage, window queries, FTS5 search §4 | `shared/storage` `EpgStore` (SQLDelight, ADR-0013) | JVM verified with 1M programmes (window P95 2.3 ms, now/next P95 1.5 ms); not yet wired to an import pipeline; device SQLite not yet verified |
+| Guide UI §5 | Android TV (Phase 7) | Not started |
+
+Deviation noted: out-of-order programmes cannot be overlap-corrected while streaming (§2 rule 5 assumes sorted input); they
+are kept when complete and flagged. A post-import correction query can be added in storage if real guides need it.
+
+## 8. Test fixtures
 
 `tooling/fixtures/xmltv/`: small valid, timezone variants, malformed (recoverable), XXE and entity-expansion
 attacks, plus generated 100k+ programme stress file. See [TESTING.md](TESTING.md#4-fixtures).

@@ -1,6 +1,6 @@
 # ADR-0011: Kotlin Multiplatform for the shared core
 
-- **Status:** Proposed
+- **Status:** Accepted (approved by product owner in Phase 0 review, 2026-09-14)
 - **Date:** 2026-09-14
 - **Spec:** §4.1, §4.2, §20 ("Shared logic may use Kotlin Multiplatform where appropriate"), §22.3
 

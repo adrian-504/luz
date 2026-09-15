@@ -28,12 +28,12 @@ Severity: **Critical** (could invalidate a platform or the security model) · **
 
 ### 1.2 TLS requirement versus cleartext IPTV providers
 
-- **Severity:** High · **Owner decision:** Yes (ADR-0016 is Proposed).
+- **Severity:** High · **Owner decision:** Decided 2026-09-14 — ADR-0016 Accepted.
 - **Spec:** §14.1 "TLS for network communication"; §14.2 provider impersonation → TLS validation.
 - **Issue:** Many IPTV providers and self-hosted playlist proxies serve API, playlists and streams over plain
   HTTP only. Enforcing TLS would make the app unusable for a large share of legitimate users. On Apple, ATS blocks
   cleartext by default; on Android, cleartext is blocked by default since API 28.
-- **Position taken (ADR-0016, Proposed):** HTTPS preferred and never downgraded on redirect; HTTP allowed only for
+- **Position taken (ADR-0016, Accepted):** HTTPS preferred and never downgraded on redirect; HTTP allowed only for
   user-configured sources and their derived URLs; cleartext sources visibly labelled; credential entry for cleartext
   sources shows a warning. ATS exceptions documented for App Review.
 
@@ -58,13 +58,13 @@ Severity: **Critical** (could invalidate a platform or the security model) · **
 
 ### 1.5 Shared-code technology not committed; Apple consumption tested late
 
-- **Severity:** High · **Owner decision:** Yes (ADR-0011 is Proposed).
+- **Severity:** High · **Owner decision:** Decided 2026-09-14 — ADR-0011 Accepted.
 - **Spec:** §4.1 "share … where beneficial"; §20 "Shared logic **may** use Kotlin Multiplatform"; §18 Apple core at Phase 10.
 - **Issue:** The spec does not commit to a shared-code technology, yet the repository and roadmap assume a
   shared core. With Kotlin Multiplatform, API choices made in Phases 1–4 (sealed hierarchies, suspend functions,
   Flows, generics, value classes) determine how usable the core is from Swift; discovering problems at Phase 10
   would force rework of the core.
-- **Position taken:** Adopt KMP (ADR-0011, Proposed). Compile and test Apple Kotlin/Native targets from Phase 1 when
+- **Position taken:** Adopt KMP (ADR-0011, Accepted). Compile and test Apple Kotlin/Native targets from Phase 1 when
   Xcode is available, and keep public API Swift-friendly (documented rules in ADR-0011). Does not move Apple UI work earlier.
 
 ### 1.6 SQLite library, FTS availability and tvOS artifacts unverified
@@ -73,7 +73,7 @@ Severity: **Critical** (could invalidate a platform or the security model) · **
 - **Spec:** §12, §13 (search index, local database) — no storage technology specified.
 - **Issue:** Candidate KMP persistence libraries differ in tvOS artifact publication and full-text-search support
   (FTS4 vs FTS5), and platform SQLite builds differ in enabled extensions. None of this has been verified.
-- **Position taken:** ADR-0013 (Proposed) fixes SQLite + shared schema; library selected by a spike with hard gates.
+- **Position taken:** ADR-0013 (Accepted 2026-09-14 after the Phase 4 spike) fixes SQLite + shared schema through SQLDelight; FTS5 verified in the JVM driver, Android and Apple system SQLite still to verify.
 
 ### 1.7 Time-to-first-audio is not directly observable on AVPlayer
 
@@ -107,7 +107,7 @@ Refinements to §5.1 made in [DOMAIN_MODEL.md](DOMAIN_MODEL.md). None removes a 
 
 | # | Spec text | Ambiguity | Phase 0 position | Owner decision |
 |---|---|---|---|---|
-| 3.1 | §1.1 core content "catch-up where supported"; §20 core features include catch-up; §3.1 V1 list omits it; §3.2 post-beta "catch-up/replay improvements" | Is catch-up playback in V1? | Model, capability and guide indicator in V1 (FR-EPG-004); playback of archived programmes marked `V1?` (FR-CATCHUP-001) | **Yes, before Phase 7** |
+| 3.1 | §1.1 core content "catch-up where supported"; §20 core features include catch-up; §3.1 V1 list omits it; §3.2 post-beta "catch-up/replay improvements" | Is catch-up playback in V1? | Model, capability and guide indicator in V1 (FR-EPG-004); playback of archived programmes post-beta (FR-CATCHUP-001) | **Decided 2026-09-14** |
 | 3.2 | §9.4 player includes "Picture-in-picture where supported"; §3.2 lists PiP as post-beta | PiP in V1? | Post-beta (follows the scope list) | Confirm |
 | 3.3 | §3.1 "M3U local-file import where platform permits" | tvOS has no document picker | tvOS: not supported in V1; options later: import on iOS + sync (Phase 13), or LAN upload page | Confirm |
 | 3.4 | §4.2 repository has `apps/android-mobile`; §18 roadmap has no Android mobile phase | When is Android mobile built? | Secondary; after Phase 12 unless reprioritized | Confirm |
@@ -157,5 +157,6 @@ Refinements to §5.1 made in [DOMAIN_MODEL.md](DOMAIN_MODEL.md). None removes a 
 
 Verified on the development machine in Phase 0: macOS 27.0 (Apple M1, 8 GB RAM), ~19 GB free disk; Swift 6.4
 via Command Line Tools only (no Xcode, no iOS/tvOS SDKs or simulators); no JDK; no Android SDK/Studio; no
-FFmpeg; Python 3.9.6, Node 26, git 2.54, sqlite3 3.54, xmllint, jq available. No code can be built for any target
-platform on this machine yet. Disk space is insufficient to install both Xcode and the Android toolchain.
+FFmpeg; Python 3.9.6, Node 26, git 2.54, sqlite3 3.54, xmllint, jq available. Disk space is insufficient to install both Xcode and the Android toolchain. Phase 1 update: JDK 21 installed and
+the shared core builds on the JVM; build outputs were corrupted once by iCloud Desktop sync, resolved by moving the
+repository to `~/Developer/IPTV App` (PLATFORM_STRATEGY.md §5).

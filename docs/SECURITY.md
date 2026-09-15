@@ -3,7 +3,10 @@
 Spec: §11.4, §14, §15.3, §21.2. Decisions: ADR-0015 (credentials), ADR-0016 (cleartext policy), ADR-0018 (XML
 parsing), ADR-0020 (no third-party telemetry in V1).
 
-This is the Phase 0 baseline. Nothing here is implemented yet; each control lists the test that will verify it.
+Baseline defined in Phase 0. Implemented so far (JVM-verified): redaction types and rules (§4), URL and redirect
+policy (§5) including the manual redirect/retry fetcher (Phase 3), credential templating and playback-time resolution
+(ADR-0015), bounded M3U and JSON parsing (§6–7), secret-store and transport interfaces. Everything else is
+not yet implemented; each control lists the test that will verify it.
 
 ## 1. Assets and data classification
 
@@ -75,20 +78,25 @@ who can already run code as the app. Revisit if profiles/parental controls or sy
 ### 4.1 Structural prevention (primary)
 
 - `SensitiveUrl` and `Secret<T>` wrapper types in `shared:domain`: `toString()` returns a redacted form; the raw
-  value is accessible only via an explicit `unsafeRawValue()` used by transport and player bridges.
+  value is accessible only via an explicit `unsafeRawValue()` used by transport and player bridges. Since Phase 3,
+  `SensitiveUrl.toString()` prints only `scheme://host[:port]/‹redacted›`: a test showed that credentials in
+  non-standard query parameters (`?u=…&p=…`) survive pattern-based redaction, so pattern rules are used only for
+  sanitized exports, never as the protection against accidental printing.
 - Logging API accepts structured fields; there is no API that logs an arbitrary exception message without passing it through the Redactor.
 - Native bridges (OkHttp interceptors, Media3 event logging, URLSession delegates, AVPlayer error logs) must redact before emitting. OkHttp `HttpLoggingInterceptor` is prohibited in release builds and redacts in debug.
 
 ### 4.2 Redactor rules (defense in depth)
 
-1. Exact and URL-encoded occurrences of any secret currently in memory from the SecretStore → `‹redacted›`.
+1. Exact and URL-encoded (upper/lowercase hex, `+` for space) occurrences of known secrets → `‹redacted›`. Secrets shorter than 3 characters are not substring-redacted (false positives); rules 2–7 still apply.
 2. URL userinfo (`user:pass@`) → removed.
 3. Query parameters (case-insensitive): `username`, `user`, `password`, `pass`, `pwd`, `token`, `auth`, `key`, `apikey`, `api_key`, `signature`, `sig`, `session`, `sid`, `hash`, `expires`, `e`, `st` → value redacted.
 4. Xtream path shape `/(live|movie|series|timeshift)/<u>/<p>/…` → `/{kind}/{u}/{p}/…`.
 5. Header values: `Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key`, `Proxy-Authorization` → redacted.
 6. Host → stable per-report pseudonym (`host-1`) in exports unless the user opts in.
+7. Free-text key/value pairs for `username`, `password`, `passwd`, `pwd`, `pass`, `token` (JSON `"password": "x"` or `password=x`) → value redacted. Covers Xtream responses, which echo the credentials, if they ever reach an exception message.
 
-Redaction is a pure shared function with exhaustive unit tests.
+Implemented in `shared/domain` (`Redactor`, `SensitiveUrl`, `Secret`, `UrlTemplate`) with canary tests in
+`CredentialSafetyTest` (Phase 1, JVM verified).
 
 ## 5. Network policy — ADR-0016
 
@@ -97,7 +105,7 @@ Redaction is a pure shared function with exhaustive unit tests.
 | Allowed schemes for sources and API | `https`, `http` (cleartext allowed for user-configured sources, flagged) |
 | Allowed schemes for streams | `https`, `http`; `rtmp`, `rtsp`, `udp`/`rtp` imported but playable only if platform capability says so |
 | Rejected everywhere | `file` (except platform picker import), `content` (except Android picker), `javascript`, `data`, `ftp`, anything else |
-| Redirects | ≤ 5; HTTPS → HTTP downgrade rejected; scheme must remain in allowlist; final host recorded |
+| Redirects | Transports never follow redirects; every hop goes through `UrlPolicy.checkRedirect`: ≤ 5; HTTPS → HTTP downgrade rejected; scheme must remain in allowlist; final host recorded |
 | TLS | platform default validation; no trust-all, no custom pinning in V1 (provider certs are arbitrary) |
 | Timeouts | connect 10 s, idle read 20–30 s, total per request class (IPTV_PROTOCOLS.md §4.4) |
 | Concurrency | ≤ 2 API requests per provider; playback uses a separate client/connection pool |
@@ -127,7 +135,7 @@ Exceeding a limit stops the unit with `Limit(which)` and an actionable message; 
 ## 7. Safe parsing
 
 - **M3U**: never interpret content as code or paths; URL fields validated by policy (§5); attribute values length-bounded; invalid UTF-8 replaced.
-- **XML (XMLTV)**: DOCTYPE skipped; no external entity resolution; no internal entity expansion beyond predefined/numeric; no XInclude; namespace-agnostic; limits §6. If a platform parser is used instead of the shared tokenizer (ADR-0018 alternative), it must be configured equivalently (Android `XmlPullParser` without DOCDECL processing; Apple `XMLParser.shouldResolveExternalEntities = false`) and pass the same attack fixtures.
+- **XML (XMLTV)**: DOCTYPE skipped; no external entity resolution; no internal entity expansion beyond predefined/numeric; no XInclude; namespace-agnostic; limits §6. Implemented in Phase 4 (`XmlTokenizer`): the XXE and billion-laughs fixtures import safely with no entity text in the output; gzip bombs stop on the compression-ratio limit (JVM verified). If a platform parser is used instead of the shared tokenizer (ADR-0018 alternative), it must be configured equivalently (Android `XmlPullParser` without DOCDECL processing; Apple `XMLParser.shouldResolveExternalEntities = false`) and pass the same attack fixtures.
 - **JSON**: lenient decoding without reflection-based polymorphism on untrusted type fields; depth and size bounded.
 - **Images**: platform decoders only; max dimensions/bytes enforced by image loader configuration.
 

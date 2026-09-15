@@ -1,6 +1,6 @@
 # ADR-0012: Monorepo layout and build systems
 
-- **Status:** Proposed
+- **Status:** Accepted (delegated technical decision, 2026-09-14 — layout and build-logic in use since Phase 2)
 - **Date:** 2026-09-14
 - **Spec:** §4.2
 
@@ -23,7 +23,7 @@ docs/, docs/ADR/
 tooling/{fixtures/{m3u,xtream,xmltv,hls,playback,…}, scripts}
 ```
 
-- **One Gradle build at the repository root** (`settings.gradle.kts`) including `shared:*` and `apps:android:*`, with a version catalog and convention plugins in `build-logic/` (created in Phase 1).
+- **One Gradle build at the repository root** (`settings.gradle.kts`) including `shared:*` and `apps:android:*`, with a version catalog; convention plugins live in `build-logic/` (created in Phase 2 with the second module: `iptv.kmp-library`, `EmbedFixtureBytes`).
 - **One Xcode project** with tvOS and iOS app targets and a local Swift package `ApplePlatform`; the shared XCFramework is produced by Gradle and referenced as a binary target (Phase 10).
 - Directories are created when their phase starts; Phase 0 creates only `shared/*` module READMEs and `apps/*` READMEs.
 

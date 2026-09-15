@@ -66,10 +66,11 @@ The Kotlin Multiplatform choice (ADR-0011) is partly motivated by this matrix: t
 
 | Need | Required for | Phase 0 status on development machine |
 |---|---|---|
-| JDK 17+ (21 recommended) | Gradle, Kotlin, Android | **Not installed** (`java` stub only; no JVM found) |
+| JDK 17+ (21 recommended) | Gradle, Kotlin, Android | Installed 2026-09-14: Homebrew `openjdk@21` (21.0.12); not on PATH, `verify.sh` locates it |
 | Android Studio / Android SDK + TV emulator image | Android build, emulator | **Not installed** |
 | Xcode (full) with tvOS/iOS SDKs and simulators | Kotlin/Native Apple targets, Apple apps | **Not installed** — only Command Line Tools (Swift 6.4 toolchain, macOS SDK) |
 | FFmpeg | generating playback test media | **Not installed** |
 | Python 3.8+ | repository tooling | Installed (3.9.6) |
 | Disk space | Xcode + simulators (~40 GB+), Android SDK + emulator images (~15 GB+), Gradle caches (~5 GB+) | **~19 GB free (91 % used)** — insufficient for both toolchains |
 | RAM | Android emulator + Gradle + Xcode concurrently | 8 GB (Apple M1) — workable for one toolchain at a time |
+| Project location outside cloud sync | Reliable builds, intact `.git` | **Resolved 2026-09-14:** repository moved from iCloud-synced `~/Desktop` (where iCloud created `… 2.class` conflict copies inside `build/`) to `~/Developer/IPTV App`, which is not synced. Keep repositories out of iCloud Drive |

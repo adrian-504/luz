@@ -1,6 +1,6 @@
 # ADR-0020: No remote analytics or crash reporting in V1
 
-- **Status:** Proposed
+- **Status:** Accepted (delegated technical decision, 2026-09-14 — no telemetry code or SDK exists; policy in force)
 - **Date:** 2026-09-14
 - **Spec:** §1.2, §3.3 (no advertising SDKs), §14.1–14.2 (analytics leakage), §15.2, §21.2
 
