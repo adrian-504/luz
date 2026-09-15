@@ -44,3 +44,4 @@ line. Product-scope decisions still go to the owner.
 | [0021](0021-byte-streams-without-io-library.md) | Byte streams without an I/O library until JSON streaming needs one | Accepted |
 | [0022](0022-first-runtime-dependencies-coroutines-serialization.md) | First runtime dependencies: kotlinx.coroutines and kotlinx.serialization JSON | Accepted |
 | [0023](0023-android-tv-app-toolchain-and-shell-navigation.md) | Android TV app toolchain and shell navigation | Accepted |
+| [0024](0024-android-playback-media3-controller.md) | Android playback with Media3 behind a shared-contract controller | Accepted |

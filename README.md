@@ -17,7 +17,8 @@ credential redaction, URL policy, playback state machine), `shared/protocols` (s
 discovery/import, streaming XMLTV import, HTTP policy layer, playback-time URL resolution), `shared/epg` (channel
 matching, now/next, guide geometry) and `shared/storage` (SQLDelight guide storage with full-text search). **Phase 5 — Android TV shell** complete on the
 Google TV emulator: `apps/android/tv` with onboarding placeholders, a side navigation rail and tested remote navigation;
-no playback yet. See
+**Phase 6 — Android playback** verified on
+the emulator: Media3 player with recovery, error messages and diagnostics, tested with synthetic streams. See
 [docs/ROADMAP.md](docs/ROADMAP.md) for the phase plan and the next milestone.
 
 ## Source of truth

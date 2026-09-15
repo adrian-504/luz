@@ -142,7 +142,7 @@ Exceeding a limit stops the unit with `Limit(which)` and an actionable message; 
 ## 8. Verification strategy for credential safety
 
 - **Canary credentials**: fixtures and tests use `canary-user` / `CANARY-PW-7f3a9c-DO-NOT-LOG` (never real).
-- Test harness captures all log output, diagnostics exports, persisted DB contents and crash-report payload builders during import and playback tests and asserts the canary strings (raw and URL-encoded) never appear.
+- Test harness captures all log output, diagnostics exports, persisted DB contents and crash-report payload builders during import and playback tests and asserts the canary strings (raw and URL-encoded) never appear. **Implemented for Android playback (Phase 6):** Media3's logger is replaced by `RedactingMedia3Logger` (URLs reduced to origin, no stack traces); `Media3PlaybackControllerTest` plays canary-credential URLs (path and query) that fail, reads the app's logcat and asserts neither canary appears. Removing the redacting logger makes the test fail — Media3 does log stream URLs.
 - `tooling/scripts/scan_secrets.py` runs in `verify.sh` (and later CI/pre-commit) to block committed credentials.
 
 ## 9. Privacy-conscious telemetry — ADR-0020

@@ -19,6 +19,8 @@ dependencies {
     implementation(libs.tv.material)
     implementation(libs.activity.compose)
     implementation(libs.navigation.compose)
+    implementation(project(":apps:android:platform"))
+    debugImplementation(project(":apps:android:testing"))
 
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)

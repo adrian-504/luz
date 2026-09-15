@@ -48,5 +48,7 @@ val androidSdkFound: Boolean = run {
     candidate != null && file(candidate).resolve("platforms").isDirectory
 }
 if (androidAppsSetting == "true" || (androidAppsSetting == "auto" && androidSdkFound)) {
+    include(":apps:android:platform")
+    include(":apps:android:testing")
     include(":apps:android:tv")
 }

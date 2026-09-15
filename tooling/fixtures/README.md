@@ -17,6 +17,7 @@ Synthetic inputs for parser, pipeline, security and playback-contract tests. Pol
 | `m3u/` | Channel-list playlists: valid, unusual attributes, malformed, HLS-disguised |
 | `xtream/` | Xtream Codes API responses and the partial-failure scenario |
 | `xmltv/` | XMLTV guides: valid (+gzip), timezone variants, malformed, XXE and entity-expansion attacks |
-| `hls/` | HLS manifests (media generated locally in Phase 6) |
+| `hls/` | HLS manifests (manifest-only fixtures for parsing) |
+| `media/` | Synthetic playback media (FFmpeg test pattern + tone): 10 s MP4, 30 s of HLS/TS segments — `generate_test_media.sh` |
 | `playback/` | Playback state machine table and conformance vectors |
 | `generated/` | Large stress fixtures from `generate_large_fixtures.py` — git-ignored, never committed |

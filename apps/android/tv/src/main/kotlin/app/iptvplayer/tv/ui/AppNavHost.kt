@@ -4,13 +4,18 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.onboarding.SourceFormPlaceholderScreen
 import app.iptvplayer.tv.ui.onboarding.SourceType
 import app.iptvplayer.tv.ui.onboarding.SourceTypeScreen
 import app.iptvplayer.tv.ui.onboarding.WelcomeScreen
+import app.iptvplayer.tv.ui.player.PlayerScreen
 import app.iptvplayer.tv.ui.shell.MainShell
 import app.iptvplayer.tv.ui.theme.Tokens
 
@@ -20,6 +25,9 @@ object Routes {
     const val SOURCE_TYPE = "source-type"
     const val SOURCE_FORM = "source-form/{type}"
     const val MAIN = "main"
+    const val PLAYER = "player/{streamId}"
+
+    fun player(streamId: String) = "player/$streamId"
 
     fun sourceForm(type: SourceType) = "source-form/${type.name}"
 }
@@ -56,7 +64,21 @@ fun AppNavHost() {
             SourceFormPlaceholderScreen(type = type ?: SourceType.XTREAM, onBack = { navController.popBackStack() })
         }
         composable(Routes.MAIN) {
-            MainShell(onAddSource = { navController.navigate(Routes.SOURCE_TYPE) })
+            MainShell(
+                onAddSource = { navController.navigate(Routes.SOURCE_TYPE) },
+                onPlayDeveloperStream = { navController.navigate(Routes.player(it)) },
+            )
+        }
+        composable(Routes.PLAYER) { entry ->
+            val context = LocalContext.current
+            val streamId = entry.arguments?.getString("streamId")
+            val stream = remember(streamId) { DeveloperStreams.list(context).firstOrNull { it.id == streamId } }
+            if (stream == null) {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            } else {
+                val request = remember(stream) { stream.request() }
+                PlayerScreen(request = request, title = stream.label)
+            }
         }
     }
 }

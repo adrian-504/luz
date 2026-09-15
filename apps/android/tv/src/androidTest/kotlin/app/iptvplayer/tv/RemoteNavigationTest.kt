@@ -110,9 +110,14 @@ class RemoteNavigationTest {
                 awaitFocus(ShellTags.rail(section))
             }
             press(KeyEvent.KEYCODE_DPAD_CENTER)
-            val first = if (section == Section.PLAYLISTS) ShellTags.ADD_SOURCE else ShellTags.item(section, 0)
+            // Debug builds list developer test streams first in Settings.
+            val first = when (section) {
+                Section.PLAYLISTS -> ShellTags.ADD_SOURCE
+                Section.SETTINGS -> ShellTags.developerStream("hls-live")
+                else -> ShellTags.item(section, 0)
+            }
             awaitFocus(first)
-            if (section == Section.PLAYLISTS) {
+            if (section == Section.PLAYLISTS || section == Section.SETTINGS) {
                 press(KeyEvent.KEYCODE_DPAD_DOWN)
                 awaitFocus(ShellTags.item(section, 0))
             }

@@ -175,3 +175,20 @@ Stored in an on-device ring buffer (bounded, e.g. last 200 sessions), never uplo
 User-initiated only. JSON + human-readable text. Passes through the shared `Redactor`: no credentials, no
 full URLs (scheme + host pseudonym + path shape only, e.g. `http://host-1/live/{u}/{p}/{id}.ts`), no
 content titles unless the user ticks "include channel names". Export content is covered by canary tests.
+
+## 7. Implementation status
+
+| Part | Android (Phase 6) | Apple |
+|---|---|---|
+| Controller contract §2 | `Media3PlaybackController` (`apps/android/platform`); tracks (audio/subtitles), playback rate not yet | Phase 11 |
+| State machine §3 | `PlaybackSession` passes all vectors (JVM); engine mapping verified on the Google TV emulator | Phase 11 |
+| Timeouts and recovery §3 | Prepare/stall timers, retry backoff and budget; retry budget restored after 10 s of stable playback; client HTTP errors fail without engine retries | Phase 11 |
+| Error taxonomy §5 | `Media3ErrorMapper`; live HLS playlist stuck → `TIMEOUT_STALL`, reset → `SRC_ENDED_UNEXPECTEDLY`; `HTTP_CONNECTION_LIMIT` only for 458/509 until account state is available | Phase 11 |
+| Fast channel switching §4 | Not started (Phase 7) | — |
+| Diagnostics panel §6.1 | Developer panel in the player (no host names, no URLs) | Phase 11 |
+| Telemetry ring buffer §6.2, export §6.3 | Not started | — |
+
+Informational emulator timings (debug build, synthetic media on 127.0.0.1, Google TV API 34 emulator on an M1 Mac; not
+device results): time to first frame HLS VOD ≈ 180 ms, HLS live ≈ 80 ms after a channel change, progressive MP4 ≈ 1.4 s
+(first playback in the process, includes decoder start), continuous TS live ≈ 1.6 s. Time to first audio is not reported on
+the emulator (started without audio output).

@@ -148,6 +148,13 @@ def check_fixture(entry: dict, policy: dict, errors: list[str]) -> str:
     elif fmt == "hls":
         if not data.startswith(b"#EXTM3U") or not re.search(rb"#EXT-X-(TARGETDURATION|STREAM-INF)", data):
             errors.append(f"{rel}: not an HLS playlist")
+        if "hls_segments" in checks:
+            segments = re.findall(rb"^([^#\s][^\r\n]*)$", data, re.M)
+            if len(segments) != checks["hls_segments"]:
+                errors.append(f"{rel}: {len(segments)} segments != manifest {checks['hls_segments']}")
+            for segment in segments:
+                if not (path.parent / segment.decode()).is_file():
+                    errors.append(f"{rel}: segment missing: {segment.decode()}")
     elif fmt in ("json", "scenario"):
         try:
             doc = json.loads(data)
@@ -191,6 +198,18 @@ def check_fixture(entry: dict, policy: dict, errors: list[str]) -> str:
         note = check_state_machine(rel, data, errors)
     elif fmt == "html":
         pass
+    elif fmt == "mp4":
+        if data[4:8] != b"ftyp":
+            errors.append(f"{rel}: missing MP4 ftyp box")
+        if checks.get("moov_before_mdat") and not (0 <= data.find(b"moov") < data.find(b"mdat")):
+            errors.append(f"{rel}: moov box must precede mdat (fast start)")
+        note = "mp4"
+        data = b""  # binary media: no URL or credential scan
+    elif fmt == "mpegts":
+        if len(data) % 188 or any(data[i] != 0x47 for i in range(0, len(data), 188)):
+            errors.append(f"{rel}: not a 188-byte MPEG-TS packet stream")
+        note = f"{len(data) // 188} TS packets"
+        data = b""  # binary media: no URL or credential scan
     else:
         errors.append(f"{rel}: unknown format '{fmt}'")
 

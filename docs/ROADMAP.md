@@ -13,7 +13,7 @@ a test plan and a review step (§18.1). A phase is closed only by review against
 | **3** | Xtream engine | Auth/content/EPG flows pass | **Complete on JVM 2026-09-14; Apple targets not yet verified** |
 | **4** | XMLTV/EPG | Large EPG imports and queries remain responsive | **Complete on JVM 2026-09-14; Apple targets and device SQLite not yet verified** |
 | **5** | Android TV shell | Remote navigation complete | **Complete on Google TV emulator 2026-09-15; owner's TV device not yet checked** |
-| 6 | Android playback | Live/VOD playback stable | Media3 controller, state-machine vectors, recovery, diagnostics, TTFF instrumentation |
+| **6** | Android playback | Live/VOD playback stable | **Verified on Google TV emulator 2026-09-15 with synthetic streams; owner's real TV not yet checked** |
 | 7 | Android Live TV | Channel browsing/zapping/EPG complete | Guide UI, zapping, preparation window, now/next |
 | 8 | Android VOD/Series | Library experience complete | Movies, series, continue watching, search UI |
 | 9 | Android QA | Stress/device matrix passes | Performance gates, soak, device matrix |
@@ -215,24 +215,50 @@ screen change. Mutation spot-checks: removing the rail-entry rule or the Back-to
 Totals: 162 JVM tests (shared core) + 6 instrumented tests (5 navigation, 1 SQLite probe) on the Google TV API 34
 emulator, 0 failures; `verify.sh` green with strict dependency verification.
 
-## Next milestone: Phase 6 — Android playback
+## Phase 6 — Android playback
 
 **Primary objective:** stable live and VOD playback on Android TV through Media3, driven by the shared playback state
 machine, with recovery and diagnostics (exit criterion: live/VOD playback stable). PLAYBACK.md is the contract.
 
-Scope (to be confirmed at Phase 5 review):
+### Phase 6 result (2026-09-15)
 
-1. `shared:domain` (and later protocols/storage) gain the Android target; the app consumes the shared playback types.
-2. Media3 (ExoPlayer, HLS; DASH evaluated) added through the dependency policy with an ADR; `apps/android/platform`
-   module with the `PlaybackController` implementation passing `tooling/fixtures/playback/state-machine.json` vectors.
-3. Error mapping to the taxonomy, bounded recovery policy, TTFF instrumentation, diagnostics panel (developer build).
-4. Test media: locally generated synthetic HLS/TS streams served on the development machine only (no bundled or
-   third-party content, ADR-0010); a tool to generate them is evaluated (FFmpeg is not installed yet).
-5. Player screen with minimal overlay; remote keys per DESIGN_SYSTEM.md §6 for play/pause and Back.
-6. First check on the owner's real Google TV device (developer mode and USB/network debugging, with owner approval).
+| Scope item | Result |
+|---|---|
+| Shared core on Android | **VERIFIED on emulator** — KMP Android target for all shared modules; `commonTest` suites run on the device (domain, protocols, EPG): stable IDs and text normalization identical to the JVM |
+| Media3 through the dependency policy | **Done — ADR-0024:** Media3 1.11.1 `exoplayer` + `exoplayer-hls`; `media3-ui-compose` evaluated and removed |
+| Controller passes the state-machine vectors | **VERIFIED (JVM)** — `PlaybackSession` passes every vector; timers, backoff and retry budget on a virtual clock |
+| Real playback, errors, recovery | **VERIFIED on emulator** — MP4 VOD (pause, seek, end, replay), HLS VOD, HLS live, continuous TS live; 401/404 fail fast without retry; malformed playlist, random bytes, HTML body, RTMP classified; DNS failure retried; 503 recovers; stall and slow-start timeouts recover |
+| Credentials never logged | **VERIFIED on emulator** — canary URLs absent from logcat; the test fails without the redacting logger |
+| TTFF instrumentation, diagnostics panel | **Done** — informational emulator numbers in PLAYBACK.md §7; time to first audio NOT YET VERIFIED (emulator without audio) |
+| Test media | **Done** — FFmpeg (owner approved) synthetic pattern + tone, reproducible, 1.3 MB; in-process fault-injecting server |
+| Player screen, remote keys | **VERIFIED on emulator** — overlay on OK (no accidental button press), auto-hide, play/pause and media keys, error panel with Retry, diagnostics, Back order; debug-only developer streams under Settings |
+| Owner's real Google TV device | **NOT YET VERIFIED** — needs developer mode on the TV and owner approval |
 
-Out of scope: channel zapping and guide (Phase 7), library UI (Phase 8), provider sources wired end to end beyond what
-playback tests need.
+Problems found and fixed during the phase: `INTERNET` permission missing for playback; Media3 retried 404/401 for ~6 s
+before reporting (now immediate); a frozen live playlist surfaced as "unknown error" (now a stall, retried); the timing
+value was published after the "playing" state; Media3's Compose video view accessed the player off the main thread under
+tests (replaced by a plain `SurfaceView`); OK opening the overlay also pressed Pause; the first Back only moved focus
+inside the player; Settings focused placeholder cards instead of the test streams.
+
+Totals: 173 JVM tests (162 shared core, 11 playback session and error mapping) and 169 device tests on the Google TV API 34
+emulator (151 shared-core, 10 real-playback, 8 TV app), 0 failures; `verify.sh` green with strict dependency verification.
+Mutation spot-checks: 7 injected playback and player bugs, all caught (one needed a stronger assertion first).
+
+## Next milestone: Phase 7 — Android Live TV
+
+**Primary objective:** channel browsing, zapping and the guide on Android TV with real sources (exit criterion:
+channel browsing/zapping/EPG complete).
+
+Scope (to be confirmed at Phase 6 review):
+
+1. Source onboarding wired end to end: Xtream login and M3U URL forms, secrets in Android Keystore-backed storage
+   (ADR-0015), import pipeline into storage with a bundled FTS5 SQLite on Android (ADR-0013).
+2. Native `HttpTransport` on OkHttp shared by imports and playback (ARCHITECTURE.md §11).
+3. Live TV screen: groups, channel list with now/next, favorites; zapping with debounce and the preparation window
+   (PLAYBACK.md §4); last-channel toggle; MediaSession for system media keys; audio/subtitle track selection.
+4. Guide screen (EPG.md §5) over storage window queries.
+5. Real-device check on the owner's Google TV, including playback of the owner's own authorized source entered at runtime
+   (never committed).
 
 ## Proposed interim gate: Android TV personal alpha
 

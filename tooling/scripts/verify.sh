@@ -62,12 +62,13 @@ android_sdk=""
 if [ -f local.properties ]; then android_sdk="$(sed -n 's/^sdk\.dir=//p' local.properties | tail -1)"; fi
 android_sdk="${android_sdk:-${ANDROID_HOME:-}}"
 if [ -n "$android_sdk" ] && [ -d "$android_sdk/platforms" ]; then
-  echo "Android SDK: $android_sdk — building the TV app (lint ran as part of check)"
-  ./gradlew :apps:android:tv:assembleDebug :apps:android:tv:assembleDebugAndroidTest --console=plain
+  echo "Android SDK: $android_sdk — building the TV app, debug and release (lint and JVM unit tests ran as part of check)"
+  ./gradlew :apps:android:tv:assembleDebug :apps:android:tv:assembleRelease :apps:android:tv:assembleDebugAndroidTest --console=plain
   adb="$android_sdk/platform-tools/adb"
   if [ -x "$adb" ] && "$adb" devices | awk 'NR>1 && $2=="device"' | grep -q .; then
-    echo "Android device/emulator connected — running remote-navigation and platform tests"
-    ./gradlew :apps:android:tv:connectedDebugAndroidTest --console=plain
+    echo "Android device/emulator connected — running shared-core, playback and TV app device tests"
+    ./gradlew :shared:domain:connectedAndroidDeviceTest :shared:protocols:connectedAndroidDeviceTest :shared:epg:connectedAndroidDeviceTest \
+      :apps:android:platform:connectedDebugAndroidTest :apps:android:tv:connectedDebugAndroidTest --console=plain
   else
     echo "SKIPPED: no Android device or emulator connected; device tests NOT run (docs/TESTING.md §3)"
   fi
