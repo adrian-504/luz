@@ -244,7 +244,31 @@ Totals: 173 JVM tests (162 shared core, 11 playback session and error mapping) a
 emulator (151 shared-core, 10 real-playback, 8 TV app), 0 failures, and the same 169 on the Bbox TV; `verify.sh` green with strict dependency verification.
 Mutation spot-checks: 7 injected playback and player bugs, all caught (one needed a stronger assertion first).
 
-## Next milestone: Phase 7 — Android Live TV
+## Phase 7 — Android Live TV (in progress)
+
+**Primary objective:** channel browsing, zapping and the guide on Android TV with real sources (exit criterion:
+channel browsing/zapping/EPG complete).
+
+### Progress (2026-09-15)
+
+| Scope item | Status |
+|---|---|
+| Bundled SQLite with FTS5 on Android (ADR-0013 follow-up) | **Done — ADR-0025:** AndroidX `sqlite-bundled` 2.7.1 behind a SQLDelight driver; tests pass on the JVM, the emulator and the Bbox TV (32-bit ARM) |
+| Content storage (sources, groups, channels, stream locators, favorites, guide links) | **Done** — snapshot publish/discard, favorites survive refresh; JVM and device tests; no credentials in database files (canary check) |
+| Shared import pipeline (`shared:ingestion`) | **Done — ADR-0026:** add Xtream / M3U, refresh live, refresh guide + channel matching, resolve channel, delete |
+| Android `HttpTransport` (OkHttp) and `SecretStore` (Keystore) | **Done — ADR-0026** — device tests (redirects not followed, body cap, DNS/refused/timeout, encryption, tamper handling) |
+| Onboarding forms (Xtream login, M3U link) | **Done** — plain-language errors, cleartext warning, keyboard on OK; M3U *file* import still a placeholder |
+| Live TV screen, favorites, sources list | **Done** — groups, channel numbers, now/next with progress, long-press favorite, refresh/remove |
+| Zapping in the player | **Done** — Up/Down and Channel ±, debounced resolve, banner; verified on the emulator |
+| Guide screen | **Done (simplified)** — 3-hour window from the current half hour; no horizontal paging yet |
+| End-to-end remote test | **VERIFIED on emulator** — type login → import → Live TV → favorite → play → zap → guide |
+| MediaSession (system media keys), audio/subtitle track selection | Not started |
+| Preparation window for faster zapping (PLAYBACK.md §4 T0/T1) | Not started |
+| Time-to-first-audio metric (not reported on emulator or Bbox) | Not started |
+| Multiple sources in Live TV (switcher), scheduled refresh | Not started (first source shown) |
+| Owner's real provider on the Bbox | **NOT YET VERIFIED** — owner enters their login on the TV |
+
+## Phase 7 original scope
 
 **Primary objective:** channel browsing, zapping and the guide on Android TV with real sources (exit criterion:
 channel browsing/zapping/EPG complete).

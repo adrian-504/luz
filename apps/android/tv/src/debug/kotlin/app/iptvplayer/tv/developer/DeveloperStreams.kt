@@ -7,15 +7,33 @@ import app.iptvplayer.domain.security.SensitiveUrl
 import app.iptvplayer.platform.playback.PlaybackRequest
 import app.iptvplayer.protocols.media.ResolvedMediaSource
 import app.iptvplayer.testing.TestMediaServer
+import app.iptvplayer.testing.TestPanel
 
 /** Debug build: synthetic streams from an in-process [TestMediaServer] (tooling/fixtures/media). */
 object DeveloperStreams {
+    private const val FIXED_PORT = 18_080
+
     @Volatile
     private var server: TestMediaServer? = null
 
     private fun server(context: Context): TestMediaServer = server ?: synchronized(this) {
-        server ?: TestMediaServer(context.applicationContext.assets).also { server = it }
+        // A fixed port keeps the saved test provider working after the app restarts; any free port if it is taken.
+        server
+            ?: (
+                runCatching { TestMediaServer(context.applicationContext.assets, FIXED_PORT) }.getOrNull()
+                    ?: TestMediaServer(context.applicationContext.assets)
+                )
+                .also { server = it }
     }
+
+    /** Starts the test server with the app, so a saved test provider works right after a restart. */
+    fun start(context: Context) {
+        server(context)
+    }
+
+    /** Server address and the canary login of the in-process test Xtream panel. */
+    fun testProvider(context: Context): Triple<String, String, String>? =
+        Triple(server(context).url(""), TestPanel.USERNAME, TestPanel.PASSWORD)
 
     fun list(context: Context): List<DeveloperStream> {
         fun stream(id: String, label: String, path: String, protocol: StreamProtocol, mode: PlaybackMode) = DeveloperStream(id, label) {

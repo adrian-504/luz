@@ -18,6 +18,18 @@ public data class GuideRow(
     public val title: String,
 )
 
+public data class ChannelEpgLinkRow(
+    public val channelId: String,
+    public val epgSourceId: String,
+    public val epgChannelId: String,
+    public val method: String,
+    public val confidence: Int,
+)
+
+public data class GuideProgramme(public val title: String, public val start: Instant, public val end: Instant)
+
+public data class NowNextRow(public val current: GuideProgramme?, public val next: GuideProgramme?)
+
 /** Minimal programme input for writing a snapshot. */
 public data class ProgramRow(
     public val id: ProgramId,
@@ -51,23 +63,107 @@ public class EpgStore(private val driver: SqlDriver) {
 
     /** Writes [programmes] as snapshot [snapshot] of [source] in transactions of [batchSize] rows. */
     public fun writeSnapshot(source: EpgSourceId, snapshot: Long, programmes: Sequence<ProgramRow>, batchSize: Int = 1_000): Int {
-        var written = 0
-        val iterator = programmes.iterator()
-        while (iterator.hasNext()) {
+        val writer = beginSnapshot(source, snapshot, batchSize)
+        programmes.forEach { writer.add(it) }
+        return writer.finish()
+    }
+
+    /** Push-style writer for importers that emit programmes one at a time. Rows stay invisible until [activate]. */
+    public fun beginSnapshot(source: EpgSourceId, snapshot: Long, batchSize: Int = 1_000): ProgramWriter =
+        ProgramWriter(source, snapshot, batchSize)
+
+    public inner class ProgramWriter internal constructor(
+        private val source: EpgSourceId,
+        private val snapshot: Long,
+        private val batchSize: Int,
+    ) {
+        private val pending = ArrayList<ProgramRow>(batchSize)
+        private var written = 0
+
+        public fun add(programme: ProgramRow) {
+            pending += programme
+            if (pending.size >= batchSize) flush()
+        }
+
+        /** Writes the remaining rows and returns the total written. */
+        public fun finish(): Int {
+            flush()
+            return written
+        }
+
+        private fun flush() {
+            if (pending.isEmpty()) return
             database.transaction {
-                var inBatch = 0
-                while (inBatch < batchSize && iterator.hasNext()) {
-                    val p = iterator.next()
+                for (p in pending) {
                     queries.insertProgram(
                         source.value, snapshot, p.id.value, p.channelId,
                         p.start.epochSeconds, p.end.epochSeconds, p.title, p.subtitle, p.description,
                     )
-                    inBatch++
                 }
-                written += inBatch
+            }
+            written += pending.size
+            pending.clear()
+        }
+    }
+
+    /** Replaces the channel ↔ EPG links of [playlistId]. */
+    public fun replaceLinks(playlistId: String, links: List<ChannelEpgLinkRow>) {
+        database.transaction {
+            queries.deleteLinks(playlistId)
+            links.forEach {
+                queries.insertLink(
+                    playlistId,
+                    it.channelId,
+                    it.epgSourceId,
+                    it.epgChannelId,
+                    it.method,
+                    it.confidence.toLong(),
+                )
             }
         }
-        return written
+    }
+
+    public fun linkCount(playlistId: String): Long = queries.linkCount(playlistId).executeAsOne()
+
+    /** Programmes of linked channels overlapping [from]..[until], per channel in start order, for the guide grid. */
+    public fun programmes(
+        playlistId: String,
+        channelIds: Collection<String>,
+        from: Instant,
+        until: Instant,
+    ): Map<String, List<GuideProgramme>> {
+        if (channelIds.isEmpty()) return emptyMap()
+        return queries.guideForChannels(playlistId, channelIds, (from - 24.hours).epochSeconds, until.epochSeconds, from.epochSeconds)
+            .executeAsList()
+            .groupBy(
+                { it.channel_id },
+                { GuideProgramme(it.title, Instant.fromEpochSeconds(it.start_utc), Instant.fromEpochSeconds(it.end_utc)) },
+            )
+    }
+
+    /**
+     * Current and next programme per linked channel at [now] (docs/EPG.md §4), for the channel list. Channels without a
+     * link or without programmes are absent from the result.
+     */
+    public fun nowNext(playlistId: String, channelIds: Collection<String>, now: Instant): Map<String, NowNextRow> {
+        if (channelIds.isEmpty()) return emptyMap()
+        val result = LinkedHashMap<String, NowNextRow>()
+        val rows = queries.guideForChannels(
+            playlistId,
+            channelIds,
+            (now - 24.hours).epochSeconds,
+            (now + 12.hours).epochSeconds,
+            now.epochSeconds,
+        ).executeAsList()
+        for ((channel, programmes) in rows.groupBy { it.channel_id }) {
+            val current = programmes.firstOrNull { it.start_utc <= now.epochSeconds && it.end_utc > now.epochSeconds }
+            val next = programmes.firstOrNull { it.start_utc > now.epochSeconds }
+            result[channel] = NowNextRow(
+                current?.let { GuideProgramme(it.title, Instant.fromEpochSeconds(it.start_utc), Instant.fromEpochSeconds(it.end_utc)) },
+                next?.let { GuideProgramme(it.title, Instant.fromEpochSeconds(it.start_utc), Instant.fromEpochSeconds(it.end_utc)) },
+            )
+        }
+        return result
     }
 
     /** Builds the full-text index for a written snapshot in one statement (the INDEX pipeline stage). */
@@ -101,6 +197,11 @@ public class EpgStore(private val driver: SqlDriver) {
                 queries.deleteSnapshot(source.value, previous)
             }
         }
+    }
+
+    /** Deletes an unpublished snapshot, for example after a failed import. */
+    public fun discard(source: EpgSourceId, snapshot: Long) {
+        queries.deleteSnapshot(source.value, snapshot)
     }
 
     public fun activeSnapshot(source: EpgSourceId): Long? = queries.activeSnapshot(source.value).executeAsOneOrNull()

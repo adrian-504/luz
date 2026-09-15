@@ -167,8 +167,8 @@ unwieldy, via ADR.
 | State | ViewModel + `StateFlow`, unidirectional data flow | |
 | Playback | AndroidX Media3 1.11.1: `exoplayer`, `exoplayer-hls` (ADR-0024); `exoplayer-dash` when a source needs it; `ui-compose` evaluated and not used (plain `SurfaceView`) | `apps/android/platform`: `Media3PlaybackController` over the shared-contract `PlaybackSession`; legacy ExoPlayer 2 prohibited |
 | Media session | Media3 `MediaSession` (Phase 7) | Hardware media keys, assistant; Phase 6 handles play/pause keys in the player screen |
-| Transport | OkHttp (+ Media3 `datasource-okhttp` so playback and API share TLS/proxy config) | Not yet: Phase 6 playback uses Media3 `DefaultHttpDataSource` until the shared `HttpTransport` is implemented |
-| Secrets | Android Keystore AES-GCM key + app-private encrypted blob | Jetpack Security Crypto is deprecated — not used |
+| Transport | OkHttp 5.5.0 `OkHttpTransport` for imports (ADR-0026); Media3 `datasource-okhttp` for playback later | Playback still uses Media3 `DefaultHttpDataSource` |
+| Secrets | `KeystoreSecretStore`: Android Keystore AES-256-GCM key, one encrypted file per reference in `noBackupFilesDir` (ADR-0026) | Jetpack Security Crypto is deprecated — not used |
 | Background | WorkManager for scheduled refresh; refresh on app start | |
 | Images | Coil (evaluate) | Must support memory-pressure trimming |
 | Performance | Macrobenchmark, Baseline Profiles, JankStats (debug) | |
@@ -215,7 +215,8 @@ committed). Candidate dependencies already named in docs (kotlinx.coroutines, ko
 kotlinx-io, SQLDelight or Room KMP, OkHttp, Media3, Coil) are **not yet approved** — each passes this policy
 when first introduced.
 
-**Current dependency set (Phase 6):** Android playback adds Media3 1.11.1 `exoplayer` and `exoplayer-hls`
+**Current dependency set (Phase 7):** adds OkHttp 5.5.0 (with Okio) for the Android transport (ADR-0026) and AndroidX
+`sqlite-bundled` 2.7.1 for storage on Android and JVM tests (ADR-0025). Phase 6: Android playback adds Media3 1.11.1 `exoplayer` and `exoplayer-hls`
 (ADR-0024); the shared modules gain the AGP Kotlin Multiplatform Android library plugin (same AGP). Phase 5: the Android TV app adds the AndroidX set of ADR-0023 (AGP 9.4.0, Compose BOM
 2026.09.00, tv-material 1.1.0, material-icons-core 1.7.8, activity-compose 1.13.0, navigation-compose 2.10.1; tests:
 Compose ui-test, androidx.test runner 1.7.0, ext-junit 1.3.0). Shared core (Phase 4): runtime — Kotlin 2.4.20 standard library; `shared:protocols` adds

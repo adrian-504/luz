@@ -9,6 +9,9 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.iptvplayer.tv.ui.guide.GuideTags
+import app.iptvplayer.tv.ui.live.LiveTags
+import app.iptvplayer.tv.ui.onboarding.FormTags
 import app.iptvplayer.tv.ui.onboarding.OnboardingTags
 import app.iptvplayer.tv.ui.onboarding.SourceType
 import app.iptvplayer.tv.ui.shell.Section
@@ -16,6 +19,7 @@ import app.iptvplayer.tv.ui.shell.ShellTags
 import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 
 /**
@@ -24,8 +28,10 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class RemoteNavigationTest {
-    @get:Rule
     val rule = createAndroidComposeRule<MainActivity>()
+
+    @get:Rule
+    val chain: RuleChain = RuleChain.outerRule(NoSourcesRule()).around(rule)
 
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
 
@@ -64,17 +70,34 @@ class RemoteNavigationTest {
 
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(OnboardingTags.sourceType(SourceType.XTREAM))
-        press(KeyEvent.KEYCODE_DPAD_DOWN)
-        awaitFocus(OnboardingTags.sourceType(SourceType.M3U_URL))
+        press(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_DOWN)
+        awaitFocus(OnboardingTags.sourceType(SourceType.M3U_FILE))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(OnboardingTags.FORM_BACK)
 
         press(KeyEvent.KEYCODE_BACK)
-        awaitFocus(OnboardingTags.sourceType(SourceType.M3U_URL))
-        press(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(OnboardingTags.sourceType(SourceType.M3U_FILE))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(OnboardingTags.FORM_BACK)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(OnboardingTags.sourceType(SourceType.M3U_FILE))
+
+        // The M3U link form: its first field takes focus, and Back returns to the chosen source type.
+        press(KeyEvent.KEYCODE_DPAD_UP)
+        awaitFocus(OnboardingTags.sourceType(SourceType.M3U_URL))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(FormTags.URL)
+        // Back leaves the form; if the system keyboard happens to be open, the first Back closes it (platform behavior).
+        press(KeyEvent.KEYCODE_BACK)
+        if (runCatching {
+                rule.waitUntil(2_000) {
+                    runCatching { rule.onNodeWithTag(OnboardingTags.sourceType(SourceType.M3U_URL)).assertIsFocused() }.isSuccess
+                }
+            }.isFailure
+        ) {
+            press(KeyEvent.KEYCODE_BACK)
+        }
+        awaitFocus(OnboardingTags.sourceType(SourceType.M3U_URL))
 
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(OnboardingTags.ADD_SOURCE)
@@ -110,17 +133,26 @@ class RemoteNavigationTest {
                 awaitFocus(ShellTags.rail(section))
             }
             press(KeyEvent.KEYCODE_DPAD_CENTER)
-            // Debug builds list developer test streams first in Settings.
-            val first = when (section) {
+            // Without sources, Live TV, Favorites and the Guide offer "Add a source"; Playlists lists no sources yet.
+            val singleAction = when (section) {
+                Section.LIVE_TV -> LiveTags.emptyAddSource(favorites = false)
+                Section.FAVORITES -> LiveTags.emptyAddSource(favorites = true)
+                Section.GUIDE -> GuideTags.ADD_SOURCE
                 Section.PLAYLISTS -> ShellTags.ADD_SOURCE
-                Section.SETTINGS -> ShellTags.developerStream("hls-live")
-                else -> ShellTags.item(section, 0)
+                else -> null
             }
-            awaitFocus(first)
-            if (section == Section.PLAYLISTS || section == Section.SETTINGS) {
+            if (singleAction != null) {
+                awaitFocus(singleAction)
+                press(KeyEvent.KEYCODE_DPAD_LEFT)
+                awaitFocus(ShellTags.rail(section))
+                continue
+            }
+            if (section == Section.SETTINGS) {
+                // Debug builds list developer test streams first in Settings.
+                awaitFocus(ShellTags.developerStream("hls-live"))
                 press(KeyEvent.KEYCODE_DPAD_DOWN)
-                awaitFocus(ShellTags.item(section, 0))
             }
+            awaitFocus(ShellTags.item(section, 0))
             press(KeyEvent.KEYCODE_DPAD_RIGHT)
             awaitFocus(ShellTags.item(section, 1))
             // No trap: the rail is always reachable from content, and returns to the selected section.
@@ -135,7 +167,7 @@ class RemoteNavigationTest {
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.HOME))
         press(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitFocus(ShellTags.item(Section.GUIDE, 0))
+        awaitFocus(GuideTags.ADD_SOURCE)
 
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.GUIDE))

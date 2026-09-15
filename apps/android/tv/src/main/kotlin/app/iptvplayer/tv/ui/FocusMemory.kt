@@ -12,6 +12,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
+import kotlinx.coroutines.delay
 
 /**
  * Remembers which element of a destination had focus and restores it when the destination is shown again, for example
@@ -67,7 +68,17 @@ fun RestoreFocusEffect(memory: FocusMemory, defaultKey: String) {
     // No frame wait: the effect runs right after the composition is applied, when the focus targets are attached, so a
     // remote key pressed during a screen change is not lost to a moment with nothing focused.
     LaunchedEffect(memory) {
-        val restored = memory.lastFocusedKey?.let { memory.requestFocus(it) } ?: false
-        if (!restored) memory.requestFocus(defaultKey)
+        val last = memory.lastFocusedKey
+        if (last != null) {
+            // Lists loaded from the database attach their rows a moment after the screen returns: wait briefly for them.
+            repeat(RESTORE_ATTEMPTS) {
+                if (memory.requestFocus(last)) return@LaunchedEffect
+                delay(RESTORE_INTERVAL_MS)
+            }
+        }
+        memory.requestFocus(defaultKey)
     }
 }
+
+private const val RESTORE_ATTEMPTS = 20
+private const val RESTORE_INTERVAL_MS = 50L

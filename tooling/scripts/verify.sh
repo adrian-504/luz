@@ -68,6 +68,7 @@ if [ -n "$android_sdk" ] && [ -d "$android_sdk/platforms" ]; then
   if [ -x "$adb" ] && "$adb" devices | awk 'NR>1 && $2=="device"' | grep -q .; then
     echo "Android device/emulator connected — running shared-core, playback and TV app device tests"
     ./gradlew :shared:domain:connectedAndroidDeviceTest :shared:protocols:connectedAndroidDeviceTest :shared:epg:connectedAndroidDeviceTest \
+      :shared:storage:connectedAndroidDeviceTest :shared:ingestion:connectedAndroidDeviceTest \
       :apps:android:platform:connectedDebugAndroidTest :apps:android:tv:connectedDebugAndroidTest --console=plain
   else
     echo "SKIPPED: no Android device or emulator connected; device tests NOT run (docs/TESTING.md §3)"

@@ -16,6 +16,10 @@ kotlin {
         commonMain.dependencies {
             api(project(":shared:domain"))
             implementation(libs.sqldelight.runtime)
+            implementation(libs.kotlinx.serialization.json)
+        }
+        findByName("jvmCommonMain")?.dependencies {
+            implementation(libs.androidx.sqlite.bundled)
         }
         jvmTest.dependencies {
             implementation(libs.sqldelight.sqlite.driver)

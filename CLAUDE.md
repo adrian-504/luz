@@ -12,7 +12,7 @@ diagnostics and low perceived latency — not feature count.
 
 ## Current phase
 
-**Phase 6 (Android playback) verified on the Google TV emulator 2026-09-15 — real-TV check and review pending.** Next: Phase 7 (Android Live TV). Open review items are tracked in
+**Phase 7 (Android Live TV) in progress** — sources, import, Live TV, zapping and guide working on the emulator (2026-09-15); see [docs/ROADMAP.md](docs/ROADMAP.md) for what remains. Open review items are tracked in
 [docs/ROADMAP.md](docs/ROADMAP.md). Work strictly phase by phase.
 
 ## Non-negotiable rules

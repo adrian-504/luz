@@ -66,6 +66,9 @@ object PlayerTags {
     const val DIAGNOSTICS_PANEL = "player-diagnostics-panel"
     const val ERROR_MESSAGE = "player-error-message"
     const val RETRY = "player-retry"
+    const val BANNER = "player-banner"
+    const val TITLE = "player-title"
+    const val FAVORITE = "player-favorite"
 }
 
 /**
@@ -74,13 +77,23 @@ object PlayerTags {
  * diagnostics panel, then the overlay, then leaves the player.
  */
 @Composable
-fun PlayerScreen(request: PlaybackRequest, title: String) {
+fun PlayerScreen(
+    request: PlaybackRequest?,
+    title: String,
+    subtitle: String? = null,
+    /** The channel could not be resolved to a stream (for example missing credentials or no playable source). */
+    unavailable: Boolean = false,
+    isFavorite: Boolean? = null,
+    onToggleFavorite: (() -> Unit)? = null,
+    /** Channel switching: -1 previous, +1 next in the current list. Null for single streams. */
+    onZap: ((Int) -> Unit)? = null,
+) {
     val context = LocalContext.current
     val controller = remember { Media3PlaybackController(context.applicationContext) }
     DisposableEffect(controller) { onDispose { controller.release() } }
     // The player must only be touched on the main thread: DisposableEffect runs there, coroutine effects may not (tests).
     DisposableEffect(controller, request) {
-        controller.prepare(request)
+        if (request != null) controller.prepare(request) else controller.stop()
         onDispose { }
     }
 
@@ -99,7 +112,15 @@ fun PlayerScreen(request: PlaybackRequest, title: String) {
     val rootFocus = remember { FocusRequester() }
     val playPauseFocus = remember { FocusRequester() }
     val retryFocus = remember { FocusRequester() }
-    val isError = snapshot.state == PlaybackState.ERROR
+    val isError = snapshot.state == PlaybackState.ERROR || unavailable
+    var bannerShownAt by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(title) {
+        if (onZap != null) {
+            bannerShownAt = System.nanoTime()
+            delay(BANNER_TIMEOUT_MS)
+            bannerShownAt = 0L
+        }
+    }
 
     BackHandler(enabled = diagnosticsVisible || (overlayVisible && !isError)) {
         if (diagnosticsVisible) diagnosticsVisible = false else overlayVisible = false
@@ -147,6 +168,16 @@ fun PlayerScreen(request: PlaybackRequest, title: String) {
                     }
                     KeyEvent.KEYCODE_MEDIA_PLAY -> true.also { controller.play() }
                     KeyEvent.KEYCODE_MEDIA_PAUSE -> true.also { controller.pause() }
+                    KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> (onZap != null).also { if (it) onZap?.invoke(+1) }
+                    KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> (onZap != null).also { if (it) onZap?.invoke(-1) }
+                    KeyEvent.KEYCODE_DPAD_UP -> (onZap != null && !overlayVisible && !diagnosticsVisible).also { if (it) onZap?.invoke(-1) }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> (onZap != null && !overlayVisible && !diagnosticsVisible).also {
+                        if (it) {
+                            onZap?.invoke(
+                                +1,
+                            )
+                        }
+                    }
                     in SELECT_KEYS -> if (!overlayVisible && !isError) {
                         overlayVisible = true
                         swallowSelectUp = true
@@ -163,6 +194,20 @@ fun PlayerScreen(request: PlaybackRequest, title: String) {
         // focus to a focusable parent on Back, which would swallow the first Back press.
         Box(modifier = Modifier.fillMaxSize().testTag(PlayerTags.ROOT).focusRequester(rootFocus).focusable())
 
+        if (bannerShownAt != 0L && !overlayVisible && !isError) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(horizontal = Tokens.safeHorizontal, vertical = Tokens.safeVertical)
+                    .background(Tokens.bgBase.copy(alpha = 0.75f), RoundedCornerShape(Tokens.radiusMedium))
+                    .padding(Tokens.space4)
+                    .testTag(PlayerTags.BANNER),
+            ) {
+                Text(title, style = MaterialTheme.typography.headlineMedium, color = Tokens.textPrimary)
+                subtitle?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = Tokens.textSecondary) }
+            }
+        }
+
         if (!overlayVisible && !isError && snapshot.state != PlaybackState.PLAYING) {
             StateText(
                 snapshot,
@@ -171,7 +216,7 @@ fun PlayerScreen(request: PlaybackRequest, title: String) {
         }
 
         if (isError) {
-            ErrorPanel(snapshot, retryFocus, onRetry = { controller.prepare(request) }, onDiagnostics = {
+            ErrorPanel(snapshot, unavailable, retryFocus, onRetry = { request?.let { controller.prepare(it) } }, onDiagnostics = {
                 diagnosticsVisible =
                     !diagnosticsVisible
             })
@@ -185,7 +230,13 @@ fun PlayerScreen(request: PlaybackRequest, title: String) {
                     .testTag(PlayerTags.OVERLAY),
                 verticalArrangement = Arrangement.spacedBy(Tokens.space3),
             ) {
-                Text(title, style = MaterialTheme.typography.headlineMedium, color = Tokens.textPrimary)
+                Text(
+                    title,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Tokens.textPrimary,
+                    modifier = Modifier.testTag(PlayerTags.TITLE),
+                )
+                subtitle?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = Tokens.textSecondary) }
                 StateText(snapshot, Modifier)
                 Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space4)) {
                     val paused = snapshot.state == PlaybackState.PAUSED
@@ -194,6 +245,13 @@ fun PlayerScreen(request: PlaybackRequest, title: String) {
                         onClick = { if (paused) controller.play() else controller.pause() },
                         modifier = Modifier.focusRequester(playPauseFocus).testTag(PlayerTags.PLAY_PAUSE),
                     )
+                    if (onToggleFavorite != null) {
+                        ActionButton(
+                            text = stringResource(if (isFavorite == true) R.string.player_unfavorite else R.string.player_favorite),
+                            onClick = onToggleFavorite,
+                            modifier = Modifier.testTag(PlayerTags.FAVORITE),
+                        )
+                    }
                     ActionButton(
                         text = stringResource(R.string.player_diagnostics),
                         onClick = { diagnosticsVisible = !diagnosticsVisible },
@@ -235,18 +293,24 @@ private fun StateText(snapshot: PlaybackSnapshot, modifier: Modifier) {
         PlaybackState.ERROR -> R.string.player_state_error
         PlaybackState.ENDED -> R.string.player_state_ended
     }
-    Text(
-        stringResource(text),
-        style = MaterialTheme.typography.titleLarge,
-        color = Tokens.textSecondary,
-        modifier = modifier.testTag(PlayerTags.STATE),
-    )
+    val label = if (snapshot.state == PlaybackState.PREPARING && snapshot.retryAttempt > 0) {
+        stringResource(R.string.player_retrying, snapshot.retryAttempt)
+    } else {
+        stringResource(text)
+    }
+    Text(label, style = MaterialTheme.typography.titleLarge, color = Tokens.textSecondary, modifier = modifier.testTag(PlayerTags.STATE))
 }
 
 @Composable
-private fun ErrorPanel(snapshot: PlaybackSnapshot, retryFocus: FocusRequester, onRetry: () -> Unit, onDiagnostics: () -> Unit) {
+private fun ErrorPanel(
+    snapshot: PlaybackSnapshot,
+    unavailable: Boolean,
+    retryFocus: FocusRequester,
+    onRetry: () -> Unit,
+    onDiagnostics: () -> Unit,
+) {
     val code = snapshot.error ?: PlaybackErrorCode.UNKNOWN
-    val (message, hint) = errorText(code)
+    val (message, hint) = if (unavailable) R.string.channel_unavailable to R.string.playback_error_http_not_found_hint else errorText(code)
     Box(modifier = Modifier.fillMaxSize().background(Tokens.bgBase.copy(alpha = 0.85f)), contentAlignment = Alignment.Center) {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.space3), modifier = Modifier.widthIn(max = 760.dp)) {
             Text(
@@ -353,4 +417,5 @@ private fun errorText(code: PlaybackErrorCode): Pair<Int, Int> = when (code) {
 }
 
 private const val OVERLAY_TIMEOUT_MS = 5_000L
+private const val BANNER_TIMEOUT_MS = 3_000L
 private val SELECT_KEYS = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)

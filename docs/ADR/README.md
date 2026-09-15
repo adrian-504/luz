@@ -45,3 +45,5 @@ line. Product-scope decisions still go to the owner.
 | [0022](0022-first-runtime-dependencies-coroutines-serialization.md) | First runtime dependencies: kotlinx.coroutines and kotlinx.serialization JSON | Accepted |
 | [0023](0023-android-tv-app-toolchain-and-shell-navigation.md) | Android TV app toolchain and shell navigation | Accepted |
 | [0024](0024-android-playback-media3-controller.md) | Android playback with Media3 behind a shared-contract controller | Accepted |
+| [0025](0025-bundled-sqlite-driver-for-sqldelight.md) | Bundled SQLite (AndroidX) behind SQLDelight on Android and JVM | Accepted |
+| [0026](0026-android-transport-secret-store-and-import-service.md) | Android network transport, secret store and the shared import service | Accepted |

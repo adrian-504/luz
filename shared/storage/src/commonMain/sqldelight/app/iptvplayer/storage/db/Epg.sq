@@ -52,3 +52,37 @@ DELETE FROM epg_program WHERE source_id = ? AND snapshot = ?;
 
 countSnapshot:
 SELECT count(*) FROM epg_program WHERE source_id = ? AND snapshot = ?;
+
+-- Channel ↔ EPG channel links chosen by EpgMatcher at EPG publish (docs/EPG.md §3). User overrides are stored separately
+-- when that feature arrives and are never replaced by imports.
+CREATE TABLE channel_epg_link (
+    playlist_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    epg_source_id TEXT NOT NULL,
+    epg_channel_id TEXT NOT NULL,
+    method TEXT NOT NULL,
+    confidence INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, channel_id)
+);
+
+deleteLinks:
+DELETE FROM channel_epg_link WHERE playlist_id = ?;
+
+insertLink:
+INSERT OR REPLACE INTO channel_epg_link(playlist_id, channel_id, epg_source_id, epg_channel_id, method, confidence) VALUES (?, ?, ?, ?, ?, ?);
+
+linkCount:
+SELECT COUNT(*) FROM channel_epg_link WHERE playlist_id = ?;
+
+-- Programmes of linked channels that have not ended before :now and start within the look-ahead, per channel by start.
+guideForChannels:
+SELECT l.channel_id, p.title, p.start_utc, p.end_utc
+FROM channel_epg_link l
+JOIN epg_active_snapshot a ON a.source_id = l.epg_source_id
+JOIN epg_program p ON p.source_id = l.epg_source_id AND p.snapshot = a.snapshot AND p.channel_key = l.epg_channel_id
+WHERE l.playlist_id = :playlistId
+  AND l.channel_id IN :channelIds
+  AND p.start_utc >= :earliestStart
+  AND p.start_utc < :until
+  AND p.end_utc > :from
+ORDER BY l.channel_id, p.start_utc;

@@ -1,0 +1,237 @@
+-- Sources and live-TV content (docs/DOMAIN_MODEL.md §3, §9). Imported rows carry the snapshot they belong to; a unit's
+-- active snapshot lives in unit_state and flips in one statement at publish. Secrets never appear here (ADR-0015):
+-- URLs are stored as templates with {credential:*} placeholders and credentials are referenced by credential_ref.
+
+CREATE TABLE provider (
+    id TEXT PRIMARY KEY NOT NULL,
+    display_name TEXT NOT NULL,
+    protocol TEXT NOT NULL,
+    -- scheme://host[:port] only, for display.
+    endpoint_display TEXT NOT NULL,
+    endpoint_template TEXT,
+    credential_ref TEXT,
+    transport_security TEXT NOT NULL,
+    account_status TEXT,
+    account_expires_at INTEGER,
+    max_connections INTEGER,
+    allowed_output_formats TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE playlist (
+    id TEXT PRIMARY KEY NOT NULL,
+    provider_id TEXT NOT NULL REFERENCES provider(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    source_template TEXT,
+    epg_template TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE unit_state (
+    playlist_id TEXT NOT NULL REFERENCES playlist(id) ON DELETE CASCADE,
+    unit TEXT NOT NULL,
+    active_snapshot INTEGER,
+    status TEXT NOT NULL,
+    item_count INTEGER NOT NULL DEFAULT 0,
+    started_at INTEGER,
+    finished_at INTEGER,
+    error_code TEXT,
+    PRIMARY KEY (playlist_id, unit)
+);
+
+CREATE TABLE channel_group (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, snapshot, id)
+);
+
+CREATE TABLE channel (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    number INTEGER,
+    sort_order INTEGER NOT NULL,
+    logo_template TEXT,
+    tvg_id TEXT,
+    catch_up_days INTEGER,
+    is_adult INTEGER,
+    PRIMARY KEY (playlist_id, snapshot, id)
+);
+
+CREATE INDEX channel_order ON channel(playlist_id, snapshot, sort_order);
+
+CREATE TABLE channel_group_member (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    group_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, snapshot, group_id, channel_id)
+);
+
+CREATE TABLE media_source (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    id TEXT NOT NULL,
+    owner_id TEXT NOT NULL,
+    -- DIRECT_URL | XTREAM_STREAM
+    locator_kind TEXT NOT NULL,
+    url_template TEXT,
+    xtream_kind TEXT,
+    stream_id TEXT,
+    extension TEXT,
+    protocol TEXT NOT NULL,
+    user_agent TEXT,
+    referrer TEXT,
+    -- JSON object of plain header values; sensitive header values live in the secret store.
+    custom_headers TEXT,
+    -- JSON object header name -> credential_ref.
+    sensitive_headers TEXT,
+    priority INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, snapshot, id)
+);
+
+CREATE INDEX media_source_owner ON media_source(playlist_id, snapshot, owner_id);
+
+-- User state: never deleted by imports.
+CREATE TABLE favorite (
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (content_type, content_id)
+);
+
+insertProvider:
+INSERT INTO provider(id, display_name, protocol, endpoint_display, endpoint_template, credential_ref, transport_security,
+    account_status, account_expires_at, max_connections, allowed_output_formats, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateProviderAccount:
+UPDATE provider SET account_status = ?, account_expires_at = ?, max_connections = ?, allowed_output_formats = ?, updated_at = ?
+WHERE id = ?;
+
+providerById:
+SELECT * FROM provider WHERE id = ?;
+
+insertPlaylist:
+INSERT INTO playlist(id, provider_id, name, type, source_template, epg_template, enabled, sort_order, created_at)
+VALUES (?, ?, ?, ?, ?, ?, 1, (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM playlist), ?);
+
+setPlaylistEpgTemplate:
+UPDATE playlist SET epg_template = ? WHERE id = ?;
+
+playlists:
+SELECT * FROM playlist ORDER BY sort_order;
+
+playlistById:
+SELECT * FROM playlist WHERE id = ?;
+
+deletePlaylistRow:
+DELETE FROM playlist WHERE id = ?;
+
+deleteProviderRow:
+DELETE FROM provider WHERE id = ?;
+
+upsertUnitState:
+INSERT INTO unit_state(playlist_id, unit, active_snapshot, status, item_count, started_at, finished_at, error_code)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(playlist_id, unit) DO UPDATE SET
+    active_snapshot = excluded.active_snapshot, status = excluded.status, item_count = excluded.item_count,
+    started_at = excluded.started_at, finished_at = excluded.finished_at, error_code = excluded.error_code;
+
+unitState:
+SELECT * FROM unit_state WHERE playlist_id = ? AND unit = ?;
+
+unitStates:
+SELECT * FROM unit_state WHERE playlist_id = ?;
+
+insertGroup:
+INSERT OR IGNORE INTO channel_group(playlist_id, snapshot, id, title, sort_order) VALUES (?, ?, ?, ?, ?);
+
+insertChannel:
+INSERT OR IGNORE INTO channel(playlist_id, snapshot, id, name, number, sort_order, logo_template, tvg_id, catch_up_days, is_adult)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+insertMember:
+INSERT OR IGNORE INTO channel_group_member(playlist_id, snapshot, group_id, channel_id, sort_order) VALUES (?, ?, ?, ?, ?);
+
+insertMediaSource:
+INSERT OR IGNORE INTO media_source(playlist_id, snapshot, id, owner_id, locator_kind, url_template, xtream_kind, stream_id, extension,
+    protocol, user_agent, referrer, custom_headers, sensitive_headers, priority)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteGroups:
+DELETE FROM channel_group WHERE playlist_id = ? AND snapshot = ?;
+
+deleteChannels:
+DELETE FROM channel WHERE playlist_id = ? AND snapshot = ?;
+
+deleteMembers:
+DELETE FROM channel_group_member WHERE playlist_id = ? AND snapshot = ?;
+
+deleteMediaSources:
+DELETE FROM media_source WHERE playlist_id = ? AND snapshot = ?;
+
+deleteAllGroups:
+DELETE FROM channel_group WHERE playlist_id = ?;
+
+deleteAllChannels:
+DELETE FROM channel WHERE playlist_id = ?;
+
+deleteAllMembers:
+DELETE FROM channel_group_member WHERE playlist_id = ?;
+
+deleteAllMediaSources:
+DELETE FROM media_source WHERE playlist_id = ?;
+
+groupsWithCounts:
+SELECT g.id, g.title, COUNT(m.channel_id) AS channel_count
+FROM channel_group g
+LEFT JOIN channel_group_member m ON m.playlist_id = g.playlist_id AND m.snapshot = g.snapshot AND m.group_id = g.id
+WHERE g.playlist_id = :playlistId AND g.snapshot = :snapshot
+GROUP BY g.id, g.title, g.sort_order
+ORDER BY g.sort_order;
+
+channelsInGroup:
+SELECT c.id, c.name, c.number, c.logo_template, c.tvg_id, (f.content_id IS NOT NULL) AS is_favorite
+FROM channel_group_member m
+JOIN channel c ON c.playlist_id = m.playlist_id AND c.snapshot = m.snapshot AND c.id = m.channel_id
+LEFT JOIN favorite f ON f.content_type = 'CHANNEL' AND f.content_id = c.id
+WHERE m.playlist_id = :playlistId AND m.snapshot = :snapshot AND m.group_id = :groupId
+ORDER BY m.sort_order, c.sort_order;
+
+allChannels:
+SELECT c.id, c.name, c.number, c.logo_template, c.tvg_id, (f.content_id IS NOT NULL) AS is_favorite
+FROM channel c
+LEFT JOIN favorite f ON f.content_type = 'CHANNEL' AND f.content_id = c.id
+WHERE c.playlist_id = :playlistId AND c.snapshot = :snapshot
+ORDER BY c.sort_order;
+
+favoriteChannels:
+SELECT c.id, c.name, c.number, c.logo_template, c.tvg_id, 1 AS is_favorite
+FROM favorite f
+JOIN channel c ON c.id = f.content_id AND c.playlist_id = :playlistId AND c.snapshot = :snapshot
+WHERE f.content_type = 'CHANNEL'
+ORDER BY f.sort_order;
+
+channelCount:
+SELECT COUNT(*) FROM channel WHERE playlist_id = ? AND snapshot = ?;
+
+mediaSourcesForOwner:
+SELECT * FROM media_source WHERE playlist_id = ? AND snapshot = ? AND owner_id = ? ORDER BY priority;
+
+addFavorite:
+INSERT OR IGNORE INTO favorite(content_type, content_id, sort_order, created_at)
+VALUES (?, ?, (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM favorite), ?);
+
+removeFavorite:
+DELETE FROM favorite WHERE content_type = ? AND content_id = ?;

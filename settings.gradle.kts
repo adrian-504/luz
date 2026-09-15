@@ -33,6 +33,7 @@ include(":shared:domain")
 include(":shared:protocols")
 include(":shared:epg")
 include(":shared:storage")
+include(":shared:ingestion")
 
 // Android apps need the Android SDK (on this machine: the external SSD). "auto" includes them only when an SDK is
 // found through local.properties `sdk.dir` or ANDROID_HOME, so the shared core still builds without it.

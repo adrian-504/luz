@@ -15,6 +15,8 @@ object Tokens {
     val textSecondary = Color(0xFFA9B1BC)
     val textTertiary = Color(0xFF7D8590)
     val accent = Color(0xFF4C8DFF)
+    val stateLive = Color(0xFFE5484D)
+    val stateWarning = Color(0xFFE3B341)
     val stateError = Color(0xFFF85149)
     val focusRing = Color(0xFFF2F4F7)
 

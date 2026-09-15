@@ -44,6 +44,8 @@
     <string name="player_pause">Pause</string>
     <string name="player_retry">Try again</string>
     <string name="player_diagnostics">Diagnostics</string>
+    <string name="player_favorite">Add to favorites</string>
+    <string name="player_unfavorite">Remove from favorites</string>
     <string name="player_diagnostics_title">Playback diagnostics</string>
     <string name="developer_streams_title">Developer: playback test streams</string>
     <string name="developer_streams_body">Synthetic test media served inside this debug build. Not available in release builds.</string>
@@ -85,4 +87,51 @@
     <string name="playback_error_decoder_failure_hint">Try again. Restarting the TV can help.</string>
     <string name="playback_error_unknown">Playback failed for an unknown reason.</string>
     <string name="playback_error_unknown_hint">Open diagnostics for details.</string>
+
+    <!-- Phase 7: sources, live TV, guide. -->
+    <string name="form_name">Name (optional)</string>
+    <string name="form_server">Server address</string>
+    <string name="form_server_hint">For example http://provider.example.com:8080</string>
+    <string name="form_username">Username</string>
+    <string name="form_password">Password</string>
+    <string name="form_m3u_url">Playlist link (M3U)</string>
+    <string name="form_connect">Connect</string>
+    <string name="form_add_playlist">Add playlist</string>
+    <string name="form_working">Checking and importing channels…</string>
+    <string name="form_cleartext_warning">This address is not encrypted (http). Your login and viewing can be seen by others on the network. Use https if your provider offers it.</string>
+    <string name="form_credentials_note">Your login is stored encrypted on this TV only.</string>
+    <string name="add_failure_invalid_url">This address is not valid. Check it and include http:// or https://.</string>
+    <string name="add_failure_invalid_credentials">The provider did not accept this username and password.</string>
+    <string name="add_failure_account_expired">This account has expired.</string>
+    <string name="add_failure_account_disabled">This account is disabled or blocked by the provider.</string>
+    <string name="add_failure_connection_failed">Could not reach the server. Check the address and the TV\'s internet connection.</string>
+    <string name="add_failure_server_error">The provider\'s server had a problem. Try again later.</string>
+    <string name="add_failure_not_a_playlist">This link did not return a channel playlist.</string>
+
+    <string name="live_all_channels">All channels</string>
+    <string name="live_favorites">Favorites</string>
+    <string name="live_no_source">No source yet. Add your provider to see channels.</string>
+    <string name="live_importing">Importing channels…</string>
+    <string name="live_no_channels">No channels in this group.</string>
+    <string name="live_no_favorites">No favorites yet. Long-press OK on a channel to add it.</string>
+    <string name="live_now">Now: %1$s</string>
+    <string name="live_next">Next: %1$s</string>
+    <string name="live_no_guide">No guide information</string>
+    <string name="channel_unavailable">This channel has no playable stream.</string>
+
+    <string name="guide_loading">Downloading the guide…</string>
+
+    <string name="sources_title">Your sources</string>
+    <plurals name="sources_channels">
+        <item quantity="one">%1$d channel</item>
+        <item quantity="other">%1$d channels</item>
+    </plurals>
+    <string name="sources_refresh">Refresh</string>
+    <string name="sources_delete">Remove</string>
+    <string name="sources_confirm_delete">Press OK again to remove</string>
+    <string name="sources_status_importing">Importing channels…</string>
+    <string name="sources_status_guide">Downloading guide…</string>
+    <string name="sources_status_failed">Last refresh failed; showing the previous channels.</string>
+    <string name="sources_cleartext">Not encrypted (http)</string>
+    <string name="developer_add_test_provider">Add test provider</string>
 </resources>

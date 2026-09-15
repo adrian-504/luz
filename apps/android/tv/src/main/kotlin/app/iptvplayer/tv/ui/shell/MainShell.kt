@@ -31,15 +31,18 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
@@ -50,15 +53,27 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.NavigationDrawer
 import androidx.tv.material3.NavigationDrawerItem
 import androidx.tv.material3.Text
+import app.iptvplayer.domain.id.ChannelId
+import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.tv.R
+import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.PlaceholderPage
 import app.iptvplayer.tv.ui.RestoreFocusEffect
+import app.iptvplayer.tv.ui.guide.GuideSection
+import app.iptvplayer.tv.ui.guide.GuideTags
+import app.iptvplayer.tv.ui.live.ChannelScope
+import app.iptvplayer.tv.ui.live.LiveTags
+import app.iptvplayer.tv.ui.live.LiveTvSection
 import app.iptvplayer.tv.ui.rememberFocusMemory
 import app.iptvplayer.tv.ui.rememberedFocus
+import app.iptvplayer.tv.ui.sources.SourcesList
 import app.iptvplayer.tv.ui.theme.Tokens
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Top-level sections (DESIGN_SYSTEM.md §2) with the roadmap phase that fills them, when planned. */
 enum class Section(@param:StringRes val title: Int, val icon: ImageVector, val phase: Int?) {
@@ -75,6 +90,7 @@ enum class Section(@param:StringRes val title: Int, val icon: ImageVector, val p
 
 object ShellTags {
     const val ADD_SOURCE = "playlists-add-source"
+    const val TEST_PROVIDER = "developer-add-test-provider"
     const val PLACEHOLDER_ITEMS = 6
 
     fun rail(section: Section) = "rail-${section.name}"
@@ -89,8 +105,15 @@ object ShellTags {
  * section's placeholder content. Selecting a rail item with OK moves focus into that section's content.
  */
 @Composable
-fun MainShell(onAddSource: () -> Unit, onPlayDeveloperStream: (String) -> Unit = {}) {
-    var selected by rememberSaveable { mutableStateOf(Section.HOME) }
+fun MainShell(
+    initialSection: Section = Section.HOME,
+    onAddSource: () -> Unit,
+    onPlayDeveloperStream: (String) -> Unit = {},
+    onPlayChannel: (PlaylistId, ChannelScope, ChannelId) -> Unit = { _, _, _ -> },
+    onSourceAdded: () -> Unit = {},
+) {
+    var selected by rememberSaveable { mutableStateOf(initialSection) }
+    val focusManager = LocalFocusManager.current
     var railHasFocus by remember { mutableStateOf(false) }
     var contentFocusRequests by remember { mutableIntStateOf(0) }
     val focus = rememberFocusMemory()
@@ -137,32 +160,60 @@ fun MainShell(onAddSource: () -> Unit, onPlayDeveloperStream: (String) -> Unit =
     ) {
         // Keyed so each section starts with its own scroll and focus-restoration state.
         key(selected) {
-            SectionContent(section = selected, focus = focus, onAddSource = onAddSource, onPlayDeveloperStream = onPlayDeveloperStream)
+            when (selected) {
+                Section.LIVE_TV -> LiveTvSection(focus, favoritesOnly = false, onPlay = onPlayChannel, onAddSource = onAddSource)
+                Section.FAVORITES -> LiveTvSection(focus, favoritesOnly = true, onPlay = onPlayChannel, onAddSource = onAddSource)
+                Section.GUIDE -> GuideSection(focus, onPlay = onPlayChannel, onAddSource = onAddSource)
+                else -> SectionContent(selected, focus, onAddSource, onPlayDeveloperStream, onSourceAdded)
+            }
         }
     }
 
     LaunchedEffect(contentFocusRequests) {
         if (contentFocusRequests > 0) {
-            val first = when (selected) {
-                Section.PLAYLISTS -> ShellTags.ADD_SOURCE
-                Section.SETTINGS -> developerStreams.firstOrNull()?.let { ShellTags.developerStream(it.id) } ?: ShellTags.item(selected, 0)
-                else -> ShellTags.item(selected, 0)
+            val candidates = when (selected) {
+                Section.PLAYLISTS -> listOf(ShellTags.ADD_SOURCE)
+                Section.SETTINGS -> listOfNotNull(
+                    developerStreams.firstOrNull()?.let { ShellTags.developerStream(it.id) },
+                    ShellTags.item(selected, 0),
+                )
+                Section.LIVE_TV -> listOf(LiveTags.GROUP_ALL, LiveTags.emptyAddSource(favorites = false))
+                Section.FAVORITES -> listOf(LiveTags.emptyAddSource(favorites = true))
+                Section.GUIDE -> listOf(GuideTags.FIRST_CELL, GuideTags.ADD_SOURCE)
+                else -> listOf(ShellTags.item(selected, 0))
             }
-            focus.requestFocus(first)
+            // Data-driven sections load asynchronously: wait briefly for their first element, then enter geometrically.
+            repeat(20) {
+                if (candidates.any { focus.requestFocus(it) }) return@LaunchedEffect
+                delay(50)
+            }
+            focusManager.moveFocus(FocusDirection.Right)
         }
     }
-    RestoreFocusEffect(focus, ShellTags.item(Section.HOME, 0))
+    // First display: enter the selected section like selecting it in the rail; afterwards restore the last focus.
+    LaunchedEffect(Unit) {
+        if (focus.lastFocusedKey == null) contentFocusRequests++
+    }
+    if (focus.lastFocusedKey != null) RestoreFocusEffect(focus, ShellTags.rail(selected))
 }
 
 @Composable
-private fun SectionContent(section: Section, focus: FocusMemory, onAddSource: () -> Unit, onPlayDeveloperStream: (String) -> Unit) {
+private fun SectionContent(
+    section: Section,
+    focus: FocusMemory,
+    onAddSource: () -> Unit,
+    onPlayDeveloperStream: (String) -> Unit,
+    onSourceAdded: () -> Unit,
+) {
     val body = section.phase?.let { stringResource(R.string.section_placeholder, it) } ?: stringResource(R.string.section_placeholder_later)
     PlaceholderPage(title = stringResource(section.title), body = body) {
         if (section == Section.PLAYLISTS) {
             ActionButton(stringResource(R.string.playlists_add_source), onAddSource, Modifier.rememberedFocus(focus, ShellTags.ADD_SOURCE))
+            SourcesList(focus)
+            return@PlaceholderPage
         }
         if (section == Section.SETTINGS) {
-            DeveloperStreamRow(focus, onPlayDeveloperStream)
+            DeveloperStreamRow(focus, onPlayDeveloperStream, onSourceAdded)
         }
         // Returning to the row with Right restores the card that last had focus.
         LazyRow(
@@ -183,16 +234,33 @@ private fun SectionContent(section: Section, focus: FocusMemory, onAddSource: ()
 
 /** Debug builds only: synthetic test streams for trying the player with the remote (empty in release builds). */
 @Composable
-private fun DeveloperStreamRow(focus: FocusMemory, onPlay: (String) -> Unit) {
+private fun DeveloperStreamRow(focus: FocusMemory, onPlay: (String) -> Unit, onSourceAdded: () -> Unit) {
     val context = LocalContext.current
+    val graph = LocalAppGraph.current
+    val scope = rememberCoroutineScope()
     val streams = remember { DeveloperStreams.list(context) }
     if (streams.isEmpty()) return
+    val testProvider = remember { DeveloperStreams.testProvider(context) }
     Text(stringResource(R.string.developer_streams_title), style = MaterialTheme.typography.titleLarge, color = Tokens.textPrimary)
     Text(stringResource(R.string.developer_streams_body), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary)
     LazyRow(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), contentPadding = PaddingValues(vertical = Tokens.space2)) {
         items(count = streams.size, key = { streams[it].id }) { index ->
             val stream = streams[index]
             ActionButton(stream.label, { onPlay(stream.id) }, Modifier.rememberedFocus(focus, ShellTags.developerStream(stream.id)))
+        }
+        if (testProvider != null) {
+            item(key = "test-provider") {
+                ActionButton(
+                    stringResource(R.string.developer_add_test_provider),
+                    {
+                        scope.launch {
+                            val (server, username, password) = testProvider
+                            if (graph.addXtream("Test provider", server, username, password) is AddSourceResult.Added) onSourceAdded()
+                        }
+                    },
+                    Modifier.rememberedFocus(focus, ShellTags.TEST_PROVIDER),
+                )
+            }
         }
     }
 }

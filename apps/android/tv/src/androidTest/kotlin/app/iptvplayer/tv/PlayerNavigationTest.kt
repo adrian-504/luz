@@ -16,13 +16,16 @@ import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 
 /** Player remote behavior (DESIGN_SYSTEM.md §6) with the debug build's synthetic streams. */
 @RunWith(AndroidJUnit4::class)
 class PlayerNavigationTest {
-    @get:Rule
     val rule = createAndroidComposeRule<MainActivity>()
+
+    @get:Rule
+    val chain: RuleChain = RuleChain.outerRule(NoSourcesRule()).around(rule)
 
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
 

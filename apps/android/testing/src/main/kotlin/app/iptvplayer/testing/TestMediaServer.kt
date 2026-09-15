@@ -26,10 +26,13 @@ import kotlin.concurrent.thread
  * - `/garbage.m3u8` — malformed HLS playlist
  * - `/noise.ts` — random bytes with a video content type
  * - `/html.ts` — an HTML error page where media was expected
+ * - `/player_api.php`, `/get.php`, `/xmltv.php`, `/live/{user}/{password}/{id}.{ts|m3u8}` — a synthetic Xtream Codes
+ *   panel ([TestPanel]) that accepts only [TestPanel.USERNAME] / [TestPanel.PASSWORD]
+ * - `/redirect` — 302 to `/vod.mp4`
  * - anything else — 404
  */
-class TestMediaServer(private val assets: AssetManager) : AutoCloseable {
-    private val socket = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
+class TestMediaServer(private val assets: AssetManager, port: Int = 0) : AutoCloseable {
+    private val socket = ServerSocket(port, 50, InetAddress.getByName("127.0.0.1"))
     private val startedAtMs = System.currentTimeMillis()
     private val failures = ConcurrentHashMap<String, Pair<Int, AtomicInteger>>()
     private val requests = CopyOnWriteArrayList<String>()
@@ -91,7 +94,19 @@ class TestMediaServer(private val assets: AssetManager) : AutoCloseable {
                 return
             }
             val route = path.substringBefore('?')
+            val query = path.substringAfter('?', "")
             when {
+                route == "/player_api.php" -> respond(out, 200, "application/json", TestPanel.api(query).toByteArray())
+                route == "/get.php" -> TestPanel.m3u(query, url(""))?.let { respond(out, 200, "audio/x-mpegurl", it.toByteArray()) }
+                    ?: respond(out, 401, "text/plain", "unauthorized".toByteArray())
+                route == "/xmltv.php" -> TestPanel.xmltv(query)?.let { respond(out, 200, "application/xml", it.toByteArray()) }
+                    ?: respond(out, 401, "text/plain", "unauthorized".toByteArray())
+                route.startsWith("/live/") -> when (TestPanel.liveTarget(route)) {
+                    TestPanel.Target.TS -> streamLiveTs(out)
+                    TestPanel.Target.HLS -> respond(out, 200, HLS, livePlaylist())
+                    null -> respond(out, 404, "text/plain", "not found".toByteArray())
+                }
+                route == "/redirect" -> respond(out, 302, "text/plain", ByteArray(0), "Location: /vod.mp4\r\n")
                 route == "/vod.mp4" -> serveAsset(out, "vod-10s.mp4", "video/mp4", headers["range"])
                 route == "/hls/vod.m3u8" -> respond(out, 200, HLS, vodPlaylist())
                 route == "/hls/live.m3u8" -> respond(out, 200, HLS, livePlaylist())
@@ -211,6 +226,7 @@ class TestMediaServer(private val assets: AssetManager) : AutoCloseable {
         val RANGE = Regex("bytes=(\\d+)-(\\d*)")
         val REASONS = mapOf(
             200 to "OK",
+            302 to "Found",
             206 to "Partial Content",
             401 to "Unauthorized",
             403 to "Forbidden",

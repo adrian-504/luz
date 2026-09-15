@@ -13,6 +13,9 @@ android {
 dependencies {
     api(project(":shared:domain"))
     api(project(":shared:protocols"))
+    api(project(":shared:ingestion"))
+    implementation(libs.okhttp)
+    implementation(libs.kotlinx.serialization.json)
     api(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.kotlinx.coroutines.core)
@@ -25,4 +28,5 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.kotlin.test.junit)
     androidTestImplementation(libs.kotlinx.coroutines.core)
+    androidTestImplementation(libs.androidx.sqlite.bundled)
 }

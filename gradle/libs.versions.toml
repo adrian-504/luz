@@ -17,6 +17,10 @@ androidx-test-runner = "1.7.0"
 androidx-test-ext-junit = "1.3.0"
 # Playback, evaluated in ADR-0024 (2026-09-15): Google, Apache-2.0, latest stable.
 media3 = "1.11.1"
+# Bundled SQLite with FTS5 for Android and JVM tests, evaluated in ADR-0025 (2026-09-15): Google, Apache-2.0.
+androidx-sqlite = "2.7.1"
+# HTTP transport for imports on Android, evaluated in ADR-0026 (2026-09-15): Square, Apache-2.0.
+okhttp = "5.5.0"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
@@ -25,6 +29,8 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
 sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
 sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+androidx-sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "androidx-sqlite" }
 sqldelight-dialect-sqlite338 = { module = "app.cash.sqldelight:sqlite-3-38-dialect", version.ref = "sqldelight" }
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 # On the build-logic classpath so it shares one Kotlin Gradle plugin instance with the convention plugins.
