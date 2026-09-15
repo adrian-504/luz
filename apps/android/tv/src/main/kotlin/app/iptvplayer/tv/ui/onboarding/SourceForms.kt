@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +42,11 @@ object FormTags {
     const val PASSWORD_FIELD = "form-password"
     const val URL = "form-url"
     const val SUBMIT = "form-submit"
+    const val SUBMIT_FULL_PLAYLIST = "form-submit-full-playlist"
+    const val XTREAM_LINK_HINT = "form-xtream-link-hint"
+    const val BUSY = "form-busy"
+    const val GUIDE_LINK_SET = "form-guide-link-set"
+    const val GUIDE_LINK_CLEAR = "form-guide-link-clear"
     const val ERROR = "form-error"
     const val WORKING = "form-working"
 }
@@ -65,7 +72,8 @@ fun XtreamFormScreen(onAdded: (PlaylistId) -> Unit) {
     var password by remember { mutableStateOf("") }
     var state by remember { mutableStateOf<FormState>(FormState.Idle) }
 
-    FormPage(title = stringResource(R.string.source_type_xtream), state = state) {
+    val busy by graph.adding.collectAsState()
+    FormPage(title = stringResource(R.string.source_type_xtream), state = state, busyElsewhere = busy) {
         TvTextField(stringResource(R.string.form_server), server, {
             server = it
         }, Modifier.rememberedFocus(focus, FormTags.SERVER), KeyboardType.Uri, hint = stringResource(R.string.form_server_hint))
@@ -79,7 +87,7 @@ fun XtreamFormScreen(onAdded: (PlaylistId) -> Unit) {
         }, Modifier.rememberedFocus(focus, FormTags.NAME), imeAction = ImeAction.Done)
         Text(stringResource(R.string.form_credentials_note), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary)
         ActionButton(stringResource(R.string.form_connect), {
-            if (state == FormState.Working) return@ActionButton
+            if (state == FormState.Working || graph.adding.value) return@ActionButton
             state = FormState.Working
             scope.launch {
                 when (val result = graph.addXtream(name, server, username, password)) {
@@ -105,7 +113,22 @@ fun M3uFormScreen(onAdded: (PlaylistId) -> Unit) {
     var url by remember { mutableStateOf("") }
     var state by remember { mutableStateOf<FormState>(FormState.Idle) }
 
-    FormPage(title = stringResource(R.string.source_type_m3u_url), state = state) {
+    val busy by graph.adding.collectAsState()
+    // An Xtream Codes playlist link is offered the Xtream API instead of the whole playlist (IPTV_PROTOCOLS.md §3.4).
+    val xtreamLink = remember(url) { graph.isXtreamPlaylistLink(url) }
+
+    fun submit(add: suspend () -> AddSourceResult) {
+        if (state == FormState.Working || graph.adding.value) return
+        state = FormState.Working
+        scope.launch {
+            when (val result = add()) {
+                is AddSourceResult.Added -> onAdded(result.playlistId)
+                is AddSourceResult.Rejected -> state = FormState.Failed(result.reason)
+            }
+        }
+    }
+
+    FormPage(title = stringResource(R.string.source_type_m3u_url), state = state, busyElsewhere = busy) {
         TvTextField(
             stringResource(R.string.form_m3u_url),
             url,
@@ -117,22 +140,93 @@ fun M3uFormScreen(onAdded: (PlaylistId) -> Unit) {
         TvTextField(stringResource(R.string.form_name), name, {
             name = it
         }, Modifier.rememberedFocus(focus, FormTags.NAME), imeAction = ImeAction.Done)
-        ActionButton(stringResource(R.string.form_add_playlist), {
+        if (xtreamLink) {
+            Text(
+                stringResource(R.string.form_xtream_link_hint),
+                style = MaterialTheme.typography.bodyLarge,
+                color = Tokens.textSecondary,
+                modifier = Modifier.testTag(FormTags.XTREAM_LINK_HINT),
+            )
+            ActionButton(
+                stringResource(R.string.form_add_with_xtream),
+                { submit { graph.addXtreamFromPlaylistLink(name, url) } },
+                Modifier.rememberedFocus(focus, FormTags.SUBMIT),
+            )
+            ActionButton(
+                stringResource(R.string.form_add_full_playlist),
+                { submit { graph.addM3u(name, url) } },
+                Modifier.rememberedFocus(focus, FormTags.SUBMIT_FULL_PLAYLIST),
+            )
+        } else {
+            ActionButton(
+                stringResource(R.string.form_add_playlist),
+                { submit { graph.addM3u(name, url) } },
+                Modifier.rememberedFocus(focus, FormTags.SUBMIT),
+            )
+        }
+    }
+    RestoreFocusEffect(focus, FormTags.URL)
+}
+
+/**
+ * A custom XMLTV guide link for one source (REQUIREMENTS.md FR-SRC-004), for providers whose own guide is empty. The link
+ * is never shown again or kept in saved state: it may carry a private key. The guide downloads after saving.
+ */
+@Composable
+fun GuideLinkFormScreen(playlistId: PlaylistId, onDone: () -> Unit) {
+    val graph = LocalAppGraph.current
+    val scope = rememberCoroutineScope()
+    val focus = rememberFocusMemory()
+    var url by remember { mutableStateOf("") }
+    var state by remember { mutableStateOf<FormState>(FormState.Idle) }
+    var hasLink by remember { mutableStateOf(false) }
+    LaunchedEffect(playlistId) { hasLink = graph.hasGuideLink(playlistId) }
+
+    FormPage(title = stringResource(R.string.guide_link_title), state = state, busyElsewhere = false) {
+        Text(stringResource(R.string.guide_link_intro), style = MaterialTheme.typography.bodyLarge, color = Tokens.textSecondary)
+        if (hasLink) {
+            Text(
+                stringResource(R.string.guide_link_current),
+                style = MaterialTheme.typography.bodyLarge,
+                color = Tokens.textPrimary,
+                modifier = Modifier.testTag(FormTags.GUIDE_LINK_SET),
+            )
+        }
+        TvTextField(
+            stringResource(R.string.guide_link_field),
+            url,
+            { url = it },
+            Modifier.rememberedFocus(focus, FormTags.URL),
+            KeyboardType.Uri,
+        )
+        if (url.trim().startsWith("http://", ignoreCase = true)) CleartextWarning()
+        ActionButton(stringResource(R.string.guide_link_save), {
             if (state == FormState.Working) return@ActionButton
             state = FormState.Working
             scope.launch {
-                when (val result = graph.addM3u(name, url)) {
-                    is AddSourceResult.Added -> onAdded(result.playlistId)
-                    is AddSourceResult.Rejected -> state = FormState.Failed(result.reason)
+                when (val failure = graph.setGuideLink(playlistId, url)) {
+                    null -> {
+                        url = ""
+                        onDone()
+                    }
+                    else -> state = FormState.Failed(failure)
                 }
             }
         }, Modifier.rememberedFocus(focus, FormTags.SUBMIT))
+        if (hasLink) {
+            ActionButton(stringResource(R.string.guide_link_clear), {
+                scope.launch {
+                    graph.clearGuideLink(playlistId)
+                    onDone()
+                }
+            }, Modifier.rememberedFocus(focus, FormTags.GUIDE_LINK_CLEAR))
+        }
     }
     RestoreFocusEffect(focus, FormTags.URL)
 }
 
 @Composable
-private fun FormPage(title: String, state: FormState, content: @Composable () -> Unit) {
+private fun FormPage(title: String, state: FormState, busyElsewhere: Boolean, content: @Composable () -> Unit) {
     PlaceholderPage(title = title, body = null) {
         Column(
             verticalArrangement = Arrangement.spacedBy(Tokens.space4),
@@ -152,7 +246,14 @@ private fun FormPage(title: String, state: FormState, content: @Composable () ->
                     color = Tokens.stateError,
                     modifier = Modifier.testTag(FormTags.ERROR),
                 )
-                FormState.Idle -> Unit
+                FormState.Idle -> if (busyElsewhere) {
+                    Text(
+                        stringResource(R.string.form_busy),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Tokens.textSecondary,
+                        modifier = Modifier.testTag(FormTags.BUSY),
+                    )
+                }
             }
         }
     }

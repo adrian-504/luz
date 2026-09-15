@@ -159,8 +159,17 @@ public class ContentStore(driver: SqlDriver, private val clock: Clock) {
             UnitStateRecord(unit, it.active_snapshot, ImportStatus.valueOf(it.status), it.item_count, it.error_code)
         }
 
-    /** Records a unit as running or failed without touching its published snapshot. */
-    public fun markUnit(playlistId: PlaylistId, unit: ImportUnit, status: ImportStatus, errorCode: String? = null) {
+    /**
+     * Records a unit's status without touching its published snapshot. [itemCount] replaces the stored count when given (for
+     * example programmes kept by a guide import).
+     */
+    public fun markUnit(
+        playlistId: PlaylistId,
+        unit: ImportUnit,
+        status: ImportStatus,
+        errorCode: String? = null,
+        itemCount: Long? = null,
+    ) {
         val previous = unitState(playlistId, unit)
         val now = clock.now().toEpochMilliseconds()
         queries.upsertUnitState(
@@ -168,7 +177,7 @@ public class ContentStore(driver: SqlDriver, private val clock: Clock) {
             unit.name,
             previous?.activeSnapshot,
             status.name,
-            previous?.itemCount ?: 0,
+            itemCount ?: previous?.itemCount ?: 0,
             if (status == ImportStatus.RUNNING) now else null,
             if (status == ImportStatus.RUNNING) null else now,
             errorCode,

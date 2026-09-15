@@ -21,6 +21,7 @@ import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.live.ChannelScope
+import app.iptvplayer.tv.ui.onboarding.GuideLinkFormScreen
 import app.iptvplayer.tv.ui.onboarding.M3uFormScreen
 import app.iptvplayer.tv.ui.onboarding.SourceFormPlaceholderScreen
 import app.iptvplayer.tv.ui.onboarding.SourceType
@@ -41,6 +42,9 @@ object Routes {
     const val MAIN = "main?section={section}"
     const val PLAYER = "player/{streamId}"
     const val CHANNEL = "channel/{playlist}/{scope}/{channel}"
+    const val GUIDE_LINK = "guide-link/{playlist}"
+
+    fun guideLink(playlist: PlaylistId) = "guide-link/${Uri.encode(playlist.value)}"
 
     fun main(section: Section = Section.HOME) = "main?section=${section.name}"
 
@@ -104,6 +108,13 @@ fun AppNavHost() {
                 onPlayDeveloperStream = { navController.navigate(Routes.player(it)) },
                 onPlayChannel = { playlist, scope, channel -> navController.navigate(Routes.channel(playlist, scope, channel)) },
                 onSourceAdded = { navController.showLiveTv() },
+                onEditGuideLink = { navController.navigate(Routes.guideLink(it)) },
+            )
+        }
+        composable(Routes.GUIDE_LINK) { entry ->
+            GuideLinkFormScreen(
+                PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty())),
+                onDone = { navController.popBackStack() },
             )
         }
         composable(Routes.CHANNEL) { entry ->

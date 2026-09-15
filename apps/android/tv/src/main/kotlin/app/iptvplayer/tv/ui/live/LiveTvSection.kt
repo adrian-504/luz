@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -24,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRestorer
@@ -42,15 +45,19 @@ import app.iptvplayer.storage.GroupRow
 import app.iptvplayer.storage.NowNextRow
 import app.iptvplayer.storage.SourceRecord
 import app.iptvplayer.tv.R
+import app.iptvplayer.tv.app.AppGraph
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 /** Which channels a list shows; also the zapping order in the player. */
 sealed interface ChannelScope {
@@ -234,6 +241,20 @@ private fun GroupItem(title: String, count: Long?, selected: Boolean, modifier: 
     )
 }
 
+/** Now/next for on-screen channels missing from [known], from the provider's per-channel guide (at most 20 channels). */
+private suspend fun visibleFallback(
+    graph: AppGraph,
+    playlist: PlaylistId,
+    rows: List<ChannelRow>,
+    listState: LazyListState,
+    known: Map<String, NowNextRow>,
+    now: Instant,
+    visible: List<Int> = listState.layoutInfo.visibleItemsInfo.map { it.index },
+): Map<String, NowNextRow> {
+    val missing = visible.mapNotNull { rows.getOrNull(it)?.id }.filter { it.value !in known }.take(20)
+    return if (missing.isEmpty()) emptyMap() else graph.nowNext(playlist, missing, now)
+}
+
 @Composable
 private fun ChannelList(
     focus: FocusMemory,
@@ -250,6 +271,7 @@ private fun ChannelList(
     var channels by remember(scope) { mutableStateOf<List<ChannelRow>?>(null) }
     var guide by remember(scope) { mutableStateOf<Map<String, NowNextRow>>(emptyMap()) }
     var now by remember { mutableStateOf(Clock.System.now()) }
+    val listState = rememberLazyListState()
 
     LaunchedEffect(playlist, scope, revision) {
         val rows = when (scope) {
@@ -260,13 +282,21 @@ private fun ChannelList(
         channels = rows
         while (true) {
             now = Clock.System.now()
-            guide =
-                rows.chunked(500).flatMap { chunk -> graph.nowNext(playlist, chunk.map { it.id }, now).entries }.associate {
-                    it.key to
-                        it.value
-                }
+            val stored = rows.chunked(500).flatMap { chunk -> graph.nowNext(playlist, chunk.map { it.id }, now).entries }
+                .associate { it.key to it.value }
+            guide = stored + visibleFallback(graph, playlist, rows, listState, stored, now)
             delay(1.minutes)
         }
+    }
+    // Channels on screen without stored guide data: ask the provider's per-channel guide once scrolling settles.
+    LaunchedEffect(playlist, scope, revision, channels) {
+        val rows = channels ?: return@LaunchedEffect
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.map { it.index } }
+            .distinctUntilChanged()
+            .collectLatest { visible ->
+                delay(400)
+                guide = guide + visibleFallback(graph, playlist, rows, listState, guide, Clock.System.now(), visible)
+            }
     }
 
     val rows = channels
@@ -286,6 +316,7 @@ private fun ChannelList(
                 modifier = Modifier.padding(Tokens.space4),
             )
             else -> LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize().focusRestorer(),
                 verticalArrangement = Arrangement.spacedBy(Tokens.space2),
             ) {

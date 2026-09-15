@@ -11,6 +11,7 @@ import app.iptvplayer.domain.model.StreamProtocol
 import app.iptvplayer.domain.playback.PlaybackMode
 import app.iptvplayer.domain.playback.PlaybackState
 import app.iptvplayer.domain.security.SensitiveUrl
+import app.iptvplayer.platform.ForegroundRule
 import app.iptvplayer.protocols.media.ResolvedMediaSource
 import app.iptvplayer.testing.TestMediaServer
 import app.iptvplayer.testing.TestPanel
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.Collections
@@ -30,6 +32,9 @@ import kotlin.time.Duration.Companion.seconds
 /** The system media session drives the player through the controller and never exposes the stream address. */
 @RunWith(AndroidJUnit4::class)
 class PlaybackMediaSessionTest {
+    @get:Rule
+    val foreground = ForegroundRule()
+
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val server = TestMediaServer(instrumentation.context.assets)
     private val texture = SurfaceTexture(false)
@@ -103,7 +108,10 @@ class PlaybackMediaSessionTest {
         awaitTrue("next channel requested") { skips.toList() == listOf(1) }
         onMain { remote.seekToPrevious() }
         awaitTrue("previous channel requested") { skips.toList() == listOf(1, -1) }
-        assertEquals(PlaybackState.PLAYING, controller.snapshot.value.state)
+        // Next/previous are channel requests for the app; the current live stream keeps going (a live stream may be
+        // buffering for a moment, but is never stopped or paused by them).
+        val state = controller.snapshot.value.state
+        assertTrue(state == PlaybackState.PLAYING || state == PlaybackState.BUFFERING, "next/previous changed playback: $state")
 
         val dump = shell("dumpsys media_session")
         assertTrue("Test channel" in dump, "the session is registered with the system")

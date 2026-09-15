@@ -14,7 +14,7 @@ a test plan and a review step (§18.1). A phase is closed only by review against
 | **4** | XMLTV/EPG | Large EPG imports and queries remain responsive | **Complete on JVM 2026-09-14; Apple targets and device SQLite not yet verified** |
 | **5** | Android TV shell | Remote navigation complete | **Complete on Google TV emulator 2026-09-15; owner's TV device not yet checked** |
 | **6** | Android playback | Live/VOD playback stable | **Verified on the Google TV emulator and the owner's Bbox TV (Android TV 11) 2026-09-15 with synthetic streams** |
-| 7 | Android Live TV | Channel browsing/zapping/EPG complete | Guide UI, zapping, preparation window, now/next |
+| **7** | Android Live TV | Channel browsing/zapping/EPG complete | **Complete 2026-09-15 on the Google TV emulator and the owner's Bbox TV (device tests + the owner's own Xtream provider). The owner's provider supplies no guide; a guide from a real provider or a user guide link is NOT YET VERIFIED on a device — parked by the owner** |
 | 8 | Android VOD/Series | Library experience complete | Movies, series, continue watching, search UI |
 | 9 | Android QA | Stress/device matrix passes | Performance gates, soak, device matrix |
 | 10 | Apple shared/core | Domain parity achieved | XCFramework, Swift bridging, Keychain, URLSession transport, AVPlayer controller + vectors |
@@ -244,7 +244,7 @@ Totals: 173 JVM tests (162 shared core, 11 playback session and error mapping) a
 emulator (151 shared-core, 10 real-playback, 8 TV app), 0 failures, and the same 169 on the Bbox TV; `verify.sh` green with strict dependency verification.
 Mutation spot-checks: 7 injected playback and player bugs, all caught (one needed a stronger assertion first).
 
-## Phase 7 — Android Live TV (in progress)
+## Phase 7 — Android Live TV (complete 2026-09-15)
 
 **Primary objective:** channel browsing, zapping and the guide on Android TV with real sources (exit criterion:
 channel browsing/zapping/EPG complete).
@@ -268,11 +268,16 @@ channel browsing/zapping/EPG complete).
 | Preparation window for faster zapping (PLAYBACK.md §4) | **Done for tier T0 — ADR-0027:** shared window policy (unit tests); neighbours and last channel resolved ahead, hosts looked up, no extra stream; per-switch timing and prepared hit in diagnostics (device test). T1/T2 deliberately not started (need connection limits and measurements) |
 | Time-to-first-audio metric | **Fixed** — Phase 6 test read it before sound started; now reported for MP4, HLS and TS on the emulator (device test asserts it). Bbox NOT YET VERIFIED |
 | Scheduled background refresh | Not in the Phase 7 scope; manual refresh in Sources. Planned with the refresh policy settings |
-| Owner's real provider on the Bbox | **NOT YET VERIFIED** — owner enters their login on the TV |
+| Owner's Bbox TV (device tests) | **VERIFIED 2026-09-15:** 198 device tests pass on the Bbox (168 shared-core, 18 playback/import/media session, 12 TV app), debug app installed. Found on the device: the operator's live-TV service holds the only hardware video decoder unless the playing app is in the foreground, so playback device tests now keep an activity on screen (`ForegroundRule`); the screensaver starts during long runs (kept awake with wake-up key events, no setting changed). Media session verified in the system "Now playing" card. MP4 first frame ≈ 285 ms, first audio ≈ 652 ms |
+| Owner's real provider on the Bbox | **VERIFIED by the owner 2026-09-15** (login typed on the TV, never shared with the agent): Xtream login imports 12,478 live channels in 123 groups in 22.4 s on the Bbox and live channels play. Found and fixed: (1) the provider's M3U link lists every movie and episode and took minutes to read on the Bbox, and leaving the form left the import running so a retry imported twice — Xtream playlist links are now offered the Xtream login (IPTV_PROTOCOLS.md §3.4) and adds run once in the application scope; (2) the provider's XMLTV guide is empty (0 channels, 0 programmes, measured with the new guide summary) — the `get_short_epg` fallback now fills now/next and the guide for on-screen channels, but this provider answers it with empty bodies too (measured on the Bbox: `VALIDATION_EMPTY_RESPONSE` for every channel), so a user guide link per source (FR-SRC-004, minimal: one XMLTV link replacing the provider's guide) was added in Playlists; (3) usernames are case-sensitive (the first attempt failed on a lowercase letter). The provider's playlist header has no guide link either (`NO_GUIDE_ATTRIBUTE`, measured on the Bbox): the provider supplies no guide. Guide from a user-supplied link on the owner's TV NOT YET VERIFIED (needs a guide link from the owner) |
 
-Totals at this checkpoint (2026-09-15): 190 JVM tests and 198 device tests on the Google TV API 34 emulator, 0 failures;
-`verify.sh` green from a clean build. A flaky remote-flow test was traced to the on-screen keyboard (opened by typing in
-the test) swallowing the OK press while closing; the test now waits for the keyboard to close. Not yet run on the Bbox TV.
+Totals after the real-provider fixes (2026-09-15): 196 JVM tests and 206 device tests on the Google TV emulator, 0
+failures, `verify.sh` green from a clean build (form tests now wait until the system keyboard has disconnected from the
+text field; the emulator needed a restart after a day of runs when AGP began skipping it with "Unknown API Level").
+
+Earlier totals (2026-09-15): 190 JVM tests and 198 device tests on the Google TV API 34 emulator, 0 failures;
+`verify.sh` green from a clean build; the same 198 device tests pass on the Bbox TV. A flaky remote-flow test was traced to the on-screen keyboard (opened by typing in
+the test) swallowing the OK press while closing; the test now waits for the keyboard to close.
 
 ## Phase 7 original scope
 

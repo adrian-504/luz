@@ -12,8 +12,6 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.iptvplayer.domain.playback.PlaybackState
@@ -103,7 +101,7 @@ class LiveTvFlowTest {
         rule.onNodeWithTag(FormTags.USERNAME).performTextInput(username)
         rule.onNodeWithTag(FormTags.PASSWORD_FIELD).performTextInput(password)
         rule.onNodeWithTag(FormTags.SUBMIT).requestFocusCompat()
-        awaitKeyboardHidden()
+        rule.awaitKeyboardReleased()
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         rule.waitUntil(20_000) {
             val error = rule.onAllNodes(hasTestTag(FormTags.ERROR), useUnmergedTree = true).fetchSemanticsNodes()
@@ -120,6 +118,8 @@ class LiveTvFlowTest {
         awaitExists(LiveTags.channel(channelId("Test News HD")))
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
         awaitFocus(LiveTags.channel(channelId("Test News HD")))
+        // "Test News 2" has no XMLTV guide: its now/next comes from the provider's per-channel guide once it is on screen.
+        awaitExists(LiveTags.channel(channelId("Test News 2")), "Test News 2 short guide", timeout = 20_000)
 
         // Favorite with a long press, then play.
         longPressOk()
@@ -190,25 +190,6 @@ class LiveTvFlowTest {
         val node = fetchSemanticsNode()
         val texts = node.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text }
         assertEquals(text, texts.joinToString(""))
-    }
-
-    /**
-     * Typing with `performTextInput` opens the on-screen keyboard, which closes again once focus leaves the field. A key
-     * pressed while it is still on screen goes to the keyboard window, so OK would not reach the Add button.
-     */
-    private fun awaitKeyboardHidden() {
-        fun keyboardVisible(): Boolean {
-            var visible = false
-            instrumentation.runOnMainSync {
-                val insets = ViewCompat.getRootWindowInsets(rule.activity.window.decorView)
-                visible = insets?.isVisible(WindowInsetsCompat.Type.ime()) == true
-            }
-            return visible
-        }
-        runCatching { rule.waitUntil(5_000) { !keyboardVisible() } }
-            .onFailure { throw AssertionError("the on-screen keyboard did not close after leaving the text fields", it) }
-        // The window regains key focus only after the keyboard's closing animation.
-        rule.waitUntil(5_000) { rule.activity.hasWindowFocus() }
     }
 
     private fun androidx.compose.ui.test.SemanticsNodeInteraction.requestFocusCompat() {

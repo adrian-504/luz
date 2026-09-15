@@ -111,6 +111,7 @@ fun MainShell(
     onPlayDeveloperStream: (String) -> Unit = {},
     onPlayChannel: (PlaylistId, ChannelScope, ChannelId) -> Unit = { _, _, _ -> },
     onSourceAdded: () -> Unit = {},
+    onEditGuideLink: (PlaylistId) -> Unit = {},
 ) {
     var selected by rememberSaveable { mutableStateOf(initialSection) }
     val focusManager = LocalFocusManager.current
@@ -164,7 +165,7 @@ fun MainShell(
                 Section.LIVE_TV -> LiveTvSection(focus, favoritesOnly = false, onPlay = onPlayChannel, onAddSource = onAddSource)
                 Section.FAVORITES -> LiveTvSection(focus, favoritesOnly = true, onPlay = onPlayChannel, onAddSource = onAddSource)
                 Section.GUIDE -> GuideSection(focus, onPlay = onPlayChannel, onAddSource = onAddSource)
-                else -> SectionContent(selected, focus, onAddSource, onPlayDeveloperStream, onSourceAdded)
+                else -> SectionContent(selected, focus, onAddSource, onPlayDeveloperStream, onSourceAdded, onEditGuideLink)
             }
         }
     }
@@ -204,12 +205,14 @@ private fun SectionContent(
     onAddSource: () -> Unit,
     onPlayDeveloperStream: (String) -> Unit,
     onSourceAdded: () -> Unit,
+    onEditGuideLink: (PlaylistId) -> Unit,
 ) {
     val body = section.phase?.let { stringResource(R.string.section_placeholder, it) } ?: stringResource(R.string.section_placeholder_later)
-    PlaceholderPage(title = stringResource(section.title), body = body) {
+    // Playlists is a real screen since Phase 7; the placeholder line only belongs to sections still to come.
+    PlaceholderPage(title = stringResource(section.title), body = if (section == Section.PLAYLISTS) null else body) {
         if (section == Section.PLAYLISTS) {
             ActionButton(stringResource(R.string.playlists_add_source), onAddSource, Modifier.rememberedFocus(focus, ShellTags.ADD_SOURCE))
-            SourcesList(focus)
+            SourcesList(focus, onEditGuideLink)
             return@PlaceholderPage
         }
         if (section == Section.SETTINGS) {

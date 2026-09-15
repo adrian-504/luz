@@ -11,6 +11,7 @@ import app.iptvplayer.domain.playback.PlaybackErrorCode
 import app.iptvplayer.domain.playback.PlaybackMode
 import app.iptvplayer.domain.playback.PlaybackState
 import app.iptvplayer.domain.security.SensitiveUrl
+import app.iptvplayer.platform.ForegroundRule
 import app.iptvplayer.protocols.media.ResolvedMediaSource
 import app.iptvplayer.testing.TestMediaServer
 import kotlinx.coroutines.flow.first
@@ -19,6 +20,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.test.assertEquals
@@ -35,6 +37,9 @@ import kotlin.time.Duration.Companion.seconds
  */
 @RunWith(AndroidJUnit4::class)
 class Media3PlaybackControllerTest {
+    @get:Rule
+    val foreground = ForegroundRule()
+
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private lateinit var server: TestMediaServer
     private lateinit var controller: Media3PlaybackController

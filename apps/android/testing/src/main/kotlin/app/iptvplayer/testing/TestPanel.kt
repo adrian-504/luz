@@ -5,6 +5,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.util.Base64
 
 /**
  * A synthetic Xtream Codes panel for device tests and debug builds: six test channels in three categories, a guide
@@ -51,8 +52,20 @@ object TestPanel {
             "get_live_streams" -> channels.withIndex().joinToString(",", "[", "]") { (index, c) ->
                 """{"num":${index + 1},"name":"${c.name}","stream_type":"live","stream_id":${c.id},"stream_icon":"","epg_channel_id":${c.epgId?.let { "\"$it\"" } ?: "null"},"category_id":"${c.category}","tv_archive":0}"""
             }
+            "get_short_epg" -> shortEpg(params(query)["stream_id"])
             "get_vod_categories", "get_series_categories", "get_vod_streams", "get_series" -> "[]"
             else -> "[]"
+        }
+    }
+
+    /** Per-channel guide (`get_short_epg`): 30-minute programmes from the current half hour, base64 titles as panels send them. */
+    private fun shortEpg(streamId: String?): String {
+        val channel = channels.firstOrNull { it.id.toString() == streamId } ?: return """{"epg_listings":[]}"""
+        val start = Instant.now().epochSecond.let { it - it % 1800 }
+        return (0 until 4).joinToString(",", """{"epg_listings":[""", "]}") { slot ->
+            val from = start + slot * 1800
+            val title = Base64.getEncoder().encodeToString("${channel.name} short guide ${slot + 1}".toByteArray())
+            """{"id":"${channel.id}$slot","title":"$title","description":"","start_timestamp":"$from","stop_timestamp":"${from + 1800}"}"""
         }
     }
 

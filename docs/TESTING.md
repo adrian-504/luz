@@ -112,6 +112,12 @@ stall, malformed playlist, random bytes, HTML body). Phase 7 adds an 8 s MP4 wit
 English text subtitle track for track selection; HLS alternate renditions and WebVTT segments are not generated yet. No
 third-party or copyrighted media is used.
 
+**Real TV devices.** Playback device tests run with an empty foreground activity (`ForegroundRule`): on operator boxes
+such as the owner's Bbox TV the built-in live-TV service holds the hardware video decoder and Android hands it only to a
+foreground app. Close the operator's live TV and avoid the screensaver during long runs (send `KEYCODE_WAKEUP`; do not
+change device settings). On a French-locale device AGP may report connected tasks as failed while the XML results pass:
+read `build/outputs/androidTest-results`.
+
 ## 5. Device matrix (initial proposal, finalized per platform phase)
 
 **Devices used so far:** Google TV emulator API 34 (arm64, on the development Mac); owner's **Bbox TV** (Technicolor

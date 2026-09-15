@@ -49,6 +49,7 @@ import app.iptvplayer.protocols.xtream.XtreamEndpoint
 import app.iptvplayer.storage.ChannelEpgLinkRow
 import app.iptvplayer.storage.ContentStore
 import app.iptvplayer.storage.EpgStore
+import app.iptvplayer.storage.GuideProgramme
 import app.iptvplayer.storage.ProgramRow
 import app.iptvplayer.storage.SourceRecord
 import kotlin.time.Duration.Companion.days
@@ -76,7 +77,39 @@ public data class UnitOutcome(
     public val status: ImportStatus,
     public val itemCount: Int,
     public val error: DomainError?,
+    /** For guide imports: what the provider's XMLTV contained (numbers only; safe to log). */
+    public val guide: GuideSummary? = null,
 )
+
+/**
+ * What a guide import found, to tell an empty provider guide from one whose times fall outside the kept window. Stored as
+ * the EPG unit's code when nothing was kept: [EMPTY] or [OUTSIDE_WINDOW].
+ */
+public data class GuideSummary(
+    public val declaredChannels: Int,
+    public val programmesRead: Int,
+    public val programmesKept: Int,
+    public val outsideWindow: Int,
+    public val dropped: Int,
+    public val linkedChannels: Int,
+    /** True when the provider's `xmltv.php` was empty and this guide came from the link in its playlist header. */
+    public val fromPlaylistHeader: Boolean = false,
+    /** Outcome of looking for a guide link in the playlist header (codes only), when that was tried. */
+    public val playlistHeader: String? = null,
+) {
+    public val code: String?
+        get() = when {
+            programmesKept > 0 -> null
+            programmesRead == 0 -> EMPTY
+            outsideWindow > 0 -> OUTSIDE_WINDOW
+            else -> null
+        }
+
+    public companion object {
+        public const val EMPTY: String = "EPG_EMPTY"
+        public const val OUTSIDE_WINDOW: String = "EPG_OUTSIDE_WINDOW"
+    }
+}
 
 /**
  * The import pipeline for user sources (docs/IPTV_PROTOCOLS.md §6, ARCHITECTURE.md §5): adding Xtream and M3U sources,
@@ -94,6 +127,21 @@ public class SourceService(
 ) {
     private val fetcher = HttpFetcher(transport)
     private val xtream = XtreamClient(fetcher, clock)
+    private val shortGuide = ShortGuide(xtream, content, secrets, clock)
+
+    /**
+     * True when [url] is an Xtream Codes playlist link (`…/get.php?username=<user>&password=<password>`). Such a source can be added with
+     * the Xtream API instead: live channels and the guide without downloading the whole playlist, which on big providers
+     * lists every movie and episode (IPTV_PROTOCOLS.md §3.4). Never logs the URL.
+     */
+    public fun isXtreamPlaylistLink(url: String): Boolean = XtreamM3uDetector.detect(SensitiveUrl.of(url.trim())) != null
+
+    /** Adds an Xtream Codes playlist link through the Xtream API ([isXtreamPlaylistLink]). */
+    public suspend fun addXtreamFromPlaylistLink(name: String?, url: String): AddSourceResult {
+        val link = XtreamM3uDetector.detect(SensitiveUrl.of(url.trim()))
+            ?: return AddSourceResult.Rejected(AddSourceFailure.INVALID_URL, null)
+        return addXtream(name, link.baseUrl, link.username.unsafeValue(), link.password.unsafeValue())
+    }
 
     public suspend fun addXtream(name: String?, serverUrl: String, username: String, password: String): AddSourceResult {
         val endpoint = XtreamEndpoint.parse(serverUrl) ?: return AddSourceResult.Rejected(AddSourceFailure.INVALID_URL, null)
@@ -174,7 +222,41 @@ public class SourceService(
         val source = content.source(playlistId)
         content.deleteSource(playlistId)
         source?.credentialRef?.let { secrets.delete(it) }
+        secrets.delete(guideLinkRef(playlistId))
     }
+
+    /**
+     * Uses [url] as the source's XMLTV guide instead of the provider's (REQUIREMENTS.md FR-SRC-004), for providers whose own
+     * guide is empty. The link is kept in the secret store (guide links often carry tokens); the database only records that
+     * a custom link is set. Returns null when saved, or why it was refused. Refresh the guide afterwards.
+     */
+    public suspend fun setGuideLink(playlistId: PlaylistId, url: String): AddSourceFailure? {
+        val parsed = ParsedUrl.parse(url.trim())
+        if (parsed == null || !parsed.hasAuthority || (parsed.scheme != "http" && parsed.scheme != "https")) {
+            return AddSourceFailure.INVALID_URL
+        }
+        content.source(playlistId) ?: return AddSourceFailure.INVALID_URL
+        secrets.put(guideLinkRef(playlistId), SecretBundle(secretUrl = SensitiveUrl.of(url.trim())))
+        content.setEpgTemplate(playlistId, UrlTemplate(GUIDE_LINK_TEMPLATE))
+        return null
+    }
+
+    /** Returns to the provider's own guide: `xmltv.php` for Xtream; for M3U the playlist's `url-tvg` at the next refresh. */
+    public suspend fun clearGuideLink(playlistId: PlaylistId) {
+        val source = content.source(playlistId) ?: return
+        secrets.delete(guideLinkRef(playlistId))
+        val providerGuide = if (source.type == PlaylistType.XTREAM) {
+            source.sourceTemplate?.let { XtreamEndpoint.parse(it.template) }?.xmltvTemplate
+        } else {
+            null
+        }
+        content.setEpgTemplate(playlistId, providerGuide)
+    }
+
+    /** True when the source uses a guide link set with [setGuideLink]. */
+    public fun hasGuideLink(source: SourceRecord): Boolean = source.epgTemplate?.template == GUIDE_LINK_TEMPLATE
+
+    private fun guideLinkRef(playlistId: PlaylistId) = CredentialRef("guide-link:${playlistId.value}")
 
     /** Imports live channels into a new snapshot and publishes it; on failure the previous channels stay visible. */
     public suspend fun refreshLive(playlistId: PlaylistId): UnitOutcome {
@@ -256,8 +338,54 @@ public class SourceService(
             content.source(playlistId) ?: return UnitOutcome(ImportUnit.EPG, ImportStatus.FAILED, 0, DomainError.Storage("SOURCE_MISSING"))
         val template =
             source.epgTemplate ?: return UnitOutcome(ImportUnit.EPG, ImportStatus.FAILED, 0, DomainError.Unsupported("NO_EPG_SOURCE"))
+        val customLink = template.template == GUIDE_LINK_TEMPLATE
         val bundle = source.credentialRef?.let { secrets.get(it) }
-        val url = template.expand(bundle?.username, bundle?.password) ?: return missingCredentials(ImportUnit.EPG)
+        val url = if (customLink) {
+            secrets.get(guideLinkRef(playlistId))?.secretUrl ?: return missingCredentials(ImportUnit.EPG)
+        } else {
+            template.expand(bundle?.username, bundle?.password) ?: return missingCredentials(ImportUnit.EPG)
+        }
+        val outcome = importGuide(playlistId, source, url, lookAheadDays)
+        if (customLink || source.type != PlaylistType.XTREAM || outcome.guide?.code != GuideSummary.EMPTY) return outcome
+        // An empty xmltv.php: many panels advertise a different guide in their playlist header (`url-tvg`).
+        val (advertised, headerResult) = playlistHeaderGuide(source, bundle)
+        if (advertised == null) return outcome.copy(guide = outcome.guide.copy(playlistHeader = headerResult))
+        val retry = importGuide(playlistId, source, advertised, lookAheadDays)
+        return retry.copy(guide = retry.guide?.copy(fromPlaylistHeader = true, playlistHeader = headerResult))
+    }
+
+    /**
+     * The guide link in an Xtream panel's M3U header (`#EXTM3U url-tvg="…"`), reading only the first line of `get.php` and
+     * closing the connection; null when absent or the same `xmltv.php`. The link is used for this refresh only, never stored.
+     */
+    private suspend fun playlistHeaderGuide(source: SourceRecord, bundle: SecretBundle?): Pair<SensitiveUrl?, String> {
+        val endpoint = source.sourceTemplate?.let { XtreamEndpoint.parse(it.template) } ?: return null to "NO_ENDPOINT"
+        val playlist =
+            UrlTemplate(
+                "${endpoint.base}/get.php?username=${UrlTemplate.USERNAME}&password=${UrlTemplate.PASSWORD}&type=m3u_plus&output=ts",
+            )
+                .expand(bundle?.username, bundle?.password) ?: return null to "NO_CREDENTIALS"
+        val response = when (val fetched = fetcher.get(playlist, RequestClass.LARGE_LIST, UrlContext.SOURCE)) {
+            is FetchResult.Failure -> return null to "FETCH_${fetched.error.code}"
+            is FetchResult.Success -> fetched.response
+        }
+        val header = try {
+            readFirstLine(response.body, HEADER_LIMIT_BYTES)
+        } finally {
+            response.body.close()
+        }
+        val providerGuide = endpoint.xmltvTemplate.expand(bundle?.username, bundle?.password)
+        val link = advertisedGuide(header, providerGuide)
+        val result = when {
+            link != null -> "FOUND"
+            !header.trimStart('\uFEFF', ' ').startsWith("#EXTM3U") -> "NOT_M3U(${header.length} chars)"
+            !GUIDE_ATTRIBUTE.containsMatchIn(header) -> "NO_GUIDE_ATTRIBUTE"
+            else -> "SAME_AS_PROVIDER_OR_NOT_HTTP"
+        }
+        return link to result
+    }
+
+    private suspend fun importGuide(playlistId: PlaylistId, source: SourceRecord, url: SensitiveUrl, lookAheadDays: Int): UnitOutcome {
         content.markUnit(playlistId, ImportUnit.EPG, ImportStatus.RUNNING)
         val response = when (val fetched = fetcher.get(url, RequestClass.LARGE_LIST, UrlContext.EPG)) {
             is FetchResult.Failure -> {
@@ -319,9 +447,28 @@ public class SourceService(
                 ChannelEpgLinkRow(it.channelId.value, epgSource.value, it.epgChannelKey.channelId, it.method.name, it.confidence)
             },
         )
-        content.markUnit(playlistId, ImportUnit.EPG, result.status)
-        return UnitOutcome(ImportUnit.EPG, result.status, written, result.error)
+        val summary = GuideSummary(
+            declaredChannels = result.counts.channels,
+            // The importer counts emitted programmes; ones outside retention or dropped were read too.
+            programmesRead = result.counts.programmes + result.counts.outsideRetention + result.counts.droppedProgrammes,
+            programmesKept = written,
+            outsideWindow = result.counts.outsideRetention,
+            dropped = result.counts.droppedProgrammes,
+            linkedChannels = match.links.size,
+        )
+        content.markUnit(playlistId, ImportUnit.EPG, result.status, summary.code, written.toLong())
+        return UnitOutcome(ImportUnit.EPG, result.status, written, result.error, summary)
     }
+
+    /**
+     * Upcoming programmes from the provider's per-channel guide (Xtream `get_short_epg`), for channels that have no XMLTV
+     * programmes. Only Xtream sources; at most 20 channels per call; results are cached in memory. Empty for other sources.
+     */
+    public suspend fun shortGuide(
+        playlistId: PlaylistId,
+        channelIds: List<ChannelId>,
+        report: (ShortGuideReport) -> Unit = {},
+    ): Map<String, List<GuideProgramme>> = shortGuide.programmes(playlistId, channelIds, report)
 
     /** Builds the playable stream for a channel immediately before playback (docs/PLAYBACK.md §2). */
     public suspend fun resolveChannel(
@@ -365,9 +512,41 @@ public class SourceService(
     private fun missingCredentials(unit: ImportUnit = ImportUnit.LIVE) =
         UnitOutcome(unit, ImportStatus.FAILED, 0, DomainError.Auth(AuthFailure.MISSING_CREDENTIALS))
 
-    private companion object {
+    internal companion object {
         /** Marks a source whose whole URL lives in the secret store. */
         const val SECRET_URL_TEMPLATE = "{credential:url}"
+
+        const val HEADER_LIMIT_BYTES = 64 * 1024
+
+        private val GUIDE_ATTRIBUTE = Regex("""(?:url-tvg|x-tvg-url)\s*=\s*"([^"]+)"""", RegexOption.IGNORE_CASE)
+
+        /** First line of [source] (up to [limit] bytes), decoded as UTF-8. */
+        fun readFirstLine(source: app.iptvplayer.domain.ports.ByteSource, limit: Int): String {
+            val buffer = ByteArray(limit)
+            var size = 0
+            while (size < limit) {
+                val read = source.read(buffer, size, minOf(8192, limit - size))
+                if (read <= 0) break
+                val newline = (size until size + read).firstOrNull { buffer[it] == '\n'.code.toByte() }
+                size += read
+                if (newline != null) return buffer.decodeToString(0, newline)
+            }
+            return buffer.decodeToString(0, size)
+        }
+
+        /** The first http(s) guide link in an `#EXTM3U` header line, unless it is [providerGuide] itself. */
+        fun advertisedGuide(header: String, providerGuide: SensitiveUrl?): SensitiveUrl? {
+            if (!header.trimStart('\uFEFF', ' ').startsWith("#EXTM3U")) return null
+            val value = GUIDE_ATTRIBUTE.find(header)?.groupValues?.get(1) ?: return null
+            val link = value.split(',').map { it.trim() }.firstOrNull {
+                it.startsWith("http://", ignoreCase = true) || it.startsWith("https://", ignoreCase = true)
+            } ?: return null
+            if (providerGuide != null && link == providerGuide.unsafeRawValue()) return null
+            return SensitiveUrl.of(link)
+        }
+
+        /** Marks a guide link set by the user; the URL itself lives in the secret store. */
+        const val GUIDE_LINK_TEMPLATE = "{credential:guide-link}"
 
         fun failureOf(error: DomainError): AddSourceFailure = when (error) {
             is DomainError.Auth -> when (error.reason) {

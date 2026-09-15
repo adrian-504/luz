@@ -49,6 +49,26 @@ programme moves the window 90 minutes later (up to three days), Left moves it ba
 focused programme's title and times are shown above the grid. Each visible row loads its whole guide range once so moving
 the window does not wait for storage. Programme detail sheet, logos, catch-up marks, search and prime time remain.
 
+## Addendum — findings with the owner's provider (2026-09-15)
+
+- **Xtream playlist links** typed into the M3U form are detected (`SourceService.isXtreamPlaylistLink`) and offered
+  "Add with Xtream login" (live channels and guide through the API) with the full playlist as a second choice.
+- **Adding a source** runs in the application scope and only one at a time (`AppGraph.adding`); leaving the form no longer
+  abandons a running import that a retry would duplicate.
+- **Guide summary**: each guide import records declared channels, programmes read/kept, outside the window and dropped;
+  the EPG unit stores `EPG_EMPTY` or `EPG_OUTSIDE_WINDOW` when nothing was kept, Sources shows it in plain language, and
+  the app logs the numbers (never URLs) under `IptvImport` for device diagnosis.
+- **Short EPG fallback** (EPG.md §1): for channels without stored programmes, `SourceService.shortGuide` fetches Xtream
+  `get_short_epg` (10 programmes) for at most 20 on-screen channels per call, 3 requests in parallel, cached in memory
+  until the last programme ends (empty results for 10 minutes). Live TV asks for visible rows after scrolling settles,
+  the guide per visible row, the player for the playing channel. Not stored in the database, so it does not appear in
+  guide search; persisting it is later work. On the owner's provider it returns empty bodies for every channel.
+- **Guide link per source** (REQUIREMENTS.md FR-SRC-004, minimal form): Playlists → Guide link saves one XMLTV link
+  that replaces the provider's guide for that source. The link is stored in the secret store (links often carry keys);
+  the playlist's EPG template becomes the marker `{credential:guide-link}`; a channel refresh keeps it; "Use the
+  provider's guide again" restores `xmltv.php` (Xtream) or the playlist's `url-tvg` at the next refresh (M3U). Sharing one
+  guide across several sources with priorities (the full FR-SRC-004) remains later work. The app bundles no guide links.
+
 ## Alternatives considered
 
 - **`media3-ui` `SubtitleView` / `PlayerView`** — full cue styling and positioning, but a View-based UI module for what a

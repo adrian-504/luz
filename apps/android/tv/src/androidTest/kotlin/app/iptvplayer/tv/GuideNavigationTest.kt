@@ -111,9 +111,13 @@ class GuideNavigationTest {
         awaitDetails(programmeAt(rows[0], start).title)
         val initialWindow = windowStartText()
 
-        // Down twice: row 1 has no guide, row 2 focuses the programme airing at the focused time.
+        // Down twice. Row 1 has no XMLTV guide: its programmes come from the provider's per-channel guide (get_short_epg).
+        // Each move focuses the programme airing at the focused time.
         press(KeyEvent.KEYCODE_DPAD_DOWN)
-        awaitFocus(GuideTags.cell(rows[1].id, null))
+        val shortGuide = programmeAt(rows[1], start)
+        assertTrue(shortGuide.title, shortGuide.title.contains("short guide"))
+        awaitFocus(GuideTags.cell(rows[1].id, shortGuide.start))
+        awaitDetails(shortGuide.title)
         press(KeyEvent.KEYCODE_DPAD_DOWN)
         awaitFocus(GuideTags.cell(rows[2].id, programmeAt(rows[2], start).start))
 

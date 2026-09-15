@@ -10,6 +10,7 @@ import app.iptvplayer.domain.playback.PlaybackState
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.ingestion.SourceService
 import app.iptvplayer.platform.AndroidPlatformCapabilities
+import app.iptvplayer.platform.ForegroundRule
 import app.iptvplayer.platform.SystemClock
 import app.iptvplayer.platform.net.OkHttpTransport
 import app.iptvplayer.platform.playback.Media3PlaybackController
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -38,6 +40,9 @@ import kotlin.test.assertTrue
 /** The whole Android stack: OkHttp → shared import → bundled SQLite + Keystore → resolver → Media3, against the test panel. */
 @RunWith(AndroidJUnit4::class)
 class SourceImportEndToEndTest {
+    @get:Rule
+    val foreground = ForegroundRule()
+
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context = instrumentation.targetContext
     private val server = TestMediaServer(instrumentation.context.assets)

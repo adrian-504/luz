@@ -108,6 +108,10 @@
     <string name="form_connect">Connect</string>
     <string name="form_add_playlist">Add playlist</string>
     <string name="form_working">Checking and importing channels…</string>
+    <string name="form_xtream_link_hint">This link comes from an Xtream Codes provider. Adding it with the Xtream login is much faster: live channels and the TV guide, without downloading every movie and episode.</string>
+    <string name="form_add_with_xtream">Add with Xtream login</string>
+    <string name="form_add_full_playlist">Add the whole playlist instead (slow)</string>
+    <string name="form_busy">Another source is still being imported. It will appear in Live TV when it is ready.</string>
     <string name="form_cleartext_warning">This address is not encrypted (http). Your login and viewing can be seen by others on the network. Use https if your provider offers it.</string>
     <string name="form_credentials_note">Your login is stored encrypted on this TV only.</string>
     <string name="add_failure_invalid_url">This address is not valid. Check it and include http:// or https://.</string>
@@ -149,4 +153,19 @@
     <string name="live_switch_source">Press OK to switch source</string>
     <string name="sources_watch">Watch in Live TV</string>
     <string name="sources_watching">Shown in Live TV and Guide</string>
+    <string name="sources_guide_failed">Guide: could not be downloaded</string>
+    <string name="sources_guide_empty">Guide: this provider\'s guide is empty</string>
+    <string name="sources_guide_outside">Guide: no programmes in the next 3 days</string>
+    <plurals name="sources_guide_programmes">
+        <item quantity="one">Guide: %d programme</item>
+        <item quantity="other">Guide: %d programmes</item>
+    </plurals>
+    <string name="sources_guide_link">Guide link</string>
+    <string name="sources_guide_custom">%1$s (your guide link)</string>
+    <string name="guide_link_title">Guide link (EPG)</string>
+    <string name="guide_link_intro">If your provider\'s guide is empty, paste the link of an XMLTV guide here, for example one your provider sent you. Channels are matched to the guide by their guide ID and name.</string>
+    <string name="guide_link_current">This source uses your own guide link. Enter a new link to replace it.</string>
+    <string name="guide_link_field">Guide link (XMLTV, .xml or .xml.gz)</string>
+    <string name="guide_link_save">Save and download the guide</string>
+    <string name="guide_link_clear">Use the provider\'s guide again</string>
 </resources>
