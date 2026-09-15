@@ -89,7 +89,9 @@ query surface. Either would be recorded in a new ADR.
 available** (neither plain nor with the `unicode61` tokenizer or `contentless_delete`). As planned above, Android storage
 will use a **bundled SQLite** with FTS5 enabled instead of the framework library. The concrete driver (for example
 `requery/sqlite-android` behind SQLDelight's Android driver, or AndroidX `sqlite-bundled`) is chosen through the dependency
-policy when storage is first wired into the Android app (Phase 7). Real TV devices are not yet checked; Apple still needs Xcode.
+policy when storage is first wired into the Android app (Phase 7). Owner's Bbox TV (Android TV 11, API 30): framework SQLite
+**3.28.0**, FTS4 only, no FTS5 — same conclusion. The Bbox runs 32-bit ARM (`armeabi-v7a`), so the bundled SQLite must ship
+that ABI. Apple still needs Xcode.
 
 ## Consequences
 

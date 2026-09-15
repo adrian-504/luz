@@ -13,7 +13,7 @@ a test plan and a review step (§18.1). A phase is closed only by review against
 | **3** | Xtream engine | Auth/content/EPG flows pass | **Complete on JVM 2026-09-14; Apple targets not yet verified** |
 | **4** | XMLTV/EPG | Large EPG imports and queries remain responsive | **Complete on JVM 2026-09-14; Apple targets and device SQLite not yet verified** |
 | **5** | Android TV shell | Remote navigation complete | **Complete on Google TV emulator 2026-09-15; owner's TV device not yet checked** |
-| **6** | Android playback | Live/VOD playback stable | **Verified on Google TV emulator 2026-09-15 with synthetic streams; owner's real TV not yet checked** |
+| **6** | Android playback | Live/VOD playback stable | **Verified on the Google TV emulator and the owner's Bbox TV (Android TV 11) 2026-09-15 with synthetic streams** |
 | 7 | Android Live TV | Channel browsing/zapping/EPG complete | Guide UI, zapping, preparation window, now/next |
 | 8 | Android VOD/Series | Library experience complete | Movies, series, continue watching, search UI |
 | 9 | Android QA | Stress/device matrix passes | Performance gates, soak, device matrix |
@@ -232,7 +232,7 @@ machine, with recovery and diagnostics (exit criterion: live/VOD playback stable
 | TTFF instrumentation, diagnostics panel | **Done** — informational emulator numbers in PLAYBACK.md §7; time to first audio NOT YET VERIFIED (emulator without audio) |
 | Test media | **Done** — FFmpeg (owner approved) synthetic pattern + tone, reproducible, 1.3 MB; in-process fault-injecting server |
 | Player screen, remote keys | **VERIFIED on emulator** — overlay on OK (no accidental button press), auto-hide, play/pause and media keys, error panel with Retry, diagnostics, Back order; debug-only developer streams under Settings |
-| Owner's real Google TV device | **NOT YET VERIFIED** — needs developer mode on the TV and owner approval |
+| Owner's real TV device | **VERIFIED on the Bbox TV** (Technicolor UZW4020BYT, Android TV 11 / API 30, 32-bit ARM, 2.2 GB RAM) over network debugging with owner approval: 151 shared-core, 10 real-playback and 8 TV app tests pass; debug app installed. Time to first audio still NOT VERIFIED (not reported on the device either — to investigate in Phase 7) |
 
 Problems found and fixed during the phase: `INTERNET` permission missing for playback; Media3 retried 404/401 for ~6 s
 before reporting (now immediate); a frozen live playlist surfaced as "unknown error" (now a stall, retried); the timing
@@ -241,7 +241,7 @@ tests (replaced by a plain `SurfaceView`); OK opening the overlay also pressed P
 inside the player; Settings focused placeholder cards instead of the test streams.
 
 Totals: 173 JVM tests (162 shared core, 11 playback session and error mapping) and 169 device tests on the Google TV API 34
-emulator (151 shared-core, 10 real-playback, 8 TV app), 0 failures; `verify.sh` green with strict dependency verification.
+emulator (151 shared-core, 10 real-playback, 8 TV app), 0 failures, and the same 169 on the Bbox TV; `verify.sh` green with strict dependency verification.
 Mutation spot-checks: 7 injected playback and player bugs, all caught (one needed a stronger assertion first).
 
 ## Next milestone: Phase 7 — Android Live TV

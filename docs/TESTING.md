@@ -113,6 +113,13 @@ stall, malformed playlist, random bytes, HTML body). Multiple audio languages an
 
 ## 5. Device matrix (initial proposal, finalized per platform phase)
 
+**Devices used so far:** Google TV emulator API 34 (arm64, on the development Mac); owner's **Bbox TV** (Technicolor
+UZW4020BYT, Android TV 11 / API 30, `armeabi-v7a`, 2.2 GB RAM, 1080p), connected over network debugging with the owner's
+approval. Known tooling issue on the Bbox: its system language is French, so `am instrument` prints `Time: 0,283` with a
+decimal comma and the Android Gradle Plugin marks `connected*Test` tasks as failed although every test passes (XML reports
+show 0 failures; raw `am instrument` output ends `OK (n tests)` and `INSTRUMENTATION_CODE: -1`). Read the XML reports or
+run `am instrument` directly on such devices; never change the owner's TV language to work around it.
+
 | Platform | Devices | Emulator/simulator |
 |---|---|---|
 | Android TV / Google TV | low-end reference, mid Google TV, owner's device | Android TV emulator (API: min supported + latest) for UI/focus only |

@@ -192,3 +192,8 @@ Informational emulator timings (debug build, synthetic media on 127.0.0.1, Googl
 device results): time to first frame HLS VOD ≈ 180 ms, HLS live ≈ 80 ms after a channel change, progressive MP4 ≈ 1.4 s
 (first playback in the process, includes decoder start), continuous TS live ≈ 1.6 s. Time to first audio is not reported on
 the emulator (started without audio output).
+
+Informational timings on the owner's Bbox TV (Android TV 11, 32-bit ARM, 2.2 GB RAM; debug build, synthetic media served
+in-process): time to first frame progressive MP4 ≈ 270 ms, HLS live ≈ 270 ms after a channel change, HLS VOD ≈ 370 ms,
+continuous TS live ≈ 1.0 s. Time to first audio was not reported on the device either: the `onAudioPositionAdvancing`
+signal needs investigation (Phase 7) before first-audio can be measured.
