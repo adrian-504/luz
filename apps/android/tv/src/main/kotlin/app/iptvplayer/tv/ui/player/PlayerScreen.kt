@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,10 +45,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import app.iptvplayer.domain.model.TrackSet
 import app.iptvplayer.domain.playback.PlaybackErrorCode
 import app.iptvplayer.domain.playback.PlaybackState
 import app.iptvplayer.platform.playback.Media3PlaybackController
 import app.iptvplayer.platform.playback.PlaybackDiagnostics
+import app.iptvplayer.platform.playback.PlaybackMediaSession
 import app.iptvplayer.platform.playback.PlaybackRequest
 import app.iptvplayer.platform.playback.PlaybackSnapshot
 import app.iptvplayer.tv.R
@@ -69,6 +72,14 @@ object PlayerTags {
     const val BANNER = "player-banner"
     const val TITLE = "player-title"
     const val FAVORITE = "player-favorite"
+    const val LAST_CHANNEL = "player-last-channel"
+    const val AUDIO = "player-audio"
+    const val SUBTITLES = "player-subtitles"
+    const val TRACK_PANEL = "player-track-panel"
+    const val SUBTITLES_OFF = "player-subtitles-off"
+    const val SUBTITLE_TEXT = "player-subtitle-text"
+
+    fun trackOption(id: String) = "player-track-$id"
 }
 
 /**
@@ -87,13 +98,27 @@ fun PlayerScreen(
     onToggleFavorite: (() -> Unit)? = null,
     /** Channel switching: -1 previous, +1 next in the current list. Null for single streams. */
     onZap: ((Int) -> Unit)? = null,
+    /** Returns to the channel watched before this one; null when there is none. */
+    onLastChannel: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val controller = remember { Media3PlaybackController(context.applicationContext) }
-    DisposableEffect(controller) { onDispose { controller.release() } }
+    val currentOnZap by rememberUpdatedState(onZap)
+    DisposableEffect(controller) {
+        // System media controls (media keys, assistant); "next"/"previous" switch channels when the screen supports it.
+        val mediaSession = PlaybackMediaSession(context, controller, onSkip = if (onZap != null) ({ currentOnZap?.invoke(it) }) else null)
+        onDispose {
+            mediaSession.close()
+            controller.release()
+        }
+    }
     // The player must only be touched on the main thread: DisposableEffect runs there, coroutine effects may not (tests).
     DisposableEffect(controller, request) {
-        if (request != null) controller.prepare(request) else controller.stop()
+        if (request != null) {
+            controller.prepare(request.copy(title = request.title ?: title, subtitle = request.subtitle ?: subtitle))
+        } else {
+            controller.stop()
+        }
         onDispose { }
     }
 
@@ -105,6 +130,12 @@ fun PlayerScreen(
 
     val snapshot by controller.snapshot.collectAsState()
     val diagnostics by controller.diagnostics.collectAsState()
+    val tracks by controller.tracks.collectAsState()
+    val cues by controller.subtitleCues.collectAsState()
+    var trackMenu by remember { mutableStateOf<TrackMenu?>(null) }
+    var lastTrackMenu by remember { mutableStateOf<TrackMenu?>(null) }
+    val audioFocus = remember { FocusRequester() }
+    val subtitlesFocus = remember { FocusRequester() }
     var overlayVisible by remember { mutableStateOf(true) }
     var diagnosticsVisible by remember { mutableStateOf(false) }
     var lastInputAt by remember { mutableLongStateOf(0L) }
@@ -122,8 +153,23 @@ fun PlayerScreen(
         }
     }
 
-    BackHandler(enabled = diagnosticsVisible || (overlayVisible && !isError)) {
-        if (diagnosticsVisible) diagnosticsVisible = false else overlayVisible = false
+    BackHandler(enabled = trackMenu != null || diagnosticsVisible || (overlayVisible && !isError)) {
+        when {
+            trackMenu != null -> trackMenu = null
+            diagnosticsVisible -> diagnosticsVisible = false
+            else -> overlayVisible = false
+        }
+    }
+    // A new channel has other tracks; close a menu that was open for the previous one.
+    LaunchedEffect(request) { trackMenu = null }
+    LaunchedEffect(trackMenu) {
+        val closed = lastTrackMenu
+        lastTrackMenu = trackMenu
+        if (trackMenu == null && closed != null && overlayVisible && !isError) {
+            // Focus returns to the button that opened the menu (it may have disappeared with a channel change).
+            runCatching { (if (closed == TrackMenu.AUDIO) audioFocus else subtitlesFocus).requestFocus() }
+                .onFailure { playPauseFocus.requestFocus() }
+        }
     }
 
     LaunchedEffect(overlayVisible, isError) {
@@ -133,8 +179,8 @@ fun PlayerScreen(
             else -> rootFocus.requestFocus()
         }
     }
-    LaunchedEffect(overlayVisible, lastInputAt, snapshot.state) {
-        if (overlayVisible && snapshot.state == PlaybackState.PLAYING) {
+    LaunchedEffect(overlayVisible, lastInputAt, snapshot.state, trackMenu) {
+        if (overlayVisible && trackMenu == null && snapshot.state == PlaybackState.PLAYING) {
             delay(OVERLAY_TIMEOUT_MS)
             overlayVisible = false
         }
@@ -168,15 +214,14 @@ fun PlayerScreen(
                     }
                     KeyEvent.KEYCODE_MEDIA_PLAY -> true.also { controller.play() }
                     KeyEvent.KEYCODE_MEDIA_PAUSE -> true.also { controller.pause() }
+                    KeyEvent.KEYCODE_LAST_CHANNEL -> (onLastChannel != null).also { if (it) onLastChannel?.invoke() }
                     KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> (onZap != null).also { if (it) onZap?.invoke(+1) }
                     KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> (onZap != null).also { if (it) onZap?.invoke(-1) }
-                    KeyEvent.KEYCODE_DPAD_UP -> (onZap != null && !overlayVisible && !diagnosticsVisible).also { if (it) onZap?.invoke(-1) }
-                    KeyEvent.KEYCODE_DPAD_DOWN -> (onZap != null && !overlayVisible && !diagnosticsVisible).also {
-                        if (it) {
-                            onZap?.invoke(
-                                +1,
-                            )
-                        }
+                    KeyEvent.KEYCODE_DPAD_UP -> (onZap != null && !overlayVisible && !diagnosticsVisible && trackMenu == null).also {
+                        if (it) onZap?.invoke(-1)
+                    }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> (onZap != null && !overlayVisible && !diagnosticsVisible && trackMenu == null).also {
+                        if (it) onZap?.invoke(+1)
                     }
                     in SELECT_KEYS -> if (!overlayVisible && !isError) {
                         overlayVisible = true
@@ -190,6 +235,7 @@ fun PlayerScreen(
             },
     ) {
         VideoSurface(controller)
+        SubtitleCues(cues, raised = overlayVisible && !isError, modifier = Modifier.align(Alignment.BottomCenter))
         // Focus target while the overlay is hidden. It is a sibling, not a parent, of the overlay buttons: Compose moves
         // focus to a focusable parent on Back, which would swallow the first Back press.
         Box(modifier = Modifier.fillMaxSize().testTag(PlayerTags.ROOT).focusRequester(rootFocus).focusable())
@@ -252,6 +298,27 @@ fun PlayerScreen(
                             modifier = Modifier.testTag(PlayerTags.FAVORITE),
                         )
                     }
+                    if (tracks.audio.size > 1) {
+                        ActionButton(
+                            text = stringResource(R.string.player_audio),
+                            onClick = { trackMenu = TrackMenu.AUDIO },
+                            modifier = Modifier.focusRequester(audioFocus).testTag(PlayerTags.AUDIO),
+                        )
+                    }
+                    if (tracks.subtitles.isNotEmpty()) {
+                        ActionButton(
+                            text = stringResource(R.string.player_subtitles),
+                            onClick = { trackMenu = TrackMenu.SUBTITLES },
+                            modifier = Modifier.focusRequester(subtitlesFocus).testTag(PlayerTags.SUBTITLES),
+                        )
+                    }
+                    if (onLastChannel != null) {
+                        ActionButton(
+                            text = stringResource(R.string.player_last_channel),
+                            onClick = onLastChannel,
+                            modifier = Modifier.testTag(PlayerTags.LAST_CHANNEL),
+                        )
+                    }
                     ActionButton(
                         text = stringResource(R.string.player_diagnostics),
                         onClick = { diagnosticsVisible = !diagnosticsVisible },
@@ -262,7 +329,23 @@ fun PlayerScreen(
         }
 
         if (diagnosticsVisible) {
-            DiagnosticsPanel(snapshot, diagnostics, Modifier.align(Alignment.TopEnd))
+            DiagnosticsPanel(snapshot, diagnostics, tracks, Modifier.align(Alignment.TopEnd))
+        }
+
+        trackMenu?.let { menu ->
+            TrackPanel(
+                menu = menu,
+                tracks = tracks,
+                onSelectAudio = { id ->
+                    controller.setAudioTrack(id)
+                    trackMenu = null
+                },
+                onSelectSubtitle = { id ->
+                    controller.setSubtitleTrack(id)
+                    trackMenu = null
+                },
+                modifier = Modifier.align(Alignment.CenterEnd),
+            )
         }
     }
 }
@@ -337,8 +420,12 @@ private fun ErrorPanel(
 
 /** Developer-facing values (PLAYBACK.md §6.1). Contains no URLs: only scheme, status codes and media facts. */
 @Composable
-private fun DiagnosticsPanel(snapshot: PlaybackSnapshot, d: PlaybackDiagnostics, modifier: Modifier) {
+private fun DiagnosticsPanel(snapshot: PlaybackSnapshot, d: PlaybackDiagnostics, tracks: TrackSet, modifier: Modifier) {
     fun ms(value: Long?) = value?.let { "$it ms" } ?: "—"
+    val audioIndex = tracks.audio.indexOfFirst { it.isSelected }
+    val subtitleIndex = tracks.subtitles.indexOfFirst { it.isSelected }
+    val audioTrack = if (audioIndex >= 0) audioLabel(tracks.audio[audioIndex], audioIndex) else "—"
+    val subtitleTrack = if (subtitleIndex >= 0) subtitleLabel(tracks.subtitles[subtitleIndex], subtitleIndex) else "—"
     val rows = listOf(
         "State" to snapshot.state.name,
         "Stream type" to (d.streamType?.name ?: "—"),
@@ -351,6 +438,8 @@ private fun DiagnosticsPanel(snapshot: PlaybackSnapshot, d: PlaybackDiagnostics,
         "Resolution" to (d.resolution ?: "—"),
         "Video codec" to (d.videoCodec ?: "—"),
         "Audio codec" to (d.audioCodec ?: "—"),
+        "Audio track" to "$audioTrack (${tracks.audio.size})",
+        "Subtitle track" to "$subtitleTrack (${tracks.subtitles.size})",
         "Video bitrate" to (d.videoBitrate?.let { "${it / 1000} kbit/s" } ?: "—"),
         "Bandwidth estimate" to (d.bandwidthEstimate?.let { "${it / 1000} kbit/s" } ?: "—"),
         "Buffer ahead" to ms(d.bufferedAheadMs),
@@ -359,6 +448,11 @@ private fun DiagnosticsPanel(snapshot: PlaybackSnapshot, d: PlaybackDiagnostics,
         "Automatic retries" to d.retryCount.toString(),
         "Time to first frame" to ms(d.timeToFirstFrameMs),
         "Time to first audio" to ms(d.timeToFirstAudioMs),
+        "Channel switch" to when (d.preparedHit) {
+            null -> "—"
+            true -> "${ms(d.switchTimeMs)} (prepared ahead)"
+            false -> "${ms(d.switchTimeMs)} (not prepared)"
+        },
         "Last error" to listOfNotNull(d.lastErrorCode?.name, d.lastEngineError).joinToString(" / ").ifEmpty { "—" },
     )
     Column(

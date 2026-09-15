@@ -12,7 +12,7 @@ dependencies, no third-party libraries. Package `app.iptvplayer.domain`.
 | `security` | `Secret`, `SensitiveUrl`, `SecretBundle`, `Redactor`, `UrlTemplate` ([SECURITY.md](../../docs/SECURITY.md)) |
 | `net` | `ParsedUrl`, `UrlPolicy` (scheme allowlist, flags, redirect checks) |
 | `error` | `DomainError` with stable codes and retryability |
-| `playback` | `PlaybackStateMachine`, `PlaybackErrorCode`, `PlaybackRetryPolicy` (ADR-0019) |
+| `playback` | `PlaybackStateMachine`, `PlaybackErrorCode`, `PlaybackRetryPolicy` (ADR-0019); `PreparationWindow` and `ChannelHistory` for channel switching (ADR-0027) |
 | `ports` | Interfaces implemented natively (`HttpTransport`, `SecretStore`, `Clock`, `Tracer`) and provisional ingestion contracts |
 
 Tests: `commonTest` (run on every enabled target) consume `tooling/fixtures/playback/state-machine.json` and

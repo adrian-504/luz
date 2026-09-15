@@ -12,6 +12,8 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.iptvplayer.domain.playback.PlaybackState
@@ -101,6 +103,7 @@ class LiveTvFlowTest {
         rule.onNodeWithTag(FormTags.USERNAME).performTextInput(username)
         rule.onNodeWithTag(FormTags.PASSWORD_FIELD).performTextInput(password)
         rule.onNodeWithTag(FormTags.SUBMIT).requestFocusCompat()
+        awaitKeyboardHidden()
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         rule.waitUntil(20_000) {
             val error = rule.onAllNodes(hasTestTag(FormTags.ERROR), useUnmergedTree = true).fetchSemanticsNodes()
@@ -135,7 +138,29 @@ class LiveTvFlowTest {
         rule.waitUntil(20_000) {
             runCatching { rule.onNodeWithTag(PlayerTags.STATE).assertExistsWithText(stateText(PlaybackState.PLAYING)) }.isSuccess
         }
-        press(KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_BACK)
+
+        // The last-channel key returns to the channel watched before; it was prepared ahead while Test Sports played.
+        press(KeyEvent.KEYCODE_LAST_CHANNEL)
+        awaitExists(PlayerTags.TITLE, "Test News HD")
+        rule.waitUntil(20_000) {
+            runCatching { rule.onNodeWithTag(PlayerTags.STATE).assertExistsWithText(stateText(PlaybackState.PLAYING)) }.isSuccess
+        }
+        repeat(6) {
+            if (runCatching {
+                    rule.onNodeWithTag(
+                        PlayerTags.DIAGNOSTICS_TOGGLE,
+                    ).assertIsFocused()
+                }.isFailure
+            ) {
+                press(KeyEvent.KEYCODE_DPAD_RIGHT)
+            }
+        }
+        awaitFocus(PlayerTags.DIAGNOSTICS_TOGGLE)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.waitUntil(5_000) {
+            rule.onAllNodes(hasText("prepared ahead", substring = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        press(KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_BACK)
 
         // Back in Live TV; the Guide shows programmes from the provider's XMLTV.
         awaitFocus(LiveTags.channel(channelId("Test News HD")))
@@ -165,6 +190,25 @@ class LiveTvFlowTest {
         val node = fetchSemanticsNode()
         val texts = node.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text }
         assertEquals(text, texts.joinToString(""))
+    }
+
+    /**
+     * Typing with `performTextInput` opens the on-screen keyboard, which closes again once focus leaves the field. A key
+     * pressed while it is still on screen goes to the keyboard window, so OK would not reach the Add button.
+     */
+    private fun awaitKeyboardHidden() {
+        fun keyboardVisible(): Boolean {
+            var visible = false
+            instrumentation.runOnMainSync {
+                val insets = ViewCompat.getRootWindowInsets(rule.activity.window.decorView)
+                visible = insets?.isVisible(WindowInsetsCompat.Type.ime()) == true
+            }
+            return visible
+        }
+        runCatching { rule.waitUntil(5_000) { !keyboardVisible() } }
+            .onFailure { throw AssertionError("the on-screen keyboard did not close after leaving the text fields", it) }
+        // The window regains key focus only after the keyboard's closing animation.
+        rule.waitUntil(5_000) { rule.activity.hasWindowFocus() }
     }
 
     private fun androidx.compose.ui.test.SemanticsNodeInteraction.requestFocusCompat() {

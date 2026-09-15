@@ -35,6 +35,8 @@ object SourcesTags {
     fun refresh(id: PlaylistId) = "source-refresh-${id.value}"
 
     fun delete(id: PlaylistId) = "source-delete-${id.value}"
+
+    fun watch(id: PlaylistId) = "source-watch-${id.value}"
 }
 
 private data class SourceRow(val record: SourceRecord, val channels: Long, val liveStatus: ImportStatus?)
@@ -47,9 +49,11 @@ fun SourcesList(focus: FocusMemory) {
     val revision by graph.revision.collectAsState()
     val activity by graph.activity.collectAsState()
     var rows by remember { mutableStateOf<List<SourceRow>>(emptyList()) }
+    var current by remember { mutableStateOf<PlaylistId?>(null) }
     var confirmDelete by remember { mutableStateOf<PlaylistId?>(null) }
 
     LaunchedEffect(revision) {
+        current = graph.currentSource()?.playlistId
         rows = graph.sources().map { SourceRow(it, graph.channelCount(it.playlistId), graph.unitStatus(it.playlistId, ImportUnit.LIVE)) }
     }
     LaunchedEffect(confirmDelete) {
@@ -81,6 +85,9 @@ fun SourcesList(focus: FocusMemory) {
                 row.liveStatus == ImportStatus.FAILED -> R.string.sources_status_failed
                 else -> null
             }
+            if (rows.size > 1 && id == current) {
+                Text(stringResource(R.string.sources_watching), style = MaterialTheme.typography.bodySmall, color = Tokens.stateLive)
+            }
             status?.let {
                 Text(
                     stringResource(it),
@@ -95,6 +102,13 @@ fun SourcesList(focus: FocusMemory) {
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3)) {
+                if (rows.size > 1 && id != current) {
+                    ActionButton(
+                        stringResource(R.string.sources_watch),
+                        { scope.launch { graph.selectSource(id) } },
+                        Modifier.rememberedFocus(focus, SourcesTags.watch(id)),
+                    )
+                }
                 ActionButton(
                     stringResource(R.string.sources_refresh),
                     { graph.refresh(id) },

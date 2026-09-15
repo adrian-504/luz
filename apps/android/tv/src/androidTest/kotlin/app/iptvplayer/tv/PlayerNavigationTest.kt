@@ -63,7 +63,7 @@ class PlayerNavigationTest {
         repeat(Section.SETTINGS.ordinal) { press(KeyEvent.KEYCODE_DPAD_DOWN) }
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(ShellTags.developerStream("hls-live"))
-        val order = listOf("hls-live", "ts-live", "hls-vod", "mp4-vod", "not-found", "unsupported")
+        val order = listOf("hls-live", "ts-live", "hls-vod", "mp4-vod", "not-found", "unsupported", "tracks")
         repeat(order.indexOf(id)) { press(KeyEvent.KEYCODE_DPAD_RIGHT) }
         awaitFocus(ShellTags.developerStream(id))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
@@ -90,7 +90,10 @@ class PlayerNavigationTest {
         press(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
         awaitText(PlayerTags.STATE, string(R.string.player_state_playing))
 
-        press(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_CENTER)
+        // Audio/Subtitles buttons appear before Diagnostics when the stream offers tracks (MPEG-TS may declare captions).
+        repeat(4) { if (focusedTag() != PlayerTags.DIAGNOSTICS_TOGGLE) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        awaitFocus(PlayerTags.DIAGNOSTICS_TOGGLE)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
         rule.waitUntil(5_000) {
             rule.onAllNodes(androidx.compose.ui.test.hasTestTag(PlayerTags.DIAGNOSTICS_PANEL)).fetchSemanticsNodes().isNotEmpty()
         }
@@ -100,6 +103,65 @@ class PlayerNavigationTest {
         awaitGone(PlayerTags.OVERLAY)
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.developerStream("hls-vod"))
+    }
+
+    private fun focusedTag(): String? = focusedTags().singleOrNull()
+
+    private fun awaitFocusWhere(label: String, predicate: (String) -> Boolean): String {
+        runCatching { rule.waitUntil(10_000) { focusedTag()?.let(predicate) == true } }
+            .onFailure { throw AssertionError("expected focus on $label, but focused: ${focusedTags()}", it) }
+        return focusedTag()!!
+    }
+
+    private fun hasNode(tag: String) = rule.onAllNodes(androidx.compose.ui.test.hasTestTag(tag)).fetchSemanticsNodes().isNotEmpty()
+
+    @Test
+    fun subtitlesAndAudioLanguageAreChosenFromTheOverlay() {
+        openDeveloperStream("tracks")
+        awaitFocus(PlayerTags.PLAY_PAUSE)
+        rule.waitUntil(10_000) { hasNode(PlayerTags.SUBTITLES) && hasNode(PlayerTags.AUDIO) }
+
+        // Subtitles: "Off" first, then the English track, whose cue text then appears on screen.
+        press(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_RIGHT)
+        awaitFocus(PlayerTags.SUBTITLES)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocusWhere("a subtitle option") { it == PlayerTags.SUBTITLES_OFF || it.startsWith("player-track-") }
+        press(KeyEvent.KEYCODE_DPAD_UP)
+        awaitFocus(PlayerTags.SUBTITLES_OFF)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitGone(PlayerTags.TRACK_PANEL)
+        awaitFocus(PlayerTags.SUBTITLES)
+        rule.waitUntil(5_000) { !hasNode(PlayerTags.SUBTITLE_TEXT) }
+
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(PlayerTags.SUBTITLES_OFF)
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        awaitFocusWhere("the English subtitle option") { it.startsWith("player-track-") }
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitGone(PlayerTags.TRACK_PANEL)
+        rule.waitUntil(5_000) { hasNode(PlayerTags.SUBTITLE_TEXT) }
+
+        // Audio: the default track has focus; choosing the second one keeps it selected when the menu reopens.
+        press(KeyEvent.KEYCODE_DPAD_LEFT)
+        awaitFocus(PlayerTags.AUDIO)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        val first = awaitFocusWhere("the selected audio option") { it.startsWith("player-track-") }
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        val second = awaitFocusWhere("the second audio option") { it.startsWith("player-track-") && it != first }
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitGone(PlayerTags.TRACK_PANEL)
+        awaitFocus(PlayerTags.AUDIO)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(second)
+
+        // Back closes the menu, then the overlay, then leaves the player.
+        press(KeyEvent.KEYCODE_BACK)
+        awaitGone(PlayerTags.TRACK_PANEL)
+        awaitFocus(PlayerTags.AUDIO)
+        press(KeyEvent.KEYCODE_BACK)
+        awaitGone(PlayerTags.OVERLAY)
+        press(KeyEvent.KEYCODE_BACK)
+        awaitFocus(ShellTags.developerStream("tracks"))
     }
 
     @Test

@@ -47,6 +47,16 @@
     <string name="player_favorite">Add to favorites</string>
     <string name="player_unfavorite">Remove from favorites</string>
     <string name="player_diagnostics_title">Playback diagnostics</string>
+    <string name="player_last_channel">Previous channel</string>
+    <string name="player_audio">Audio</string>
+    <string name="player_subtitles">Subtitles</string>
+    <string name="player_subtitles_off">Off</string>
+    <string name="player_track_number">Track %1$d</string>
+    <string name="player_track_forced">%1$s (forced)</string>
+    <plurals name="player_track_channels">
+        <item quantity="one">%1$s · %2$d channel</item>
+        <item quantity="other">%1$s · %2$d channels</item>
+    </plurals>
     <string name="developer_streams_title">Developer: playback test streams</string>
     <string name="developer_streams_body">Synthetic test media served inside this debug build. Not available in release builds.</string>
     <string name="playback_error_net_offline">No internet connection.</string>
@@ -120,6 +130,8 @@
     <string name="channel_unavailable">This channel has no playable stream.</string>
 
     <string name="guide_loading">Downloading the guide…</string>
+    <string name="guide_now">Now</string>
+    <string name="guide_programme_time">%1$s – %2$s</string>
 
     <string name="sources_title">Your sources</string>
     <plurals name="sources_channels">
@@ -134,4 +146,7 @@
     <string name="sources_status_failed">Last refresh failed; showing the previous channels.</string>
     <string name="sources_cleartext">Not encrypted (http)</string>
     <string name="developer_add_test_provider">Add test provider</string>
+    <string name="live_switch_source">Press OK to switch source</string>
+    <string name="sources_watch">Watch in Live TV</string>
+    <string name="sources_watching">Shown in Live TV and Guide</string>
 </resources>

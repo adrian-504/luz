@@ -12,7 +12,7 @@ diagnostics and low perceived latency — not feature count.
 
 ## Current phase
 
-**Phase 7 (Android Live TV) in progress** — sources, import, Live TV, zapping and guide working on the emulator (2026-09-15); see [docs/ROADMAP.md](docs/ROADMAP.md) for what remains. Open review items are tracked in
+**Phase 7 (Android Live TV) in progress** — sources, import, Live TV, zapping (T0 preparation, last channel), tracks, media session, multiple sources and guide navigation working on the emulator (2026-09-15); remaining: checks on the owner's Bbox TV with their own provider; see [docs/ROADMAP.md](docs/ROADMAP.md) for what remains. Open review items are tracked in
 [docs/ROADMAP.md](docs/ROADMAP.md). Work strictly phase by phase.
 
 ## Non-negotiable rules

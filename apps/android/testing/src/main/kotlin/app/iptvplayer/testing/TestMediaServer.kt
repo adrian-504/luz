@@ -19,6 +19,7 @@ import kotlin.concurrent.thread
  *
  * Routes:
  * - `/vod.mp4` — 10 s progressive MP4 (supports `Range`)
+ * - `/multi-track.mp4` — 8 s MP4 with English and Spanish audio and an English subtitle track (supports `Range`)
  * - `/hls/vod.m3u8`, `/seg/seg-NN.ts` — 30 s HLS VOD
  * - `/hls/live.m3u8` — sliding live window over the same segments (4 segments, advances every 2 s, loops with
  *   `EXT-X-DISCONTINUITY`)
@@ -108,6 +109,7 @@ class TestMediaServer(private val assets: AssetManager, port: Int = 0) : AutoClo
                 }
                 route == "/redirect" -> respond(out, 302, "text/plain", ByteArray(0), "Location: /vod.mp4\r\n")
                 route == "/vod.mp4" -> serveAsset(out, "vod-10s.mp4", "video/mp4", headers["range"])
+                route == "/multi-track.mp4" -> serveAsset(out, "multi-track-8s.mp4", "video/mp4", headers["range"])
                 route == "/hls/vod.m3u8" -> respond(out, 200, HLS, vodPlaylist())
                 route == "/hls/live.m3u8" -> respond(out, 200, HLS, livePlaylist())
                 route.startsWith("/seg/") -> serveSegment(out, route.removePrefix("/seg/"))

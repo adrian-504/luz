@@ -81,3 +81,6 @@ public data class SubtitleTrack(
     public val isSelected: Boolean,
     public val origin: TrackOrigin,
 )
+
+/** The tracks the native player currently offers (PLAYBACK.md §2 `tracks()`); empty until the media has been parsed. */
+public data class TrackSet(public val audio: List<AudioTrack> = emptyList(), public val subtitles: List<SubtitleTrack> = emptyList())

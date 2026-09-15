@@ -20,6 +20,7 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.navigation.compose)
     implementation(project(":apps:android:platform"))
+    implementation(project(":shared:epg"))
     debugImplementation(project(":apps:android:testing"))
 
     androidTestImplementation(platform(libs.compose.bom))

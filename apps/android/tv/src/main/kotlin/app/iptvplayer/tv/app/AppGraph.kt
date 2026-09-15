@@ -3,6 +3,7 @@ package app.iptvplayer.tv.app
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import androidx.core.content.edit
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.model.ImportStatus
@@ -34,6 +35,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.InetAddress
+import java.net.URI
 import kotlin.time.Instant
 
 /** Import activity per source, for the UI. */
@@ -80,6 +83,20 @@ class AppGraph(context: Context) {
     }
 
     suspend fun sources(): List<SourceRecord> = io { content.sources() }
+
+    // The source Live TV and the guide show. A UI preference (a playlist id, nothing secret); falls back to the first source.
+    private val preferences by lazy { appContext.getSharedPreferences("ui", Context.MODE_PRIVATE) }
+
+    suspend fun currentSource(): SourceRecord? = io {
+        val all = content.sources()
+        val selected = preferences.getString(KEY_CURRENT_SOURCE, null)
+        all.firstOrNull { it.playlistId.value == selected } ?: all.firstOrNull()
+    }
+
+    suspend fun selectSource(playlistId: PlaylistId) {
+        io { preferences.edit(commit = true) { putString(KEY_CURRENT_SOURCE, playlistId.value) } }
+        changed()
+    }
 
     suspend fun channelCount(playlistId: PlaylistId): Long = io { content.channelCount(playlistId) }
 
@@ -161,9 +178,24 @@ class AppGraph(context: Context) {
         }
     }
 
+    /**
+     * Looks up the stream host ahead of a channel switch so the system resolver has it cached (PLAYBACK.md §4 tier T0). Opens
+     * no connection. Failures are ignored: playback reports its own errors.
+     */
+    suspend fun warmUp(request: PlaybackRequest) {
+        io {
+            val host = runCatching { URI(request.source.url.unsafeRawValue()).host }.getOrNull() ?: return@io
+            runCatching { InetAddress.getAllByName(host) }
+        }
+    }
+
     private fun track(playlistId: PlaylistId, change: (SourceActivity) -> SourceActivity) {
         mutableActivity.update { it + (playlistId to change(it[playlistId] ?: SourceActivity())) }
     }
 
     private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) { block() }
+
+    private companion object {
+        const val KEY_CURRENT_SOURCE = "current_source"
+    }
 }

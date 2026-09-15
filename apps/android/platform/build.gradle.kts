@@ -18,6 +18,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     api(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
+    implementation(libs.media3.session)
     implementation(libs.kotlinx.coroutines.core)
 
     testImplementation(libs.kotlin.test.junit)

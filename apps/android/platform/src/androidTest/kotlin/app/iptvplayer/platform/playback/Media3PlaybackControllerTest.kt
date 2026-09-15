@@ -16,6 +16,7 @@ import app.iptvplayer.testing.TestMediaServer
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -80,9 +81,13 @@ class Media3PlaybackControllerTest {
         }
     }
 
+    /** Logs start-up timings. Sound starts shortly after the first frame, so first audio is awaited (all test media has audio). */
     private fun timing(label: String) {
-        val d = controller.diagnostics.value
+        val d = runBlocking {
+            withTimeoutOrNull(5.seconds) { controller.diagnostics.first { it.timeToFirstAudioMs != null } } ?: controller.diagnostics.value
+        }
         Log.i("PlaybackTiming", "$label ttff=${d.timeToFirstFrameMs}ms firstAudio=${d.timeToFirstAudioMs}ms")
+        assertNotNull(d.timeToFirstAudioMs, "$label: first audio not reported $d")
     }
 
     @Test
@@ -107,6 +112,46 @@ class Media3PlaybackControllerTest {
 
         onMain { controller.seekTo(Duration.ZERO) }
         await(PlaybackState.PLAYING)
+    }
+
+    private fun <T> awaitValue(label: String, timeout: Duration = 10.seconds, read: () -> T?): T = runBlocking {
+        withTimeoutOrNull(timeout) {
+            var value = onMain(read)
+            while (value == null) {
+                Thread.sleep(50)
+                value = onMain(read)
+            }
+            value
+        } ?: throw AssertionError("$label not reached within $timeout; tracks=${controller.tracks.value}")
+    }
+
+    @Test
+    fun audioAndSubtitleTracksCanBeSelected() {
+        setUp()
+        play(server.url("/multi-track.mp4"), StreamProtocol.PROGRESSIVE_MP4, PlaybackMode.VOD)
+        await(PlaybackState.PLAYING)
+        val initial = awaitValue("two audio tracks") { controller.tracks.value.takeIf { it.audio.size == 2 } }
+        assertEquals(listOf("en", "es"), initial.audio.map { it.language?.take(2) })
+        assertEquals(listOf(true, false), initial.audio.map { it.isSelected }, "the default (English) audio plays first")
+        val subtitle = initial.subtitles.single()
+        assertEquals("en", subtitle.language?.take(2))
+
+        val spanish = initial.audio[1].id
+        onMain { controller.setAudioTrack(spanish) }
+        awaitValue(
+            "Spanish audio selected",
+        ) { controller.tracks.value.audio.takeIf { it.size == 2 && it[1].isSelected && !it[0].isSelected } }
+        assertEquals(PlaybackState.PLAYING, controller.snapshot.value.state)
+
+        onMain { controller.setSubtitleTrack(subtitle.id) }
+        awaitValue("subtitle selected") { controller.tracks.value.subtitles.singleOrNull()?.takeIf { it.isSelected } }
+        val cue = awaitValue("a subtitle cue on screen") { controller.subtitleCues.value.firstOrNull() }
+        assertTrue(cue.text.toString().startsWith("Subtitle cue"), "${cue.text}")
+
+        onMain { controller.setSubtitleTrack(null) }
+        awaitValue("subtitles off") { controller.tracks.value.subtitles.singleOrNull()?.takeIf { !it.isSelected } }
+        awaitValue("no cues while subtitles are off") { controller.subtitleCues.value.takeIf { it.isEmpty() } }
+        assertEquals(PlaybackState.PLAYING, controller.snapshot.value.state)
     }
 
     @Test

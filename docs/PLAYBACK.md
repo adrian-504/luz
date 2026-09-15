@@ -180,12 +180,13 @@ content titles unless the user ticks "include channel names". Export content is 
 
 | Part | Android (Phase 6) | Apple |
 |---|---|---|
-| Controller contract §2 | `Media3PlaybackController` (`apps/android/platform`); tracks (audio/subtitles), playback rate not yet | Phase 11 |
+| Controller contract §2 | `Media3PlaybackController` (`apps/android/platform`); audio/subtitle tracks and cues (ADR-0027); playback rate not yet | Phase 11 |
 | State machine §3 | `PlaybackSession` passes all vectors (JVM); engine mapping verified on the Google TV emulator | Phase 11 |
 | Timeouts and recovery §3 | Prepare/stall timers, retry backoff and budget; retry budget restored after 10 s of stable playback; client HTTP errors fail without engine retries | Phase 11 |
 | Error taxonomy §5 | `Media3ErrorMapper`; live HLS playlist stuck → `TIMEOUT_STALL`, reset → `SRC_ENDED_UNEXPECTEDLY`; `HTTP_CONNECTION_LIMIT` only for 458/509 until account state is available | Phase 11 |
-| Fast channel switching §4 | Not started (Phase 7) | — |
-| Diagnostics panel §6.1 | Developer panel in the player (no host names, no URLs) | Phase 11 |
+| Fast channel switching §4 | Tier T0 only (ADR-0027): shared `PreparationWindow` / `ChannelHistory`; candidates resolved and hosts looked up while a channel plays; per-switch key-to-first-frame time and prepared hit in diagnostics; last-channel key and button. T1/T2 not started | Phase 11 |
+| Diagnostics panel §6.1 | Developer panel in the player (no host names, no URLs), including audio/subtitle track and channel-switch time | Phase 11 |
+| Media session | `PlaybackMediaSession` (Media3 session): media keys, assistant, next/previous channel; no URL leaves the app (device test) | Phase 11 |
 | Telemetry ring buffer §6.2, export §6.3 | Not started | — |
 
 Informational emulator timings (debug build, synthetic media on 127.0.0.1, Google TV API 34 emulator on an M1 Mac; not
@@ -195,5 +196,8 @@ the emulator (started without audio output).
 
 Informational timings on the owner's Bbox TV (Android TV 11, 32-bit ARM, 2.2 GB RAM; debug build, synthetic media served
 in-process): time to first frame progressive MP4 ≈ 270 ms, HLS live ≈ 270 ms after a channel change, HLS VOD ≈ 370 ms,
-continuous TS live ≈ 1.0 s. Time to first audio was not reported on the device either: the `onAudioPositionAdvancing`
-signal needs investigation (Phase 7) before first-audio can be measured.
+continuous TS live ≈ 1.0 s. Time to first audio was not reported on the device either (Phase 6 read it too early).
+
+Phase 7 emulator timings with time to first audio (same setup; the test now waits for sound): progressive MP4 first frame
+≈ 234 ms / first audio ≈ 544 ms, HLS VOD ≈ 188 / 361 ms, HLS live after a channel change ≈ 59 / 166 ms, continuous TS live
+≈ 439 / 619 ms. Informational only; device numbers NOT YET VERIFIED for first audio.

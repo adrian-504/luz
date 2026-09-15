@@ -40,6 +40,7 @@ import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.storage.ChannelRow
 import app.iptvplayer.storage.GroupRow
 import app.iptvplayer.storage.NowNextRow
+import app.iptvplayer.storage.SourceRecord
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.ActionButton
@@ -77,6 +78,7 @@ sealed interface ChannelScope {
 object LiveTags {
     const val GROUP_ALL = "live-group-all"
     const val GROUP_FAVORITES = "live-group-favorites"
+    const val SWITCH_SOURCE = "live-switch-source"
 
     fun group(id: String) = "live-group-$id"
 
@@ -102,13 +104,16 @@ fun LiveTvSection(
     var playlist by remember { mutableStateOf<PlaylistId?>(null) }
     var loaded by remember { mutableStateOf(false) }
     var groups by remember { mutableStateOf<List<GroupRow>>(emptyList()) }
+    var sources by remember { mutableStateOf<List<SourceRecord>>(emptyList()) }
+    val coroutines = rememberCoroutineScope()
     var scopeKey by rememberSaveable { mutableStateOf(if (favoritesOnly) ChannelScope.Favorites.key() else ChannelScope.All.key()) }
     val scope = ChannelScope.of(scopeKey)
 
     LaunchedEffect(revision) {
-        val first = graph.sources().firstOrNull()
-        playlist = first?.playlistId
-        groups = first?.let { graph.groups(it.playlistId) }.orEmpty()
+        val source = graph.currentSource()
+        sources = graph.sources()
+        playlist = source?.playlistId
+        groups = source?.let { graph.groups(it.playlistId) }.orEmpty()
         loaded = true
     }
     if (!loaded) return
@@ -138,6 +143,20 @@ fun LiveTvSection(
                 modifier = Modifier.width(280.dp).fillMaxHeight().focusRestorer(),
                 verticalArrangement = Arrangement.spacedBy(Tokens.space2),
             ) {
+                if (sources.size > 1) {
+                    item(key = "source") {
+                        val index = sources.indexOfFirst { it.playlistId == current }
+                        SourceSwitcher(
+                            name = sources.getOrNull(index)?.name.orEmpty(),
+                            modifier = Modifier.rememberedFocus(focus, LiveTags.SWITCH_SOURCE),
+                        ) {
+                            // Few sources are expected on a TV, so OK moves to the next one; the list reloads for it.
+                            val next = sources[(index + 1).mod(sources.size)].playlistId
+                            scopeKey = if (favoritesOnly) ChannelScope.Favorites.key() else ChannelScope.All.key()
+                            coroutines.launch { graph.selectSource(next) }
+                        }
+                    }
+                }
                 item(key = "all") {
                     GroupItem(
                         stringResource(R.string.live_all_channels),
@@ -183,6 +202,17 @@ fun LiveTvSection(
             Modifier.padding(start = if (favoritesOnly) 0.dp else Tokens.space6).weight(1f),
         )
     }
+}
+
+@Composable
+private fun SourceSwitcher(name: String, modifier: Modifier, onSwitch: () -> Unit) {
+    ListItem(
+        selected = false,
+        onClick = onSwitch,
+        headlineContent = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        supportingContent = { Text(stringResource(R.string.live_switch_source), style = MaterialTheme.typography.bodySmall) },
+        modifier = modifier.padding(bottom = Tokens.space3),
+    )
 }
 
 @Composable

@@ -56,6 +56,25 @@ public object GuideMath {
         return NowNext(current, next, progress, validUntil)
     }
 
+    /**
+     * The programme to focus at [time] in one guide row (EPG.md §5: vertical moves keep the focused time, not the cell
+     * index): the one airing at [time], else the next to start after it, else the last one. [items] are sorted by start.
+     */
+    public fun <T> indexAt(items: List<T>, time: Instant, start: (T) -> Instant, end: (T) -> Instant): Int? {
+        if (items.isEmpty()) return null
+        val airing = items.indexOfFirst { start(it) <= time && time < end(it) }
+        if (airing >= 0) return airing
+        val next = items.indexOfFirst { start(it) > time }
+        return if (next >= 0) next else items.lastIndex
+    }
+
+    /** Moves the guide's visible [window] by [by], keeping its length and staying within [earliest]..[latest]. */
+    public fun shift(window: TimeWindow, by: Duration, earliest: Instant, latest: Instant): TimeWindow {
+        val latestStart = maxOf(earliest, latest - window.duration)
+        val start = (window.start + by).coerceIn(earliest, latestStart)
+        return TimeWindow(start, start + window.duration)
+    }
+
     /** Cells for [programmes] intersecting [window], at [pixelsPerMinute]. */
     public fun cells(programmes: List<Program>, window: TimeWindow, pixelsPerMinute: Double): List<GuideCell> =
         programmes.filter { it.end > window.start && it.start < window.end }.map { program ->

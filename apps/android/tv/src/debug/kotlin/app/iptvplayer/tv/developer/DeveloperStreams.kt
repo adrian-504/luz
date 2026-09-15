@@ -46,6 +46,7 @@ object DeveloperStreams {
             stream("mp4-vod", "Movie — MP4", "/vod.mp4", StreamProtocol.PROGRESSIVE_MP4, PlaybackMode.VOD),
             stream("not-found", "Error — 404", "/missing.m3u8", StreamProtocol.HLS, PlaybackMode.LIVE),
             stream("unsupported", "Error — not a video", "/html.ts", StreamProtocol.PROGRESSIVE_TS, PlaybackMode.VOD),
+            stream("tracks", "Movie — audio & subtitles", "/multi-track.mp4", StreamProtocol.PROGRESSIVE_MP4, PlaybackMode.VOD),
         )
     }
 }

@@ -257,16 +257,22 @@ channel browsing/zapping/EPG complete).
 | Content storage (sources, groups, channels, stream locators, favorites, guide links) | **Done** — snapshot publish/discard, favorites survive refresh; JVM and device tests; no credentials in database files (canary check) |
 | Shared import pipeline (`shared:ingestion`) | **Done — ADR-0026:** add Xtream / M3U, refresh live, refresh guide + channel matching, resolve channel, delete |
 | Android `HttpTransport` (OkHttp) and `SecretStore` (Keystore) | **Done — ADR-0026** — device tests (redirects not followed, body cap, DNS/refused/timeout, encryption, tamper handling) |
-| Onboarding forms (Xtream login, M3U link) | **Done** — plain-language errors, cleartext warning, keyboard on OK; M3U *file* import still a placeholder |
+| Onboarding forms (Xtream login, M3U link) | **Done** — plain-language errors, cleartext warning, keyboard on OK; M3U *file* import is not in the Phase 7 scope (placeholder) |
 | Live TV screen, favorites, sources list | **Done** — groups, channel numbers, now/next with progress, long-press favorite, refresh/remove |
-| Zapping in the player | **Done** — Up/Down and Channel ±, debounced resolve, banner; verified on the emulator |
-| Guide screen | **Done (simplified)** — 3-hour window from the current half hour; no horizontal paging yet |
+| Multiple sources | **Done — ADR-0027:** current source for Live TV / Favorites / Guide, switch item in Live TV, "Watch in Live TV" in Sources; device test |
+| Zapping in the player | **Done** — Up/Down and Channel ±, debounced resolve, banner; last-channel key and "Previous channel" button (ADR-0027); verified on the emulator |
+| Guide screen | **Done — ADR-0027:** Up/Down keep the focused time, Right/Left move the window (now to +3 days), now-line, "Now", focused programme title and times; device test. Detail sheet, logos, catch-up marks, guide search and prime time not yet |
 | End-to-end remote test | **VERIFIED on emulator** — type login → import → Live TV → favorite → play → zap → guide |
-| MediaSession (system media keys), audio/subtitle track selection | Not started |
-| Preparation window for faster zapping (PLAYBACK.md §4 T0/T1) | Not started |
-| Time-to-first-audio metric (not reported on emulator or Bbox) | Not started |
-| Multiple sources in Live TV (switcher), scheduled refresh | Not started (first source shown) |
+| MediaSession (system media keys) | **Done — ADR-0027:** Media3 session through the controller; next/previous channel; device test asserts no credentials or stream address in the system session dump |
+| Audio/subtitle track selection | **Done — ADR-0027:** controller tracks and cues, overlay Audio/Subtitles panel, subtitles drawn by the app; synthetic two-language MP4 fixture; device tests (controller and remote) |
+| Preparation window for faster zapping (PLAYBACK.md §4) | **Done for tier T0 — ADR-0027:** shared window policy (unit tests); neighbours and last channel resolved ahead, hosts looked up, no extra stream; per-switch timing and prepared hit in diagnostics (device test). T1/T2 deliberately not started (need connection limits and measurements) |
+| Time-to-first-audio metric | **Fixed** — Phase 6 test read it before sound started; now reported for MP4, HLS and TS on the emulator (device test asserts it). Bbox NOT YET VERIFIED |
+| Scheduled background refresh | Not in the Phase 7 scope; manual refresh in Sources. Planned with the refresh policy settings |
 | Owner's real provider on the Bbox | **NOT YET VERIFIED** — owner enters their login on the TV |
+
+Totals at this checkpoint (2026-09-15): 190 JVM tests and 198 device tests on the Google TV API 34 emulator, 0 failures;
+`verify.sh` green from a clean build. A flaky remote-flow test was traced to the on-screen keyboard (opened by typing in
+the test) swallowing the OK press while closing; the test now waits for the keyboard to close. Not yet run on the Bbox TV.
 
 ## Phase 7 original scope
 

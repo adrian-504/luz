@@ -1,10 +1,13 @@
 package app.iptvplayer.tv.ui.guide
 
+import android.view.KeyEvent
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -12,18 +15,31 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
@@ -32,58 +48,91 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.epg.GuideMath
+import app.iptvplayer.epg.TimeWindow
 import app.iptvplayer.storage.ChannelRow
 import app.iptvplayer.storage.GuideProgramme
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.LocalAppGraph
+import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.live.ChannelScope
 import app.iptvplayer.tv.ui.live.EmptyState
 import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.theme.Tokens
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import kotlin.time.toJavaInstant
 
 object GuideTags {
     const val ADD_SOURCE = "guide-add-source"
+    const val NOW = "guide-now"
+    const val WINDOW_START = "guide-window-start"
+    const val DETAILS = "guide-details"
 
-    /** The first cell of the first row, where focus enters the guide. */
+    /** The first visible cell of the first row, where focus enters the guide. */
     const val FIRST_CELL = "guide-first-cell"
 
-    fun cell(channel: ChannelId, index: Int) = "guide-${channel.value}-$index"
+    /** A programme cell, identified by its channel and start time (stable while the window moves). */
+    fun cell(channel: ChannelId, start: Instant?) = "guide-${channel.value}-${start?.epochSeconds ?: "none"}"
 }
 
 private const val WINDOW_MINUTES = 180
+private const val PAGE_MINUTES = 90
 private val MINUTE_WIDTH: Dp = 3.2.dp
 private val CHANNEL_COLUMN: Dp = 200.dp
+private val ROW_HEIGHT: Dp = 56.dp
 
 /**
- * Guide grid (EPG.md §5, simplified for Phase 7): a 3-hour window starting at the current half hour, one row per channel,
- * programme cells sized by duration and clipped to the window. OK on a programme plays its channel. Moving up and down
- * keeps roughly the same time because focus search is geometric.
+ * Guide grid (EPG.md §5): a 3-hour window, one row per channel, programme cells sized by duration and clipped to the window,
+ * and a line at the current time. Remote behavior:
+ * - Up/Down keep the focused *time* (the programme airing then on the next row), not the cell position.
+ * - Right on the last visible programme moves the window 90 minutes later; Left on the first moves it back, but not before
+ *   the current half hour (past programmes are not playable until catch-up exists). "Now" returns to the present.
+ * - OK plays the channel. The focused programme's title and times are shown above the grid.
+ * Programmes are loaded per visible row for the whole guide range once, so moving the window does not wait for storage.
  */
 @Composable
 fun GuideSection(focus: FocusMemory, onPlay: (PlaylistId, ChannelScope, ChannelId) -> Unit, onAddSource: () -> Unit) {
     val graph = LocalAppGraph.current
+    val coroutines = rememberCoroutineScope()
     val revision by graph.revision.collectAsState()
     val activity by graph.activity.collectAsState()
     var playlist by remember { mutableStateOf<PlaylistId?>(null) }
     var channels by remember { mutableStateOf<List<ChannelRow>?>(null) }
-    val windowStart = remember {
-        val now = Clock.System.now()
-        Instant.fromEpochSeconds(now.epochSeconds - now.epochSeconds % (30 * 60))
-    }
-    val windowEnd = windowStart + WINDOW_MINUTES.minutes
+
+    val earliest = remember { halfHourFloor(Clock.System.now()) }
+    val latest = earliest + GUIDE_DAYS.days
+    var window by remember { mutableStateOf(TimeWindow(earliest, earliest + WINDOW_MINUTES.minutes)) }
+    var now by remember { mutableStateOf(Clock.System.now()) }
+    var focusedTime by remember { mutableStateOf(now) }
+    var focusedRow by remember { mutableIntStateOf(0) }
+    var focusedProgramme by remember { mutableStateOf<GuideProgramme?>(null) }
+    var horizontalMove by remember { mutableStateOf(false) }
+    var pendingFocusRow by remember { mutableStateOf<Int?>(null) }
+    val programmes = remember { mutableStateMapOf<String, List<GuideProgramme>>() }
+    val listState = rememberLazyListState()
 
     LaunchedEffect(revision) {
-        val first = graph.sources().firstOrNull()
-        playlist = first?.playlistId
-        channels = first?.let { graph.channels(it.playlistId, null) }.orEmpty()
+        val source = graph.currentSource()
+        if (source?.playlistId != playlist) programmes.clear()
+        playlist = source?.playlistId
+        channels = source?.let { graph.channels(it.playlistId, null) }.orEmpty()
     }
+    // UI clock for the now-line, ticking at minute boundaries (EPG.md §5).
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = Clock.System.now()
+            delay(60_000 - now.toEpochMilliseconds() % 60_000)
+        }
+    }
+
     val current = playlist
     val rows = channels ?: return
     if (current == null) {
@@ -97,6 +146,77 @@ fun GuideSection(focus: FocusMemory, onPlay: (PlaylistId, ChannelScope, ChannelI
         return
     }
 
+    fun visible(channel: ChannelRow) = programmes[channel.id.value].orEmpty().filter { it.end > window.start && it.start < window.end }
+
+    fun cellKey(row: Int, channel: ChannelRow, index: Int, programme: GuideProgramme?) =
+        if (row == 0 && index == 0) GuideTags.FIRST_CELL else GuideTags.cell(channel.id, programme?.start)
+
+    fun focusAt(row: Int, time: Instant): Boolean {
+        val channel = rows.getOrNull(row) ?: return false
+        val cells = visible(channel)
+        val index = GuideMath.indexAt(cells, time, { it.start }, { it.end }) ?: 0
+        return focus.requestFocus(cellKey(row, channel, index, cells.getOrNull(index)))
+    }
+
+    // After the window moves, focus the programme at the focused time on the same row.
+    LaunchedEffect(window, pendingFocusRow) {
+        val row = pendingFocusRow ?: return@LaunchedEffect
+        repeat(20) {
+            if (focusAt(row, focusedTime)) {
+                pendingFocusRow = null
+                return@LaunchedEffect
+            }
+            delay(25)
+        }
+        pendingFocusRow = null
+    }
+
+    fun onGridKey(keyCode: Int): Boolean {
+        val channel = rows.getOrNull(focusedRow) ?: return false
+        val cells = visible(channel)
+        val index = focusedProgramme?.let { p -> cells.indexOfFirst { it.start == p.start } } ?: -1
+        return when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_UP -> {
+                horizontalMove = false
+                val target = focusedRow + if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1
+                if (target !in rows.indices) return false
+                if (!focusAt(target, focusedTime)) {
+                    // The row is not composed yet: bring it on screen, then focus it.
+                    coroutines.launch {
+                        listState.scrollToItem(target)
+                        pendingFocusRow = target
+                    }
+                }
+                true
+            }
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                val atEnd = index == cells.lastIndex || cells.isEmpty()
+                if (atEnd && window.end < latest) {
+                    focusedTime = maxOf(focusedProgramme?.end ?: window.end, window.start)
+                    window = GuideMath.shift(window, PAGE_MINUTES.minutes, earliest, latest)
+                    pendingFocusRow = focusedRow
+                    true
+                } else {
+                    horizontalMove = true
+                    false
+                }
+            }
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                val atStart = index <= 0
+                if (atStart && window.start > earliest) {
+                    focusedTime = maxOf((focusedProgramme?.start ?: window.start) - 1.minutes, earliest)
+                    window = GuideMath.shift(window, -PAGE_MINUTES.minutes, earliest, latest)
+                    pendingFocusRow = focusedRow
+                    true
+                } else {
+                    horizontalMove = true
+                    false
+                }
+            }
+            else -> false
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(
             start = Tokens.space8,
@@ -105,26 +225,119 @@ fun GuideSection(focus: FocusMemory, onPlay: (PlaylistId, ChannelScope, ChannelI
             bottom = Tokens.safeVertical,
         ),
     ) {
-        TimeHeader(windowStart)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.space6)) {
+            ActionButton(
+                stringResource(R.string.guide_now),
+                {
+                    now = Clock.System.now()
+                    focusedTime = now
+                    window = TimeWindow(earliest, earliest + WINDOW_MINUTES.minutes)
+                    pendingFocusRow = focusedRow
+                },
+                Modifier.rememberedFocus(focus, GuideTags.NOW),
+            )
+            ProgrammeDetails(rows.getOrNull(focusedRow), focusedProgramme)
+        }
+        TimeHeader(window.start)
         if (activity[current]?.guideRunning == true) {
             Text(stringResource(R.string.guide_loading), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary)
         }
-        LazyColumn(modifier = Modifier.fillMaxSize().focusRestorer(), verticalArrangement = Arrangement.spacedBy(Tokens.space2)) {
-            items(rows.size, key = { rows[it].id.value }) { index ->
-                val channel = rows[index]
-                var programmes by remember(channel.id, revision) { mutableStateOf<List<GuideProgramme>?>(null) }
-                LaunchedEffect(channel.id, revision) {
-                    programmes = graph.programmes(current, listOf(channel.id), windowStart, windowEnd)[channel.id.value].orEmpty()
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusRestorer()
+                    .onPreviewKeyEvent { event ->
+                        event.type == KeyEventType.KeyDown && onGridKey(event.nativeKeyEvent.keyCode)
+                    },
+                verticalArrangement = Arrangement.spacedBy(Tokens.space2),
+            ) {
+                items(rows.size, key = { rows[it].id.value }) { rowIndex ->
+                    val channel = rows[rowIndex]
+                    LaunchedEffect(channel.id, revision) {
+                        programmes[channel.id.value] =
+                            graph.programmes(current, listOf(channel.id), earliest, latest)[channel.id.value].orEmpty()
+                    }
+                    val loaded = channel.id.value in programmes
+                    val cells = visible(channel)
+                    GuideRow(channel, window) {
+                        if (loaded && cells.isEmpty()) {
+                            GuideCell(
+                                stringResource(R.string.live_no_guide),
+                                0.dp,
+                                MINUTE_WIDTH * WINDOW_MINUTES,
+                                Modifier.rememberedFocus(focus, cellKey(rowIndex, channel, 0, null)).onFocusChanged {
+                                    if (it.isFocused) {
+                                        focusedRow = rowIndex
+                                        focusedProgramme = null
+                                        horizontalMove = false
+                                    }
+                                },
+                            ) { onPlay(current, ChannelScope.All, channel.id) }
+                        }
+                        cells.forEachIndexed { index, programme ->
+                            key(programme.start.epochSeconds) {
+                                val from = maxOf(programme.start, window.start)
+                                val to = minOf(programme.end, window.end)
+                                val x = MINUTE_WIDTH * (from - window.start).inWholeMinutes.toInt()
+                                val width = (MINUTE_WIDTH * (to - from).inWholeMinutes.toInt()).coerceAtLeast(12.dp)
+                                GuideCell(
+                                    programme.title,
+                                    x,
+                                    width - 2.dp,
+                                    Modifier.rememberedFocus(focus, cellKey(rowIndex, channel, index, programme)).onFocusChanged {
+                                        if (it.isFocused) {
+                                            focusedRow = rowIndex
+                                            focusedProgramme = programme
+                                            // Only horizontal moves change the focused time; vertical moves keep it.
+                                            if (horizontalMove) focusedTime = maxOf(programme.start, window.start)
+                                            horizontalMove = false
+                                        }
+                                    },
+                                ) { onPlay(current, ChannelScope.All, channel.id) }
+                            }
+                        }
+                    }
                 }
-                GuideRow(
-                    focus,
-                    channel,
-                    programmes,
-                    windowStart,
-                    windowEnd,
-                    first = index == 0,
-                ) { onPlay(current, ChannelScope.All, channel.id) }
             }
+            if (now >= window.start && now < window.end) {
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset((CHANNEL_COLUMN + MINUTE_WIDTH * (now - window.start).inWholeMinutes.toInt()).roundToPx(), 0) }
+                        .width(2.dp)
+                        .fillMaxHeight()
+                        .background(Tokens.stateLive),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProgrammeDetails(channel: ChannelRow?, programme: GuideProgramme?) {
+    val format = remember { DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()) }
+    Column(modifier = Modifier.testTag(GuideTags.DETAILS).semantics(mergeDescendants = true) {}) {
+        Text(
+            programme?.title ?: channel?.name.orEmpty(),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.titleLarge,
+            color = Tokens.textPrimary,
+        )
+        if (programme != null && channel != null) {
+            Text(
+                listOf(
+                    channel.name,
+                    stringResource(
+                        R.string.guide_programme_time,
+                        format.format(programme.start.toJavaInstant()),
+                        format.format(programme.end.toJavaInstant()),
+                    ),
+                ).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = Tokens.textSecondary,
+            )
         }
     }
 }
@@ -132,31 +345,24 @@ fun GuideSection(focus: FocusMemory, onPlay: (PlaylistId, ChannelScope, ChannelI
 @Composable
 private fun TimeHeader(start: Instant) {
     val format = remember { DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()) }
-    Box(modifier = Modifier.fillMaxWidth().height(32.dp)) {
+    Box(modifier = Modifier.fillMaxWidth().height(32.dp).padding(top = Tokens.space2)) {
         for (slot in 0 until WINDOW_MINUTES / 30) {
             val time = start + (slot * 30).minutes
             Text(
                 format.format(time.toJavaInstant()),
                 style = MaterialTheme.typography.bodySmall,
                 color = Tokens.textSecondary,
-                modifier = Modifier.offset(x = CHANNEL_COLUMN + MINUTE_WIDTH * (slot * 30)),
+                modifier = Modifier
+                    .offset(x = CHANNEL_COLUMN + MINUTE_WIDTH * (slot * 30))
+                    .then(if (slot == 0) Modifier.testTag(GuideTags.WINDOW_START) else Modifier),
             )
         }
     }
 }
 
 @Composable
-private fun GuideRow(
-    focus: FocusMemory,
-    channel: ChannelRow,
-    programmes: List<GuideProgramme>?,
-    start: Instant,
-    end: Instant,
-    first: Boolean,
-    onPlay: () -> Unit,
-) {
-    fun key(index: Int) = if (first && index == 0) GuideTags.FIRST_CELL else GuideTags.cell(channel.id, index)
-    Row(modifier = Modifier.height(56.dp)) {
+private fun GuideRow(channel: ChannelRow, window: TimeWindow, cells: @Composable () -> Unit) {
+    Row(modifier = Modifier.height(ROW_HEIGHT)) {
         Text(
             channel.name,
             maxLines = 1,
@@ -165,25 +371,7 @@ private fun GuideRow(
             color = Tokens.textPrimary,
             modifier = Modifier.width(CHANNEL_COLUMN).padding(end = Tokens.space3, top = Tokens.space4),
         )
-        Box(modifier = Modifier.width(MINUTE_WIDTH * WINDOW_MINUTES).height(56.dp)) {
-            val cells = programmes.orEmpty().filter { it.end > start && it.start < end }
-            if (programmes != null && cells.isEmpty()) {
-                GuideCell(
-                    stringResource(R.string.live_no_guide),
-                    0.dp,
-                    MINUTE_WIDTH * WINDOW_MINUTES,
-                    Modifier.rememberedFocus(focus, key(0)),
-                    onPlay,
-                )
-            }
-            cells.forEachIndexed { index, programme ->
-                val from = maxOf(programme.start, start)
-                val to = minOf(programme.end, end)
-                val x = MINUTE_WIDTH * ((from - start).inWholeMinutes.toInt())
-                val width = (MINUTE_WIDTH * ((to - from).inWholeMinutes.toInt())).coerceAtLeast(12.dp)
-                GuideCell(programme.title, x, width - 2.dp, Modifier.rememberedFocus(focus, key(index)), onPlay)
-            }
-        }
+        Box(modifier = Modifier.width(MINUTE_WIDTH * (window.duration.inWholeMinutes.toInt())).height(ROW_HEIGHT)) { cells() }
     }
 }
 
@@ -191,7 +379,7 @@ private fun GuideRow(
 private fun GuideCell(title: String, x: Dp, width: Dp, modifier: Modifier, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        modifier = modifier.offset(x = x).width(width).height(56.dp),
+        modifier = modifier.offset(x = x).width(width).height(ROW_HEIGHT),
         shape = ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(Tokens.radiusSmall)),
         colors = ClickableSurfaceDefaults.colors(containerColor = Tokens.bgSurface1, focusedContainerColor = Tokens.bgSurface3),
         border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(Tokens.focusRingWidth, Tokens.focusRing))),
@@ -207,3 +395,8 @@ private fun GuideCell(title: String, x: Dp, width: Dp, modifier: Modifier, onCli
         )
     }
 }
+
+private fun halfHourFloor(instant: Instant): Instant = Instant.fromEpochSeconds(instant.epochSeconds - instant.epochSeconds % (30 * 60))
+
+/** How far ahead the guide can move; guide refresh keeps three days ahead (SourceService.refreshEpg). */
+private const val GUIDE_DAYS = 3

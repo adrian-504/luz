@@ -1,6 +1,7 @@
 package app.iptvplayer.platform.playback
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -10,10 +11,14 @@ import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -24,7 +29,12 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.LoadEventInfo
 import androidx.media3.exoplayer.source.MediaLoadData
+import app.iptvplayer.domain.model.AudioTrack
 import app.iptvplayer.domain.model.StreamProtocol
+import app.iptvplayer.domain.model.SubtitleFormat
+import app.iptvplayer.domain.model.SubtitleTrack
+import app.iptvplayer.domain.model.TrackOrigin
+import app.iptvplayer.domain.model.TrackSet
 import app.iptvplayer.domain.playback.PlaybackErrorCode
 import app.iptvplayer.domain.playback.PlaybackEvent
 import app.iptvplayer.domain.playback.PlaybackMode
@@ -37,8 +47,31 @@ import java.io.IOException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
-/** What to play. The source lives only in memory for this session (docs/PLAYBACK.md §2). */
-class PlaybackRequest(val source: ResolvedMediaSource, val mode: PlaybackMode, val startPosition: Duration? = null)
+/**
+ * What to play. The source lives only in memory for this session (docs/PLAYBACK.md §2). [title] and [subtitle] are shown by
+ * the system's media controls (MediaSession); they must never contain URLs or credentials.
+ */
+class PlaybackRequest(
+    val source: ResolvedMediaSource,
+    val mode: PlaybackMode,
+    val startPosition: Duration? = null,
+    val title: String? = null,
+    val subtitle: String? = null,
+    /** `SystemClock.elapsedRealtime()` of the key press that asked for this stream, for channel-switch timing. */
+    val intentAtMs: Long? = null,
+    /** True when the stream was resolved ahead of the key press (PLAYBACK.md §4 tier T0). */
+    val prepared: Boolean = false,
+) {
+    fun copy(
+        title: String? = this.title,
+        subtitle: String? = this.subtitle,
+        intentAtMs: Long? = this.intentAtMs,
+        prepared: Boolean = this.prepared,
+    ) = PlaybackRequest(source, mode, startPosition, title, subtitle, intentAtMs, prepared)
+}
+
+/** One subtitle cue on screen: text cues carry [text], bitmap subtitles (for example DVB) carry [bitmap]. */
+class SubtitleCue(val text: CharSequence?, val bitmap: Bitmap?)
 
 /** Values for the diagnostics panel and local telemetry (docs/PLAYBACK.md §6). Never contains URLs or credentials. */
 data class PlaybackDiagnostics(
@@ -57,6 +90,10 @@ data class PlaybackDiagnostics(
     val retryCount: Int = 0,
     val timeToFirstFrameMs: Long? = null,
     val timeToFirstAudioMs: Long? = null,
+    /** Key press to first frame for a channel switch (includes the zap settle delay and resolving the stream). */
+    val switchTimeMs: Long? = null,
+    /** Whether the switched-to stream had been prepared ahead (tier T0 hit); null when not a channel switch. */
+    val preparedHit: Boolean? = null,
     val lastErrorCode: PlaybackErrorCode? = null,
     /** Media3's error code name for developers, for example `ERROR_CODE_IO_BAD_HTTP_STATUS`. */
     val lastEngineError: String? = null,
@@ -84,6 +121,18 @@ interface PlaybackController {
     /** Null for live streams and while unknown. */
     fun duration(): Duration?
 
+    /** Audio and subtitle tracks of the current media (track ids are valid only for the current media). */
+    val tracks: StateFlow<TrackSet>
+
+    /** Subtitle cues to draw now; empty when subtitles are off or between cues. */
+    val subtitleCues: StateFlow<List<SubtitleCue>>
+
+    /** Selects an audio track; its language becomes the preferred audio language for later channels in this player. */
+    fun setAudioTrack(id: String)
+
+    /** Selects a subtitle track, or turns subtitles off with null; the choice carries over to later channels in this player. */
+    fun setSubtitleTrack(id: String?)
+
     /** Width / height of the current video (pixel aspect applied), or null before the first video format. */
     val videoAspectRatio: StateFlow<Float?>
 
@@ -107,7 +156,7 @@ class Media3PlaybackController(
     private val handler = Handler(Looper.getMainLooper())
     private val loadErrorPolicy = PlaybackLoadErrorPolicy()
 
-    private val player: ExoPlayer = ExoPlayer.Builder(context).build()
+    internal val player: ExoPlayer = ExoPlayer.Builder(context).build()
     private var surfaceView: SurfaceView? = null
 
     private val session = PlaybackSession(HandlerScheduler(handler), timeouts, SessionCallbacks())
@@ -116,10 +165,17 @@ class Media3PlaybackController(
     private val mutableAspectRatio = MutableStateFlow<Float?>(null)
     override val videoAspectRatio: StateFlow<Float?> = mutableAspectRatio.asStateFlow()
 
+    private val mutableTracks = MutableStateFlow(TrackSet())
+    override val tracks: StateFlow<TrackSet> = mutableTracks.asStateFlow()
+
+    private val mutableCues = MutableStateFlow<List<SubtitleCue>>(emptyList())
+    override val subtitleCues: StateFlow<List<SubtitleCue>> = mutableCues.asStateFlow()
+
     private val mutableDiagnostics = MutableStateFlow(PlaybackDiagnostics())
     override val diagnostics: StateFlow<PlaybackDiagnostics> = mutableDiagnostics.asStateFlow()
 
     private var prepareCalledAtMs = 0L
+    private var intentAtMs: Long? = null
     private var lastPositionMs = 0L
 
     init {
@@ -133,9 +189,15 @@ class Media3PlaybackController(
         val raw = request.source.url.unsafeRawValue()
         prepareCalledAtMs = SystemClock.elapsedRealtime()
         lastPositionMs = request.startPosition?.inWholeMilliseconds ?: 0
-        mutableDiagnostics.value =
-            PlaybackDiagnostics(streamType = protocol, connection = raw.substringBefore("://", "").lowercase().ifEmpty { null })
+        intentAtMs = request.intentAtMs
+        mutableDiagnostics.value = PlaybackDiagnostics(
+            streamType = protocol,
+            connection = raw.substringBefore("://", "").lowercase().ifEmpty { null },
+            preparedHit = request.prepared.takeIf { request.intentAtMs != null },
+        )
         session.prepare(request.mode)
+        mutableTracks.value = TrackSet()
+        mutableCues.value = emptyList()
 
         if (protocol in UNSUPPORTED) {
             player.stop()
@@ -157,7 +219,8 @@ class Media3PlaybackController(
         val mediaSourceFactory = DefaultMediaSourceFactory(
             DefaultDataSource.Factory(context, http),
         ).setLoadErrorHandlingPolicy(loadErrorPolicy)
-        val item = MediaItem.Builder().setUri(raw).setMimeType(mimeType(protocol)).build()
+        val metadata = MediaMetadata.Builder().setTitle(request.title).setSubtitle(request.subtitle).setArtist(request.subtitle).build()
+        val item = MediaItem.Builder().setUri(raw).setMimeType(mimeType(protocol)).setMediaMetadata(metadata).build()
         player.setMediaSource(mediaSourceFactory.createMediaSource(item), lastPositionMs)
         player.playWhenReady = true
         player.prepare()
@@ -178,6 +241,8 @@ class Media3PlaybackController(
     }
 
     override fun stop() {
+        mutableTracks.value = TrackSet()
+        mutableCues.value = emptyList()
         session.dispatch(PlaybackEvent.STOP)
         player.stop()
         player.clearMediaItems()
@@ -197,9 +262,85 @@ class Media3PlaybackController(
         player.currentPosition.milliseconds
     }
 
+    internal val isLive: Boolean get() = session.currentMode == PlaybackMode.LIVE
+
     override fun duration(): Duration? {
         if (session.currentMode == PlaybackMode.LIVE || player.isCurrentMediaItemLive) return null
         return player.duration.takeIf { it != C.TIME_UNSET }?.milliseconds
+    }
+
+    override fun setAudioTrack(id: String) {
+        val (group, index) = trackById(id, C.TRACK_TYPE_AUDIO) ?: return
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, index))
+            .setPreferredAudioLanguage(group.getTrackFormat(index).language)
+            .build()
+    }
+
+    override fun setSubtitleTrack(id: String?) {
+        val builder = player.trackSelectionParameters.buildUpon()
+        if (id == null) {
+            builder.clearOverridesOfType(C.TRACK_TYPE_TEXT).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+        } else {
+            val (group, index) = trackById(id, C.TRACK_TYPE_TEXT) ?: return
+            builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, index))
+                .setPreferredTextLanguage(group.getTrackFormat(index).language)
+        }
+        player.trackSelectionParameters = builder.build()
+    }
+
+    /** Track ids are "group:track" indexes into the player's current tracks. */
+    private fun trackById(id: String, type: Int): Pair<Tracks.Group, Int>? {
+        val parts = id.split(':').mapNotNull { it.toIntOrNull() }
+        if (parts.size != 2) return null
+        val group = player.currentTracks.groups.getOrNull(parts[0])?.takeIf { it.type == type } ?: return null
+        return (group to parts[1]).takeIf { parts[1] in 0 until group.length && group.isTrackSupported(parts[1]) }
+    }
+
+    private fun publishTracks(tracks: Tracks) {
+        val audio = mutableListOf<AudioTrack>()
+        val subtitles = mutableListOf<SubtitleTrack>()
+        tracks.groups.forEachIndexed { groupIndex, group ->
+            for (index in 0 until group.length) {
+                if (!group.isTrackSupported(index)) continue
+                val format = group.getTrackFormat(index)
+                val id = "$groupIndex:$index"
+                val language = format.language?.takeUnless { it == C.LANGUAGE_UNDETERMINED }
+                val isDefault = format.selectionFlags and C.SELECTION_FLAG_DEFAULT != 0
+                when (group.type) {
+                    C.TRACK_TYPE_AUDIO -> audio += AudioTrack(
+                        id = id,
+                        language = language,
+                        label = format.label,
+                        codec = format.codecs ?: format.sampleMimeType,
+                        channelCount = format.channelCount.takeIf { it != Format.NO_VALUE },
+                        isDefault = isDefault,
+                        isSelected = group.isTrackSelected(index),
+                    )
+                    C.TRACK_TYPE_TEXT -> subtitles += SubtitleTrack(
+                        id = id,
+                        language = language,
+                        label = format.label,
+                        // Media3 parses subtitles while extracting; the original format is then kept in `codecs`.
+                        format = subtitleFormat(
+                            if (format.sampleMimeType ==
+                                MimeTypes.APPLICATION_MEDIA3_CUES
+                            ) {
+                                format.codecs
+                            } else {
+                                format.sampleMimeType
+                            },
+                        ),
+                        isForced = format.selectionFlags and C.SELECTION_FLAG_FORCED != 0,
+                        isDefault = isDefault,
+                        isSelected = group.isTrackSelected(index),
+                        origin = TrackOrigin.EMBEDDED,
+                    )
+                }
+            }
+        }
+        mutableTracks.value = TrackSet(audio, subtitles)
     }
 
     override fun attachSurfaceView(view: SurfaceView?) {
@@ -253,6 +394,14 @@ class Media3PlaybackController(
             }
         }
 
+        override fun onTracksChanged(tracks: Tracks) {
+            publishTracks(tracks)
+        }
+
+        override fun onCues(cueGroup: CueGroup) {
+            mutableCues.value = cueGroup.cues.filter { it.text != null || it.bitmap != null }.map { SubtitleCue(it.text, it.bitmap) }
+        }
+
         override fun onRenderedFirstFrame() {
             if (session.currentState == PlaybackState.PREPARING) firstFrame()
         }
@@ -267,8 +416,12 @@ class Media3PlaybackController(
 
         private fun firstFrame() {
             // Diagnostics first, so observers of the PLAYING state already see the timing.
+            val now = SystemClock.elapsedRealtime()
             updateDiagnostics { current ->
-                current.copy(timeToFirstFrameMs = current.timeToFirstFrameMs ?: (SystemClock.elapsedRealtime() - prepareCalledAtMs))
+                current.copy(
+                    timeToFirstFrameMs = current.timeToFirstFrameMs ?: (now - prepareCalledAtMs),
+                    switchTimeMs = current.switchTimeMs ?: intentAtMs?.let { now - it },
+                )
             }
             session.dispatch(PlaybackEvent.FIRST_FRAME)
         }
@@ -298,8 +451,14 @@ class Media3PlaybackController(
         }
 
         override fun onAudioPositionAdvancing(eventTime: AnalyticsListener.EventTime, playoutStartSystemTimeMs: Long) {
+            // Reported once the audio position has advanced, a little after sound began; playoutStartSystemTimeMs is the
+            // wall-clock start of playout, converted here to the elapsed-realtime base of prepareCalledAtMs.
+            val startedAgoMs = (System.currentTimeMillis() - playoutStartSystemTimeMs).coerceAtLeast(0)
+            val startedAtMs = maxOf(prepareCalledAtMs, SystemClock.elapsedRealtime() - startedAgoMs)
             updateDiagnostics { current ->
-                current.copy(timeToFirstAudioMs = current.timeToFirstAudioMs ?: (SystemClock.elapsedRealtime() - prepareCalledAtMs))
+                current.copy(
+                    timeToFirstAudioMs = current.timeToFirstAudioMs ?: (startedAtMs - prepareCalledAtMs),
+                )
             }
         }
 
@@ -356,6 +515,17 @@ class Media3PlaybackController(
         const val NETWORK_TIMEOUT_MS = 8_000
         const val MAX_CAUSES = 8
         val UNSUPPORTED = setOf(StreamProtocol.DASH, StreamProtocol.RTMP, StreamProtocol.RTSP, StreamProtocol.UDP)
+
+        fun subtitleFormat(mimeType: String?): SubtitleFormat = when (mimeType) {
+            MimeTypes.TEXT_VTT -> SubtitleFormat.WEBVTT
+            MimeTypes.APPLICATION_CEA608, MimeTypes.APPLICATION_MP4CEA608 -> SubtitleFormat.CEA608
+            MimeTypes.APPLICATION_CEA708 -> SubtitleFormat.CEA708
+            MimeTypes.APPLICATION_TTML -> SubtitleFormat.TTML
+            MimeTypes.APPLICATION_DVBSUBS -> SubtitleFormat.DVB_BITMAP
+            MimeTypes.APPLICATION_PGS -> SubtitleFormat.PGS
+            MimeTypes.APPLICATION_SUBRIP -> SubtitleFormat.SRT
+            else -> SubtitleFormat.OTHER
+        }
 
         fun mimeType(protocol: StreamProtocol): String? = when (protocol) {
             StreamProtocol.HLS -> MimeTypes.APPLICATION_M3U8

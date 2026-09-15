@@ -113,6 +113,29 @@ class EpgTest {
     private val day = listOf(program(0, 30, "A"), program(30, 90, "B"), program(120, 180, "C"))
 
     @Test
+    fun verticalGuideMovesKeepTheFocusedTime() {
+        fun at(minutes: Int) = GuideMath.indexAt(day, t0 + minutes.minutes, { it.start }, { it.end })
+        assertEquals(1, at(80), "the programme airing then, even though it started 50 minutes earlier")
+        assertEquals(1, at(30), "a programme starting exactly then")
+        assertEquals(2, at(100), "in a gap, the next programme to start")
+        assertEquals(0, at(-20), "before the first programme")
+        assertEquals(2, at(500), "after the last programme")
+        assertNull(GuideMath.indexAt(emptyList<Program>(), t0, { it.start }, { it.end }))
+    }
+
+    @Test
+    fun guideWindowShiftsWithinTheAvailableRange() {
+        val window = TimeWindow(t0, t0 + 180.minutes)
+        val earliest = t0 - 60.minutes
+        val latest = t0 + 360.minutes
+        assertEquals(TimeWindow(t0 + 90.minutes, t0 + 270.minutes), GuideMath.shift(window, 90.minutes, earliest, latest))
+        assertEquals(TimeWindow(t0 + 180.minutes, latest), GuideMath.shift(window, 600.minutes, earliest, latest), "clamped at the end")
+        assertEquals(TimeWindow(earliest, earliest + 180.minutes), GuideMath.shift(window, -90.minutes, earliest, latest))
+        val narrow = GuideMath.shift(window, 30.minutes, earliest, t0 + 60.minutes)
+        assertEquals(earliest, narrow.start, "a range shorter than the window pins it to the earliest start")
+    }
+
+    @Test
     fun nowNextIncludingGapsAndEdges() {
         val during = GuideMath.nowNext(day, t0 + 45.minutes)
         assertEquals("B", during.current?.title)
