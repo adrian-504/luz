@@ -21,7 +21,7 @@ and type read very differently at 3 m on a TV panel than on a monitor.
 
 `Home · Live TV · Guide · Movies · Series · Favorites · Search · Playlists · Settings`
 
-- **TV**: top or side navigation rail (decided in Phase 5 prototype against Compose for TV `NavigationDrawer`/tabs and tvOS `TabView` conventions); player is full-screen with overlays.
+- **TV**: Android TV uses a side navigation rail (tv-material `NavigationDrawer`, collapsed icons that expand with labels on focus; decided in Phase 5, ADR-0023). tvOS follows `TabView` conventions (Phase 11). Player is full-screen with overlays.
 - **iOS**: tab bar with ≤ 5 primary items (Home, Live, Guide, Library, Search) and Playlists/Settings/Favorites reachable from Home/Library — mapping finalized in Phase 12.
 
 ## 3. Tokens (§10.2)

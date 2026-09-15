@@ -12,6 +12,8 @@ val ktlintRules =
     mapOf(
         "ktlint_code_style" to "intellij_idea",
         "max_line_length" to "140",
+        // Compose convention: @Composable functions are PascalCase.
+        "ktlint_function_naming_ignore_when_annotated_with" to "Composable",
         "ktlint_standard_multiline-expression-wrapping" to "disabled",
         "ktlint_standard_when-entry-bracing" to "disabled",
         "ktlint_standard_blank-line-between-when-conditions" to "disabled",
@@ -22,11 +24,17 @@ val ktlintRules =
 
 spotless {
     kotlin {
-        target("shared/*/src/**/*.kt", "build-logic/src/**/*.kt")
+        target("shared/*/src/**/*.kt", "build-logic/src/**/*.kt", "apps/android/*/src/**/*.kt")
         ktlint(ktlintVersion).editorConfigOverride(ktlintRules)
     }
     kotlinGradle {
-        target("*.gradle.kts", "shared/*/*.gradle.kts", "build-logic/*.gradle.kts", "build-logic/src/**/*.gradle.kts")
+        target(
+            "*.gradle.kts",
+            "shared/*/*.gradle.kts",
+            "apps/android/*/*.gradle.kts",
+            "build-logic/*.gradle.kts",
+            "build-logic/src/**/*.gradle.kts",
+        )
         ktlint(ktlintVersion).editorConfigOverride(ktlintRules)
     }
 }

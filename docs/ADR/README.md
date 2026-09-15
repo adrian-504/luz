@@ -43,3 +43,4 @@ line. Product-scope decisions still go to the owner.
 | [0020](0020-no-remote-telemetry-v1.md) | No remote analytics or crash reporting in V1 | Accepted |
 | [0021](0021-byte-streams-without-io-library.md) | Byte streams without an I/O library until JSON streaming needs one | Accepted |
 | [0022](0022-first-runtime-dependencies-coroutines-serialization.md) | First runtime dependencies: kotlinx.coroutines and kotlinx.serialization JSON | Accepted |
+| [0023](0023-android-tv-app-toolchain-and-shell-navigation.md) | Android TV app toolchain and shell navigation | Accepted |

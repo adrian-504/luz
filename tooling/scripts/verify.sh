@@ -47,7 +47,7 @@ fi
 echo "== 6/7 Reference ID vectors (Python reference implementation)"
 "$PY" tooling/scripts/generate_id_vectors.py --check
 
-echo "== 7/7 Gradle build, tests and formatting (shared core)"
+echo "== 7/7 Gradle build, tests and formatting (shared core, Android TV app)"
 if [ -z "${JAVA_HOME:-}" ]; then
   for candidate in /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home /usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home; do
     if [ -x "$candidate/bin/java" ]; then export JAVA_HOME="$candidate"; break; fi
@@ -56,6 +56,24 @@ fi
 if [ -z "${JAVA_HOME:-}" ]; then echo "verify.sh: JDK 21 not found (set JAVA_HOME)"; exit 1; fi
 echo "Using JAVA_HOME=$JAVA_HOME"
 ./gradlew check spotlessCheck --console=plain
+
+# Android TV app (Phase 5+): built and linted when an Android SDK is present (settings.gradle.kts "iptv.androidApps").
+android_sdk=""
+if [ -f local.properties ]; then android_sdk="$(sed -n 's/^sdk\.dir=//p' local.properties | tail -1)"; fi
+android_sdk="${android_sdk:-${ANDROID_HOME:-}}"
+if [ -n "$android_sdk" ] && [ -d "$android_sdk/platforms" ]; then
+  echo "Android SDK: $android_sdk — building the TV app (lint ran as part of check)"
+  ./gradlew :apps:android:tv:assembleDebug :apps:android:tv:assembleDebugAndroidTest --console=plain
+  adb="$android_sdk/platform-tools/adb"
+  if [ -x "$adb" ] && "$adb" devices | awk 'NR>1 && $2=="device"' | grep -q .; then
+    echo "Android device/emulator connected — running remote-navigation and platform tests"
+    ./gradlew :apps:android:tv:connectedDebugAndroidTest --console=plain
+  else
+    echo "SKIPPED: no Android device or emulator connected; device tests NOT run (docs/TESTING.md §3)"
+  fi
+else
+  echo "SKIPPED: no Android SDK (local.properties sdk.dir or ANDROID_HOME); Android TV app NOT built"
+fi
 if xcrun --sdk iphonesimulator --show-sdk-path >/dev/null 2>&1; then
   echo "Apple Kotlin/Native targets: ENABLED (Xcode SDK found) and included in check"
 else

@@ -73,7 +73,7 @@ Severity: **Critical** (could invalidate a platform or the security model) · **
 - **Spec:** §12, §13 (search index, local database) — no storage technology specified.
 - **Issue:** Candidate KMP persistence libraries differ in tvOS artifact publication and full-text-search support
   (FTS4 vs FTS5), and platform SQLite builds differ in enabled extensions. None of this has been verified.
-- **Position taken:** ADR-0013 (Accepted 2026-09-14 after the Phase 4 spike) fixes SQLite + shared schema through SQLDelight; FTS5 verified in the JVM driver, Android and Apple system SQLite still to verify.
+- **Position taken:** ADR-0013 (Accepted 2026-09-14 after the Phase 4 spike) fixes SQLite + shared schema through SQLDelight; FTS5 verified in the JVM driver. Android framework SQLite (API 34 emulator) has no FTS5, so Android uses a bundled SQLite (driver chosen in Phase 7); Apple system SQLite still to verify.
 
 ### 1.7 Time-to-first-audio is not directly observable on AVPlayer
 
@@ -112,7 +112,7 @@ Refinements to §5.1 made in [DOMAIN_MODEL.md](DOMAIN_MODEL.md). None removes a 
 | 3.3 | §3.1 "M3U local-file import where platform permits" | tvOS has no document picker | tvOS: not supported in V1; options later: import on iOS + sync (Phase 13), or LAN upload page | Confirm |
 | 3.4 | §4.2 repository has `apps/android-mobile`; §18 roadmap has no Android mobile phase | When is Android mobile built? | Secondary; after Phase 12 unless reprioritized | Confirm |
 | 3.5 | §8.4 "Jump to prime time" | Definition | 20:00 local, configurable | No |
-| 3.6 | §9.6 Back: "previous screen → home" | Behavior at Home | Platform convention (exit / confirm) decided in Phase 5 | No |
+| 3.6 | §9.6 Back: "previous screen → home" | Behavior at Home | **Decided 2026-09-15 (ADR-0023):** Android TV — Back on Home returns to the TV home screen without confirmation (guideline TV-DB); tvOS decided in Phase 11 | No |
 | 3.7 | §12.3 ranking includes "Fuzzy match" over programmes | Fuzzy search on 100k+ programmes on low-end TVs may miss latency targets | Fuzzy matching restricted to channel/VOD/series titles; programmes use token/prefix FTS | No (revisit with benchmarks) |
 | 3.8 | Number-key channel entry | Not in spec; common on Android TV remotes | Proposed for Phase 7 | Confirm |
 

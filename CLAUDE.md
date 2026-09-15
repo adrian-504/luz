@@ -12,7 +12,7 @@ diagnostics and low perceived latency — not feature count.
 
 ## Current phase
 
-**Phase 4 (XMLTV/EPG) complete on JVM 2026-09-14 — awaiting review.** Next: Phase 5 (Android TV shell; needs the Android SDK). Open review items are tracked in
+**Phase 5 (Android TV shell) complete on the Google TV emulator 2026-09-15 — awaiting review.** Next: Phase 6 (Android playback). Open review items are tracked in
 [docs/ROADMAP.md](docs/ROADMAP.md). Work strictly phase by phase.
 
 ## Non-negotiable rules

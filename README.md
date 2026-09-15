@@ -15,7 +15,9 @@ The app ships **no channels, subscriptions, playlists or content of any kind**.
 **Phase 4 — XMLTV/EPG** complete on JVM (awaiting review): `shared/domain` (entities, stable IDs, capabilities,
 credential redaction, URL policy, playback state machine), `shared/protocols` (streaming M3U import, Xtream Codes
 discovery/import, streaming XMLTV import, HTTP policy layer, playback-time URL resolution), `shared/epg` (channel
-matching, now/next, guide geometry) and `shared/storage` (SQLDelight guide storage with full-text search). No app UI yet. See
+matching, now/next, guide geometry) and `shared/storage` (SQLDelight guide storage with full-text search). **Phase 5 — Android TV shell** complete on the
+Google TV emulator: `apps/android/tv` with onboarding placeholders, a side navigation rail and tested remote navigation;
+no playback yet. See
 [docs/ROADMAP.md](docs/ROADMAP.md) for the phase plan and the next milestone.
 
 ## Source of truth

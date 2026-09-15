@@ -83,6 +83,14 @@ SQLite via `native-driver` (needs Xcode); migration testing tooling (first real 
 is missing on a platform, the fallback order is: a bundled-SQLite driver for that platform, then FTS4 with the same
 query surface. Either would be recorded in a new ADR.
 
+## Android framework SQLite check (2026-09-15, Phase 5)
+
+`PlatformSqliteProbeTest` on the Google TV emulator (API 34): framework SQLite **3.39.2**, FTS4 available, **FTS5 not
+available** (neither plain nor with the `unicode61` tokenizer or `contentless_delete`). As planned above, Android storage
+will use a **bundled SQLite** with FTS5 enabled instead of the framework library. The concrete driver (for example
+`requery/sqlite-android` behind SQLDelight's Android driver, or AndroidX `sqlite-bundled`) is chosen through the dependency
+policy when storage is first wired into the Android app (Phase 7). Real TV devices are not yet checked; Apple still needs Xcode.
+
 ## Consequences
 
 - One schema to migrate and test; sync (Phase 13) builds on one data model.

@@ -12,7 +12,7 @@ a test plan and a review step (§18.1). A phase is closed only by review against
 | **2** | M3U engine | Real-world fixtures pass | **Complete on JVM 2026-09-14; Apple targets not yet verified** |
 | **3** | Xtream engine | Auth/content/EPG flows pass | **Complete on JVM 2026-09-14; Apple targets not yet verified** |
 | **4** | XMLTV/EPG | Large EPG imports and queries remain responsive | **Complete on JVM 2026-09-14; Apple targets and device SQLite not yet verified** |
-| 5 | Android TV shell | Remote navigation complete | App skeleton, navigation, focus tests, design tokens, onboarding shell |
+| **5** | Android TV shell | Remote navigation complete | **Complete on Google TV emulator 2026-09-15; owner's TV device not yet checked** |
 | 6 | Android playback | Live/VOD playback stable | Media3 controller, state-machine vectors, recovery, diagnostics, TTFF instrumentation |
 | 7 | Android Live TV | Channel browsing/zapping/EPG complete | Guide UI, zapping, preparation window, now/next |
 | 8 | Android VOD/Series | Library experience complete | Movies, series, continue watching, search UI |
@@ -180,33 +180,59 @@ Totals: 162 JVM tests (62 domain, 93 protocols, 4 epg, 3 storage), 0 failures; `
 dependency verification with the new SQLDelight artifacts). Mutation spot-checks: 5 injected bugs, 4 caught at first;
 the surviving one exposed a missing matcher edge case (symbol-only duplicate names), now tested and caught.
 
-## Next milestone: Phase 5 — Android TV shell
+## Phase 5 — Android TV shell
 
 **Primary objective:** an installable Google TV / Android TV app skeleton with complete remote (D-pad) navigation
 between placeholder screens (exit criterion: remote navigation complete). Not the polished UI and no playback.
 
-### Prerequisites (must be true before starting)
+### Prerequisites
 
-- [ ] Android SDK installed: command-line tools, platform-tools, one current platform + build-tools, an Android TV
-      emulator system image (estimated 4–6 GB of disk; ~13 GB free on 2026-09-14). Installing requires accepting the
-      Android SDK license — **owner approval needed**.
-- [ ] Owner's TV device available for a later on-device check (likely a Bbox Google TV box), with developer mode
-      enabled when we get there. Not required to start.
-- [x] ADR-0012 layout: `apps/android/{platform,tv}` as documented; accepted under delegated authority at Phase 5 start
-      unless the owner objects.
+- [x] Android SDK installed on the external SSD (`/Volumes/DevSSD/Android/sdk`, 2026-09-15, owner approved the license):
+      command-line tools 23.0 (SHA-1 checked against Google's repository index), platform-tools, emulator, platforms 36
+      and 37.0, build-tools 36.0.0, Google TV API 34 arm64 system image; emulator `googletv34` stored on the SSD.
+- [ ] Owner's TV device (likely a Bbox Google TV box) — not required for the shell; needed before Phase 6 sign-off.
+- [x] ADR-0012 layout used: `apps/android/tv`.
 
-### Scope (to be confirmed at Phase 4 review)
+### Phase 5 result (2026-09-15)
 
-1. Android Gradle Plugin, Compose, Compose for TV and Navigation Compose added through the dependency policy
-   (ARCHITECTURE.md §14) with an ADR; `shared:*` modules gain the `android` target.
-2. `apps/android/tv`: single activity, navigation graph with placeholder Home, Live TV, Movies, Series, Search,
-   Settings and source onboarding screens; Back behavior per SPEC_REVIEW §3.6.
-3. Design tokens from DESIGN_SYSTEM.md as Compose theme values (Proposed values; no visual polish).
-4. Focus tests per TESTING.md §3 for every screen (entry, restoration after Back, no traps), run on the emulator.
-5. Verify FTS5 in Android framework SQLite on the emulator (ADR-0013 open item).
+| Scope item | Result |
+|---|---|
+| Toolchain through the dependency policy | **Done — ADR-0023:** AGP 9.4.0, Compose BOM 2026.09.00, tv-material 1.1.0, Navigation Compose 2.10.1; compile/target SDK 37, min SDK 26; checksums pinned |
+| `apps/android/tv` single activity, onboarding shell, nine sections | **VERIFIED on emulator** — Welcome → source type → placeholder forms; side rail with Home, Live TV, Guide, Movies, Series, Favorites, Search, Playlists, Settings |
+| Back behavior (SPEC_REVIEW §3.6) | **Decided and VERIFIED on emulator** — content → rail → Home → Android TV home screen (guideline TV-DB) |
+| Design tokens as Compose theme | Done — DESIGN_SYSTEM.md §3 colors, type, spacing, safe area, focus ring/scale, motion; values still Proposed |
+| Focus tests (TESTING.md §3) | **VERIFIED on emulator** — 5 remote-navigation tests pass (entry, traversal, Back, no traps across all sections, restoration) |
+| FTS5 in Android framework SQLite | **Checked on emulator: not available** (SQLite 3.39.2, FTS4 only) → bundled SQLite on Android (ADR-0013) |
+| Android lint, formatting | **VERIFIED** — lint 0 issues with warnings as errors; ktlint clean |
+| `shared:*` Android target | **Deferred to Phase 6** — the shell uses no shared code yet; added when playback uses the shared state machine |
+| Owner's real TV device | **NOT YET VERIFIED** |
 
-Out of scope: playback (Phase 6), guide and library UI (Phases 7–8), real network transport and secret storage
-beyond interfaces needed by the onboarding shell.
+Problems found and fixed during the phase (each seen on the emulator, not only in tests): the card row ran off screen
+(now a scrolling row); moving Left into the rail landed on the nearest icon instead of the selected section; switching
+sections kept the previous row's scroll position; a one-frame focus delay could drop a remote key pressed right after a
+screen change. Mutation spot-checks: removing the rail-entry rule or the Back-to-Home rule each made the tests fail.
+
+Totals: 162 JVM tests (shared core) + 6 instrumented tests (5 navigation, 1 SQLite probe) on the Google TV API 34
+emulator, 0 failures; `verify.sh` green with strict dependency verification.
+
+## Next milestone: Phase 6 — Android playback
+
+**Primary objective:** stable live and VOD playback on Android TV through Media3, driven by the shared playback state
+machine, with recovery and diagnostics (exit criterion: live/VOD playback stable). PLAYBACK.md is the contract.
+
+Scope (to be confirmed at Phase 5 review):
+
+1. `shared:domain` (and later protocols/storage) gain the Android target; the app consumes the shared playback types.
+2. Media3 (ExoPlayer, HLS; DASH evaluated) added through the dependency policy with an ADR; `apps/android/platform`
+   module with the `PlaybackController` implementation passing `tooling/fixtures/playback/state-machine.json` vectors.
+3. Error mapping to the taxonomy, bounded recovery policy, TTFF instrumentation, diagnostics panel (developer build).
+4. Test media: locally generated synthetic HLS/TS streams served on the development machine only (no bundled or
+   third-party content, ADR-0010); a tool to generate them is evaluated (FFmpeg is not installed yet).
+5. Player screen with minimal overlay; remote keys per DESIGN_SYSTEM.md §6 for play/pause and Back.
+6. First check on the owner's real Google TV device (developer mode and USB/network debugging, with owner approval).
+
+Out of scope: channel zapping and guide (Phase 7), library UI (Phase 8), provider sources wired end to end beyond what
+playback tests need.
 
 ## Proposed interim gate: Android TV personal alpha
 

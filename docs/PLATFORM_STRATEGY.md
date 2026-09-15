@@ -22,7 +22,7 @@ The Kotlin Multiplatform choice (ADR-0011) is partly motivated by this matrix: t
 
 | Platform | Proposed minimum | Rationale | Confirm in |
 |---|---|---|---|
-| Android TV | API 26 (Android 8.0); target/compile latest stable required by Google Play | Covers practically all Google TV / Android TV devices in use; AndroidX libraries require ≥ 23; Keystore AES-GCM mature | Phase 5, against the owner's device and Play policy |
+| Android TV | API 26 (Android 8.0); target/compile latest stable required by Google Play (**37** since Phase 5, ADR-0023) | Covers practically all Google TV / Android TV devices in use; AndroidX libraries require ≥ 23; Keystore AES-GCM mature | Phase 5, against the owner's device and Play policy |
 | tvOS | current major − 1 at Phase 10 start | Modern SwiftUI focus APIs and Observation; oldest supported Apple TV hardware still covered | Phase 10 |
 | iOS | current major − 1 at Phase 10 start | Same | Phase 10 |
 

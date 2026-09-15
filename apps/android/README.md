@@ -13,4 +13,12 @@ apps/android/
 Stack and rules: [ARCHITECTURE.md §11](../../docs/ARCHITECTURE.md#11-android-implementation-architecture-phase-5),
 [PLATFORM_STRATEGY.md](../../docs/PLATFORM_STRATEGY.md). No Google Play Services dependencies (Fire TV compatibility).
 
-Toolchain status (2026-09-14): JDK 21 installed; Android SDK **not installed** (Phase 5 prerequisite, see docs/ROADMAP.md).
+Toolchain status (2026-09-15): JDK 21 and the Android SDK (external SSD) installed. `apps/android/tv` exists (Phase 5
+shell, ADR-0023); `platform` arrives with playback (Phase 6).
+
+```bash
+./gradlew :apps:android:tv:installDebug            # install on a connected emulator/device
+./gradlew :apps:android:tv:connectedDebugAndroidTest   # remote-navigation tests on it
+```
+
+`local.properties` (not committed) sets `sdk.dir`; without an SDK the Android app is simply left out of the build.

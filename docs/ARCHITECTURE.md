@@ -162,8 +162,8 @@ unwieldy, via ADR.
 
 | Area | Choice | Notes |
 |---|---|---|
-| Language/UI | Kotlin, Jetpack Compose, Compose for TV (`androidx.tv:tv-material`) | Single activity |
-| Navigation | Navigation Compose | Back behavior per §9.6 |
+| Language/UI | Kotlin, Jetpack Compose, Compose for TV (`androidx.tv:tv-material` 1.1.0, Compose BOM 2026.09.00) | Single activity; AGP 9.4.0, compile/target SDK 37, min SDK 26 (ADR-0023) |
+| Navigation | Navigation Compose 2.10.1; side rail via tv-material `NavigationDrawer` | Back behavior per §9.6 and ADR-0023 |
 | State | ViewModel + `StateFlow`, unidirectional data flow | |
 | Playback | AndroidX Media3: `exoplayer`, `exoplayer-hls`, `exoplayer-dash` (evaluate), `session`, `ui-compose` (evaluate) | Legacy ExoPlayer 2 prohibited |
 | Media session | Media3 `MediaSession` | Hardware media keys, assistant |
@@ -215,7 +215,9 @@ committed). Candidate dependencies already named in docs (kotlinx.coroutines, ko
 kotlinx-io, SQLDelight or Room KMP, OkHttp, Media3, Coil) are **not yet approved** — each passes this policy
 when first introduced.
 
-**Current dependency set (Phase 4):** runtime — Kotlin 2.4.20 standard library; `shared:protocols` adds
+**Current dependency set (Phase 5):** the Android TV app adds the AndroidX set of ADR-0023 (AGP 9.4.0, Compose BOM
+2026.09.00, tv-material 1.1.0, material-icons-core 1.7.8, activity-compose 1.13.0, navigation-compose 2.10.1; tests:
+Compose ui-test, androidx.test runner 1.7.0, ext-junit 1.3.0). Shared core (Phase 4): runtime — Kotlin 2.4.20 standard library; `shared:protocols` adds
 `kotlinx-coroutines-core` and `kotlinx-serialization-json` 1.11.0 (ADR-0022); `shared:storage` adds SQLDelight 2.3.2
 `runtime`, `sqlite-driver` (JVM) and `native-driver` (Apple) with the SQLDelight Gradle plugin and SQLite 3.38 dialect
 (ADR-0013; evaluation: maintained by Cash App, Apache-2.0, publishes all required targets, exit plan = same SQL on

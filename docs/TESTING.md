@@ -45,11 +45,22 @@ For every TV screen, a focus test documents and asserts:
 
 1. **Entry**: which element receives focus on first display and on return (restoration).
 2. **Traversal**: expected focus target for Up/Down/Left/Right from each region boundary.
-3. **Back**: dismiss overlay → previous screen → home (§9.6); Back on Home does not exit without confirmation (proposed; verify against platform guidelines).
+3. **Back**: dismiss overlay → previous screen → home (§9.6). On Android TV, Back on Home returns to the TV home screen without confirmation (guideline TV-DB, ADR-0023); tvOS behavior is decided in Phase 11.
 4. **No traps**: from any focusable element, the root navigation is reachable.
 5. **Long lists**: focus follows scroll without skipping; holding D-pad accelerates predictably.
 6. **Guide**: vertical movement keeps the focused time; horizontal crosses programme boundaries; jump to now.
 7. **Player**: channel +/- and D-pad Up/Down zap when overlay hidden; overlay-local navigation when visible.
+
+**Implementation (Android TV, Phase 5):** `apps/android/tv/src/androidTest/.../RemoteNavigationTest.kt` injects real key
+events through the window (`Instrumentation.sendKeyDownUpSync`) and asserts focus by stable test tags: entry focus,
+traversal, Back, no traps (every section), rail entry on the selected section, and focus restoration after Back. Run on
+a connected emulator or device:
+
+```bash
+./gradlew :apps:android:tv:connectedDebugAndroidTest
+```
+
+`verify.sh` runs it when a device is connected and prints SKIPPED otherwise. Items 5–7 apply from Phase 7.
 
 ## 4. Fixtures
 
@@ -109,13 +120,16 @@ Playback codec behavior, performance and soak results are only accepted from phy
   was rejected; six rules that re-wrap expressions without adding clarity are disabled (list and rationale in
   `build.gradle.kts`). Spotless does not read `.editorconfig` for these rules, so they are configured in Gradle.
   Build-time only; no runtime dependency.
+- Android TV app: Android lint with warnings as errors, Kotlin warnings as errors, ktlint via Spotless (Composable
+  functions may be PascalCase).
 - detekt: **not adopted** — 2.0 is still alpha and 1.23.8 predates Kotlin 2.4; re-evaluate when 2.0 is stable.
 - `tooling/scripts/check_source_text.py` rejects raw invisible/control characters in sources (they must be escapes),
   after tooling silently converted `\u` escapes into raw characters twice during Phase 1–2.
 - Mutation spot-checks: the Phase 1 suite was verified to fail when a SHA-256 constant, a state transition, a
   Redactor rule or the whitespace set was deliberately broken; the Phase 2 suite when CRLF handling, stream URL
   credential templating, duplicate collapsing or over-long-line URL dropping was broken; the Phase 3 suite when `auth=0` acceptance,
-  truncated-list failure, 5xx retries, the Apple HLS live-output choice or `category_ids` handling was broken.
+  truncated-list failure, 5xx retries, the Apple HLS live-output choice or `category_ids` handling was broken; the Phase 5
+  remote-navigation tests when the rail-entry rule or the Back-to-Home rule was removed.
 
 ## 7. CI (planned, not created)
 
