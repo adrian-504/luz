@@ -56,6 +56,10 @@ fun ArtworkImage(
 ) {
     val context = LocalContext.current
     val url = remember(template, resolver) { template?.let { resolver?.invoke(it) } }
+    android.util.Log.i(
+        "luz-art",
+        "template=" + (template?.template ?: "null") + " resolver=" + (resolver != null) + " url=" + (url != null),
+    )
     Box(modifier = modifier.clip(RoundedCornerShape(Tokens.radiusSmall)).background(Tokens.bgSurface2)) {
         if (fallbackTitle != null) {
             Text(

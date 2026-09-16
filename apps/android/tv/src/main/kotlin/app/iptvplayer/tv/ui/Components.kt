@@ -47,7 +47,7 @@ fun ActionButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifie
         onClick = onClick,
         modifier = modifier,
         shape = LuzSurface.shapes(),
-        colors = if (primary) LuzSurface.primaryColors() else LuzSurface.colors(resting = Tokens.bgSurface2),
+        colors = if (primary) LuzSurface.primaryColors() else LuzSurface.colors(resting = Tokens.raised),
         border = if (primary) LuzSurface.primaryBorder() else LuzSurface.border(),
         scale = LuzSurface.scale(),
     ) {

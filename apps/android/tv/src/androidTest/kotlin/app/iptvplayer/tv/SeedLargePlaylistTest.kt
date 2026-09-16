@@ -6,6 +6,7 @@ import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.tv.app.IptvApplication
+import app.iptvplayer.tv.developer.DeveloperStreams
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -36,6 +37,26 @@ class SeedLargePlaylistTest {
     fun importsTheLargePlaylistAndLeavesItInstalled() {
         val url = InstrumentationRegistry.getArguments().getString("seedPlaylistUrl")
         val guideUrl = InstrumentationRegistry.getArguments().getString("seedGuideUrl")
+        // The synthetic panel, which serves artwork as well as streams — the fixture playlist has no images at all.
+        if (InstrumentationRegistry.getArguments().getString("seedTestProvider") != null) {
+            runBlocking {
+                val (server, username, password) = DeveloperStreams.testProvider(instrumentation.targetContext)!!
+                val added = graph.addXtream("Test provider", server, username, password)
+                assertTrue("$added", added is AddSourceResult.Added)
+                val playlist = (added as AddSourceResult.Added).playlistId
+                val deadline = System.nanoTime() + 5.minutes.inWholeNanoseconds
+                while (listOf(ImportUnit.LIVE, ImportUnit.MOVIES, ImportUnit.SERIES)
+                        .any { graph.libraryState(playlist, it)?.status != ImportStatus.PUBLISHED }
+                ) {
+                    check(System.nanoTime() < deadline) { "test provider import did not finish" }
+                    Thread.sleep(200)
+                }
+                println("seed-large-playlist: test provider ready")
+                println("seed-artwork: channel=" + graph.channels(playlist, null).first().logo?.template)
+                println("seed-artwork: movie=" + graph.movies(playlist, null, 1, 0).firstOrNull()?.poster?.template)
+            }
+            return
+        }
         if (url == null && guideUrl == null) {
             // Nothing to seed. A plain return, not an assumption: this runner reports a violated assumption as a failure.
             println("seed-large-playlist: skipped (pass seedPlaylistUrl to seed a device)")

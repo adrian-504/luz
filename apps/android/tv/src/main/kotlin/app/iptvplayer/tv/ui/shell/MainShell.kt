@@ -3,12 +3,13 @@ package app.iptvplayer.tv.ui.shell
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -38,7 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -102,8 +102,10 @@ object ShellTags {
 }
 
 /**
- * Main TV shell: a side navigation rail (tv-material `NavigationDrawer`, expands while focused) and the selected
- * section's placeholder content. Selecting a rail item with OK moves focus into that section's content.
+ * The shell: a line of sections across the top and the chosen one underneath (ADR-0033).
+ *
+ * Back steps out of the content to the bar, then to Home, then leaves the app — the same walk back the Apple TV app
+ * has. Choosing a section with OK drops focus into it, so the bar is only ever passed through.
  */
 @Composable
 fun MainShell(
@@ -135,35 +137,16 @@ fun MainShell(
         }
     }
 
-    NavigationDrawer(
-        drawerContent = {
-            Column(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .padding(horizontal = Tokens.space3, vertical = Tokens.safeVertical)
-                    .selectableGroup()
-                    // Entering the rail from content always lands on the selected section, not the nearest icon.
-                    .focusProperties { onEnter = { focus.requester(ShellTags.rail(selected)).requestFocus() } }
-                    .focusGroup()
-                    .onFocusChanged { railHasFocus = it.hasFocus },
-                verticalArrangement = Arrangement.spacedBy(Tokens.space2, Alignment.CenterVertically),
-            ) {
-                for (section in Section.entries) {
-                    NavigationDrawerItem(
-                        selected = selected == section,
-                        onClick = {
-                            selected = section
-                            contentFocusRequests++
-                        },
-                        leadingContent = { Icon(section.icon, contentDescription = null) },
-                        modifier = Modifier.rememberedFocus(focus, ShellTags.rail(section)),
-                    ) {
-                        Text(stringResource(section.title))
-                    }
-                }
-            }
-        },
-    ) {
+    Column(modifier = Modifier.fillMaxSize().background(Tokens.bgBase)) {
+        TabBar(
+            sections = Section.entries,
+            selected = selected,
+            focus = focus,
+            modifier = Modifier.onFocusChanged { railHasFocus = it.hasFocus },
+        ) { section ->
+            selected = section
+            contentFocusRequests++
+        }
         // Keyed so each section starts with its own scroll and focus-restoration state.
         key(selected) {
             when (selected) {
@@ -194,21 +177,27 @@ fun MainShell(
 
     LaunchedEffect(contentFocusRequests) {
         if (contentFocusRequests > 0) {
-            val candidates = when (selected) {
-                Section.SETTINGS -> listOf(SettingsTags.entry(SettingsTags.PROVIDERS), SettingsTags.ADD_SOURCE)
-                Section.LIVE_TV -> listOf(LiveTags.GROUP_ALL, LiveTags.emptyAddSource(favorites = false))
-                Section.FAVORITES -> listOf(LiveTags.emptyAddSource(favorites = true))
-                Section.GUIDE -> listOf(GuideTags.FIRST_CELL, GuideTags.ADD_SOURCE)
-                Section.MOVIES, Section.SERIES -> listOf(LibraryTags.CATEGORY_ALL, LibraryTags.ADD_SOURCE)
-                Section.HOME -> listOfNotNull(homeFirstKey, ShellTags.ADD_SOURCE)
-                Section.SEARCH -> listOf(SearchTags.FIELD, SearchTags.ADD_SOURCE)
-            }
-            // Data-driven sections load asynchronously: wait briefly for their first element, then enter geometrically.
-            repeat(20) {
+            // Data-driven sections attach their first element a moment after the screen changes, and Home only knows its
+            // first row once that row has composed — so the candidates are read again on every attempt, not once.
+            repeat(ENTER_ATTEMPTS) {
+                val candidates = when (selected) {
+                    Section.SETTINGS -> listOf(SettingsTags.entry(SettingsTags.PROVIDERS), SettingsTags.ADD_SOURCE)
+                    Section.LIVE_TV -> listOf(LiveTags.GROUP_ALL, LiveTags.emptyAddSource(favorites = false))
+                    Section.FAVORITES -> listOf(LiveTags.emptyAddSource(favorites = true))
+                    Section.GUIDE -> listOf(GuideTags.FIRST_CELL, GuideTags.ADD_SOURCE)
+                    Section.MOVIES, Section.SERIES -> listOf(LibraryTags.CATEGORY_ALL, LibraryTags.ADD_SOURCE)
+                    Section.HOME -> listOfNotNull(homeFirstKey, ShellTags.ADD_SOURCE)
+                    Section.SEARCH -> listOf(SearchTags.FIELD, SearchTags.ADD_SOURCE)
+                }
                 if (candidates.any { focus.requestFocus(it) }) return@LaunchedEffect
-                delay(50)
+                delay(ENTER_INTERVAL_MS)
             }
-            focusManager.moveFocus(FocusDirection.Right)
+            // The bar is across the top, so the content is below it: moving right would only walk to the next section.
+            if (!focusManager.moveFocus(FocusDirection.Down)) {
+                // Nothing down there took it. Focus goes back to the bar rather than nowhere: a remote with no focus is
+                // a dead remote, and the viewer would have to leave the app to recover.
+                focus.requestFocus(ShellTags.rail(selected))
+            }
         }
     }
     // First display: enter the selected section like selecting it in the rail; afterwards restore the last focus.
@@ -245,3 +234,7 @@ private fun PlaceholderCard(label: String, modifier: Modifier) {
         }
     }
 }
+
+/** How long entering a section waits for its first element: the screen may still be reading from the database. */
+private const val ENTER_ATTEMPTS = 40
+private const val ENTER_INTERVAL_MS = 50L

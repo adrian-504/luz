@@ -179,7 +179,10 @@ fun GuideSection(focus: FocusMemory, onPlay: (PlaylistId, ChannelScope, ChannelI
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_UP -> {
                 horizontalMove = false
                 val target = focusedRow + if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1
-                if (target !in rows.indices) return false
+                if (target !in rows.indices) {
+                    // Above the first row are the guide's own controls, not the section bar: Up goes to "Now".
+                    return keyCode == KeyEvent.KEYCODE_DPAD_UP && focus.requestFocus(GuideTags.NOW)
+                }
                 if (!focusAt(target, focusedTime)) {
                     // The row is not composed yet: bring it on screen, then focus it.
                     coroutines.launch {

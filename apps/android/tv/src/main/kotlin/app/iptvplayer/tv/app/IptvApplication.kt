@@ -2,6 +2,7 @@ package app.iptvplayer.tv.app
 
 import android.app.Application
 import androidx.compose.runtime.staticCompositionLocalOf
+import app.iptvplayer.tv.BuildConfig
 import app.iptvplayer.tv.developer.DeveloperStreams
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -9,6 +10,7 @@ import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.util.DebugLogger
 import okio.Path.Companion.toOkioPath
 
 class IptvApplication :
@@ -30,6 +32,8 @@ class IptvApplication :
         .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.15).build() }
         .diskCache { DiskCache.Builder().directory(cacheDir.resolve("artwork").toOkioPath()).maxSizeBytes(200L * 1024 * 1024).build() }
         .components { add(OkHttpNetworkFetcherFactory()) }
+        // Debug builds say why a picture did not appear; release builds stay silent (artwork URLs can carry a login).
+        .apply { if (BuildConfig.DEBUG) logger(DebugLogger()) }
         .build()
 }
 

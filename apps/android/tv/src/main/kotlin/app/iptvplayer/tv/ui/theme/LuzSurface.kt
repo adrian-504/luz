@@ -42,10 +42,10 @@ import androidx.tv.material3.ClickableSurfaceScale
 object LuzSurface {
     /** Rows, cards and cells: they lift and take the ring, and keep their own content colours. */
     @Composable
-    fun colors(resting: Color = Tokens.bgSurface1, selected: Boolean = false) = ClickableSurfaceDefaults.colors(
-        containerColor = if (selected) Tokens.bgSurface2 else resting,
-        focusedContainerColor = Tokens.bgSurface3,
-        pressedContainerColor = Tokens.bgSurface3,
+    fun colors(resting: Color = Tokens.raised, selected: Boolean = false) = ClickableSurfaceDefaults.colors(
+        containerColor = if (selected) Tokens.raised else resting,
+        focusedContainerColor = Tokens.raisedFocused,
+        pressedContainerColor = Tokens.raisedFocused,
         contentColor = Tokens.textPrimary,
         focusedContentColor = Tokens.textPrimary,
         pressedContentColor = Tokens.textPrimary,
@@ -54,12 +54,12 @@ object LuzSurface {
     /** The one control on a screen the viewer is meant to press: focused, it fills with the accent. */
     @Composable
     fun primaryColors() = ClickableSurfaceDefaults.colors(
-        containerColor = Tokens.bgSurface2,
-        focusedContainerColor = Tokens.accent,
+        containerColor = Tokens.raised,
+        focusedContainerColor = Tokens.textPrimary,
         pressedContainerColor = Tokens.accentPressed,
         contentColor = Tokens.textPrimary,
-        focusedContentColor = Tokens.onAccent,
-        pressedContentColor = Tokens.onAccent,
+        focusedContentColor = Tokens.bgBase,
+        pressedContentColor = Tokens.bgBase,
     )
 
     @Composable
@@ -135,8 +135,8 @@ fun LuzRow(
             .drawBehind {
                 val corner = CornerRadius(radius, radius)
                 val fill = when {
-                    focused.value -> Tokens.bgSurface3
-                    selected -> Tokens.bgSurface2
+                    focused.value -> Tokens.raisedFocused
+                    selected -> Tokens.raised
                     else -> Color.Transparent
                 }
                 if (fill != Color.Transparent) drawRoundRect(fill, cornerRadius = corner)

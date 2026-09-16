@@ -75,7 +75,11 @@ class GuideLinkTest {
         rule.waitUntil(20_000) { focusedTag()?.startsWith("live-") == true }
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.LIVE_TV))
-        repeat(Section.entries.size) { if (focusedTag() != ShellTags.rail(Section.SETTINGS)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        walkTabsTo(Section.SETTINGS, ::focusedTag, { key -> press(key) }) { timeout, condition ->
+            runCatching {
+                rule.waitUntil(timeout, condition)
+            }
+        }
         awaitFocus(ShellTags.rail(Section.SETTINGS))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(SettingsTags.entry(SettingsTags.PROVIDERS))

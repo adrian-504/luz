@@ -53,3 +53,4 @@ line. Product-scope decisions still go to the owner.
 | [0030](0030-tv-launch-and-frame-performance.md) | Measuring and fixing launch and frame performance on the TV | Accepted |
 | [0031](0031-design-tokens-in-one-platform-neutral-file.md) | One platform-neutral source for the design tokens, and the Luz amber accent | Accepted |
 | [0032](0032-tv-navigation-three-levels-and-context-menus.md) | Three navigation levels on the TV, and menus instead of hidden gestures | Accepted |
+| [0033](0033-apple-tv-design-language-on-the-tv.md) | The Apple TV app's design language on the television | Accepted |

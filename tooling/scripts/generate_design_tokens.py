@@ -84,6 +84,16 @@ def kotlin(tokens: dict) -> str:
                 out.append("")
             out.append(doc)
         out.append(f"    val {name} = Color(0xFF{value_of(entry).lstrip('#').upper()})")
+    for name, entry in tokens["material"].items():
+        if name.startswith("$"):
+            continue
+        doc = kdoc("    ", note_of(entry))
+        if doc:
+            if not out[-1].endswith("{"):
+                out.append("")
+            out.append(doc)
+        colour = entry["over"].lstrip("#").upper()
+        out.append(f"    val {name} = Color(0xFF{colour}).copy(alpha = {entry['alpha']}f)")
     out.append("")
     for name, size in entries(tokens["text"]):
         out.append(f"    val {name} = {size}.sp")
@@ -100,6 +110,8 @@ def kotlin(tokens: dict) -> str:
     out.append("")
     out.append(f"    const val FOCUS_SCALE = {value_of(tokens['focus']['scale'])}f")
     out.append(f"    val focusRingWidth = {value_of(tokens['focus']['ringWidth'])}.dp")
+    out.append(f"    val focusElevation = {value_of(tokens['focus']['elevation'])}.dp")
+    out.append(f"    const val FOCUS_RING_ALPHA = {value_of(tokens['focus']['ringAlpha'])}f")
     out.append("}")
     return "\n".join(out) + "\n"
 

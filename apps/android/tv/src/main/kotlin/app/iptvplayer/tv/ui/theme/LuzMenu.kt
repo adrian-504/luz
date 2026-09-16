@@ -2,6 +2,7 @@ package app.iptvplayer.tv.ui.theme
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,14 +46,15 @@ fun LuzMenu(title: String, items: List<LuzMenuItem>, onDismiss: () -> Unit) {
     BackHandler(enabled = true, onBack = onDismiss)
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = SCRIM_ALPHA)).testTag(LuzMenuTags.MENU),
+        modifier = Modifier.fillMaxSize().background(Tokens.scrim).testTag(LuzMenuTags.MENU),
         contentAlignment = Alignment.Center,
     ) {
         Column(
             modifier = Modifier
                 .widthIn(min = 360.dp, max = 560.dp)
-                .clip(RoundedCornerShape(Tokens.radiusMedium))
-                .background(Tokens.bgSurface2)
+                .clip(RoundedCornerShape(Tokens.radiusLarge))
+                .background(Tokens.panel)
+                .border(1.dp, Tokens.hairline, RoundedCornerShape(Tokens.radiusLarge))
                 .padding(vertical = Tokens.space4, horizontal = Tokens.space2),
             verticalArrangement = Arrangement.spacedBy(Tokens.space2),
         ) {

@@ -61,7 +61,7 @@ class PlayerNavigationTest {
         awaitFocus(ShellTags.ADD_SOURCE)
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.HOME))
-        repeat(Section.SETTINGS.ordinal) { press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        repeat(Section.SETTINGS.ordinal) { press(KeyEvent.KEYCODE_DPAD_RIGHT) }
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         // Settings: pick the developer section, then its streams.
         awaitFocus(SettingsTags.entry(SettingsTags.PROVIDERS))

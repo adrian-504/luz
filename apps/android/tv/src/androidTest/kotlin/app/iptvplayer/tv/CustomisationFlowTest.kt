@@ -93,7 +93,7 @@ class CustomisationFlowTest {
         // Back reaches the rail; which entry it lands on depends on where focus was, so walk to Settings from wherever.
         press(KeyEvent.KEYCODE_BACK)
         rule.waitUntil(5_000) { focusedTag()?.startsWith("rail-") == true }
-        repeat(Section.entries.size * 2) { if (focusedTag() != ShellTags.rail(Section.SETTINGS)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        repeat(Section.entries.size * 2) { if (focusedTag() != ShellTags.rail(Section.SETTINGS)) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
         awaitFocus(ShellTags.rail(Section.SETTINGS))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
     }

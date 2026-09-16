@@ -29,6 +29,7 @@ import kotlin.concurrent.thread
  * - `/html.ts` — an HTML error page where media was expected
  * - `/player_api.php`, `/get.php`, `/xmltv.php`, `/live/{user}/{password}/{id}.{ts|m3u8}` — a synthetic Xtream Codes
  *   panel ([TestPanel]) that accepts only [TestPanel.USERNAME] / [TestPanel.PASSWORD]
+ * - `/art/{name}.png[?wide]` — generated poster or backdrop artwork for the panel's items ([TestArtwork])
  * - `/redirect` — 302 to `/vod.mp4`
  * - anything else — 404
  */
@@ -97,7 +98,7 @@ class TestMediaServer(private val assets: AssetManager, port: Int = 0) : AutoClo
             val route = path.substringBefore('?')
             val query = path.substringAfter('?', "")
             when {
-                route == "/player_api.php" -> respond(out, 200, "application/json", TestPanel.api(query).toByteArray())
+                route == "/player_api.php" -> respond(out, 200, "application/json", TestPanel.api(query, url("/")).toByteArray())
                 route == "/get.php" -> TestPanel.m3u(query, url(""))?.let { respond(out, 200, "audio/x-mpegurl", it.toByteArray()) }
                     ?: respond(out, 401, "text/plain", "unauthorized".toByteArray())
                 route == "/xmltv.php" -> TestPanel.xmltv(query)?.let { respond(out, 200, "application/xml", it.toByteArray()) }
@@ -116,6 +117,13 @@ class TestMediaServer(private val assets: AssetManager, port: Int = 0) : AutoClo
                     } else {
                         respond(out, 404, "text/plain", "not found".toByteArray())
                     }
+                // Synthetic artwork so the screens can be judged with pictures in them (TestArtwork).
+                route.startsWith("/art/") -> respond(
+                    out,
+                    200,
+                    "image/png",
+                    TestArtwork.png(route.removePrefix("/art/").removeSuffix(".png"), wide = query.contains("wide")),
+                )
                 route == "/redirect" -> respond(out, 302, "text/plain", ByteArray(0), "Location: /vod.mp4\r\n")
                 route == "/vod.mp4" -> serveAsset(out, "vod-10s.mp4", "video/mp4", headers["range"])
                 route == "/multi-track.mp4" -> serveAsset(out, "multi-track-30s.mp4", "video/mp4", headers["range"])

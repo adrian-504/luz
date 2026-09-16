@@ -2,6 +2,7 @@
 
 - **Status:** Accepted (delegated technical decision, 2026-09-15 — app built, linted and remote-navigation tests passing on a Google TV emulator (Phase 5))
 - **Date:** 2026-09-15
+- **Superseded in part:** the side navigation rail is replaced by a top tab bar in [ADR-0033](0033-apple-tv-design-language-on-the-tv.md) (2026-09-16). The toolchain decisions stand.
 - **Spec:** §9.1, §9.6, §10, §18 (Phase 5); ARCHITECTURE.md §11, §14; DESIGN_SYSTEM.md §2, §3.5–3.6, §6
 
 ## Context

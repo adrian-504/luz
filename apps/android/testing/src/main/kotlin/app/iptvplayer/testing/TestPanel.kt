@@ -47,7 +47,7 @@ object TestPanel {
 
     private fun authorized(query: String): Boolean = params(query).let { it["username"] == USERNAME && it["password"] == PASSWORD }
 
-    fun api(query: String): String {
+    fun api(query: String, base: String = ""): String {
         if (!authorized(query)) return """{"user_info":{"auth":0}}"""
         return when (params(query)["action"]) {
             null -> """{"user_info":{"username":"$USERNAME","auth":1,"status":"Active","exp_date":"${Instant.now().plus(
@@ -60,16 +60,22 @@ object TestPanel {
                 "]",
             ) { (id, name) -> """{"category_id":"$id","category_name":"$name","parent_id":0}""" }
             "get_live_streams" -> channels.withIndex().joinToString(",", "[", "]") { (index, c) ->
-                """{"num":${index + 1},"name":"${c.name}","stream_type":"live","stream_id":${c.id},"stream_icon":"","epg_channel_id":${c.epgId?.let { "\"$it\"" } ?: "null"},"category_id":"${c.category}","tv_archive":0}"""
+                """{"num":${index + 1},"name":"${c.name}","stream_type":"live","stream_id":${c.id},"stream_icon":"${base}art/${c.name.replace(
+                    " ",
+                    "%20",
+                )}.png?wide","epg_channel_id":${c.epgId?.let { "\"$it\"" } ?: "null"},"category_id":"${c.category}","tv_archive":0}"""
             }
             "get_short_epg" -> shortEpg(params(query)["stream_id"])
             "get_vod_categories" -> categoryJson(vodCategories)
             "get_vod_streams" -> movies.withIndex().joinToString(",", "[", "]") { (index, m) ->
-                """{"num":${index + 1},"name":"${m.second}","stream_type":"movie","stream_id":${m.first},"stream_icon":"",""" +
+                """{"num":${index + 1},"name":"${m.second}","stream_type":"movie","stream_id":${m.first},"stream_icon":"${base}art/${m.second.replace(
+                    " ",
+                    "%20",
+                )}.png",""" +
                     """"rating":"7","added":"${Instant.now().epochSecond - index * 3600}","category_id":"${m.third}","container_extension":"m3u8"}"""
             }
             "get_series_categories" -> categoryJson(seriesCategories)
-            "get_series" -> seriesListJson()
+            "get_series" -> seriesListJson(base)
             "get_series_info" -> if (params(query)["series_id"] == SERIES_ID.toString()) seriesInfo() else EMPTY_SERIES_INFO
             else -> "[]"
         }
@@ -78,9 +84,9 @@ object TestPanel {
     private fun categoryJson(list: List<Pair<String, String>>) =
         list.joinToString(",", "[", "]") { (id, name) -> """{"category_id":"$id","category_name":"$name","parent_id":0}""" }
 
-    private fun seriesListJson() =
-        """[{"num":1,"name":"Test Series","series_id":$SERIES_ID,"cover":"","plot":"A synthetic test series.",""" +
-            """"genre":"Test","releaseDate":"2026-01-01","category_id":"21"}]"""
+    private fun seriesListJson(base: String) = """[{"num":1,"name":"Test Series","series_id":$SERIES_ID,""" +
+        """"cover":"${base}art/Test%20Series.png","plot":"A synthetic test series.",""" +
+        """"genre":"Test","releaseDate":"2026-01-01","category_id":"21"}]"""
 
     private const val EMPTY_SERIES_INFO = """{"seasons":[],"info":{},"episodes":{}}"""
 

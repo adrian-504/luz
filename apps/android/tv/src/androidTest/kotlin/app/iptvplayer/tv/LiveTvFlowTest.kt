@@ -76,6 +76,8 @@ class LiveTvFlowTest {
 
     private fun focusedTags() = rule.onAllNodes(isFocused()).fetchSemanticsNodes().map { it.config.getOrNull(SemanticsProperties.TestTag) }
 
+    private fun focusedTag(): String? = focusedTags().singleOrNull()
+
     private fun awaitFocus(tag: String, timeout: Long = 10_000) {
         runCatching { rule.waitUntil(timeout) { runCatching { rule.onNodeWithTag(tag).assertIsFocused() }.isSuccess } }
             .onFailure { throw AssertionError("expected focus on $tag, but focused: ${focusedTags()}", it) }
@@ -174,7 +176,12 @@ class LiveTvFlowTest {
         awaitFocus(LiveTags.channel(channelId("Test News HD")))
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.LIVE_TV))
-        press(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER)
+        walkTabsTo(
+            Section.GUIDE,
+            ::focusedTag,
+            { key -> press(key) },
+        ) { timeout, condition -> runCatching { rule.waitUntil(timeout, condition) } }
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(GuideTags.FIRST_CELL, timeout = 20_000)
         awaitExists(GuideTags.FIRST_CELL, "Test News HD programme", timeout = 20_000)
 

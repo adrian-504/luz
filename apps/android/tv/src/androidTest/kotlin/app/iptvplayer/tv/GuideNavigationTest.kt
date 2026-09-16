@@ -97,11 +97,15 @@ class GuideNavigationTest {
 
     @Test
     fun upDownKeepTheTimeRightPagesLaterAndNowReturns() {
-        // Live TV opens first; Back reaches the rail, where Guide is the next section.
+        // Live TV opens first; Back reaches the bar across the top, where Guide is the next section along.
         rule.waitUntil(20_000) { focusedTag()?.startsWith("live-") == true }
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.LIVE_TV))
-        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        walkTabsTo(
+            Section.GUIDE,
+            ::focusedTag,
+            { key -> press(key) },
+        ) { timeout, condition -> runCatching { rule.waitUntil(timeout, condition) } }
         awaitFocus(ShellTags.rail(Section.GUIDE))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(GuideTags.FIRST_CELL)
@@ -127,7 +131,13 @@ class GuideNavigationTest {
         assertTrue("focus stays in the guide row: ${focusedTag()}", focusedTag()?.startsWith("guide-${rows[2].id.value}-") == true)
 
         // Up from the first row reaches "Now", which returns to the present.
-        repeat(3) { if (focusedTag() != GuideTags.NOW) press(KeyEvent.KEYCODE_DPAD_UP) }
+        pressUntilFocused(
+            GuideTags.NOW,
+            KeyEvent.KEYCODE_DPAD_UP,
+            attempts = 3,
+            ::focusedTag,
+            { key -> press(key) },
+        ) { timeout, condition -> runCatching { rule.waitUntil(timeout, condition) } }
         awaitFocus(GuideTags.NOW)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         rule.waitUntil(5_000) { windowStartText() == initialWindow }

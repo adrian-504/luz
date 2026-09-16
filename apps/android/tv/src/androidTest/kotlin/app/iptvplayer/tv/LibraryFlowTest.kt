@@ -112,7 +112,11 @@ class LibraryFlowTest {
         rule.waitUntil(20_000) { focusedTag()?.startsWith("live-") == true }
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.LIVE_TV))
-        repeat(Section.entries.size) { if (focusedTag() != ShellTags.rail(section)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        walkTabsTo(
+            section,
+            ::focusedTag,
+            { key -> press(key) },
+        ) { timeout, condition -> runCatching { rule.waitUntil(timeout, condition) } }
         awaitFocus(ShellTags.rail(section))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(entry)
@@ -183,10 +187,14 @@ class LibraryFlowTest {
         awaitFocus(LibraryTags.item(movie.id))
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.MOVIES))
-        repeat(Section.entries.size) { if (focusedTag() != ShellTags.rail(Section.HOME)) press(KeyEvent.KEYCODE_DPAD_UP) }
+        walkTabsTo(
+            Section.HOME,
+            ::focusedTag,
+            { key -> press(key) },
+        ) { timeout, condition -> runCatching { rule.waitUntil(timeout, condition) } }
         awaitFocus(ShellTags.rail(Section.HOME))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitFocus(HomeTags.item(HomeTags.CONTINUE, movie.id))
+        awaitFocus(HomeTags.item(HomeTags.CONTINUE, movie.id), timeout = 20_000)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitPlaying()
     }

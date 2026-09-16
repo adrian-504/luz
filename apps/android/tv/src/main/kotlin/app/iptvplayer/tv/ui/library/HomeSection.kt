@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,6 +43,9 @@ import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.live.ChannelScope
 import app.iptvplayer.tv.ui.rememberedFocus
+import app.iptvplayer.tv.ui.theme.CardShape
+import app.iptvplayer.tv.ui.theme.LuzCard
+import app.iptvplayer.tv.ui.theme.LuzHero
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlin.time.Clock
 
@@ -72,6 +76,8 @@ private data class HomeCard(
     val caption: String?,
     val poster: UrlTemplate?,
     val fraction: Float?,
+    /** Wider artwork for the hero when the provider has it; the poster stands in when it does not. */
+    val backdrop: UrlTemplate? = null,
     val open: () -> Unit,
 )
 
@@ -123,12 +129,16 @@ fun HomeSection(
             },
             HomeRowSpec(HomeTags.MOVIES, R.string.home_recent_movies) { p ->
                 graph.recentMovies(p, ROW_LIMIT).map { movie ->
-                    HomeCard(movie.id, movie.title, movie.year?.toString(), movie.poster, null) { onOpenMovie(p, movie.id) }
+                    HomeCard(movie.id, movie.title, movie.year?.toString(), movie.poster, null, movie.backdrop) {
+                        onOpenMovie(p, movie.id)
+                    }
                 }
             },
             HomeRowSpec(HomeTags.SERIES, R.string.home_series) { p ->
                 graph.series(p, null, ROW_LIMIT, 0).map { series ->
-                    HomeCard(series.id, series.title, series.year?.toString(), series.poster, null) { onOpenSeries(p, series.id) }
+                    HomeCard(series.id, series.title, series.year?.toString(), series.poster, null, series.backdrop) {
+                        onOpenSeries(p, series.id)
+                    }
                 }
             },
         )
@@ -152,36 +162,63 @@ fun HomeSection(
         return
     }
     val resolver = rememberArtworkResolver(playlist)
+    // What the hero shows follows the card under focus, so the top of the screen answers "what is this?" as you move.
+    var featured by remember(shown) { mutableStateOf(shown.first().cards.first() to shown.first()) }
+
+    // The hero scrolls with the shelves rather than staying pinned: a pinned one leaves the captions of a half-scrolled
+    // shelf stranded underneath it. At this size the hero and the first shelf both fit without scrolling, so the screen
+    // still opens on the artwork.
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(start = Tokens.space8, top = Tokens.safeVertical, bottom = Tokens.safeVertical),
-        verticalArrangement = Arrangement.spacedBy(Tokens.space6),
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(Tokens.space4),
+        contentPadding = PaddingValues(bottom = Tokens.safeVertical),
     ) {
         item(key = HomeTags.GREETING) {
-            Text(
-                greeting(),
-                style = MaterialTheme.typography.headlineMedium,
-                color = Tokens.textPrimary,
-                modifier = Modifier.testTag(HomeTags.GREETING),
-            )
+            val (heroCard, heroRow) = featured
+            Box {
+                LuzHero(
+                    title = heroCard.title,
+                    subtitle = heroCard.caption,
+                    detail = stringResource(heroRow.title),
+                    artworkOf = heroCard,
+                ) { card, modifier -> ArtworkImage(card.backdrop ?: card.poster, resolver, null, modifier) }
+                Text(
+                    greeting(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Tokens.textSecondary,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = Tokens.space8, top = Tokens.safeVertical)
+                        .testTag(HomeTags.GREETING),
+                )
+            }
         }
         items(shown.size, key = { shown[it].id }) { index ->
             val row = shown[index]
-            Column {
-                Text(stringResource(row.title), style = MaterialTheme.typography.titleLarge, color = Tokens.textPrimary)
+            Column(verticalArrangement = Arrangement.spacedBy(Tokens.space2)) {
+                Text(
+                    stringResource(row.title),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Tokens.textSecondary,
+                    modifier = Modifier.padding(start = Tokens.space8),
+                )
                 LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(Tokens.space4),
-                    contentPadding = PaddingValues(horizontal = Tokens.space4, vertical = Tokens.space4),
-                    modifier = Modifier.offset(x = -Tokens.space4).focusRestorer(),
+                    horizontalArrangement = Arrangement.spacedBy(Tokens.space3),
+                    contentPadding = PaddingValues(horizontal = Tokens.space8, vertical = Tokens.space2),
+                    modifier = Modifier.focusRestorer(),
                 ) {
                     items(row.cards.size, key = { row.cards[it].key }) { cardIndex ->
                         val card = row.cards[cardIndex]
-                        HomeCardView(
-                            card,
-                            resolver,
-                            if (row.wide) 220.dp else 140.dp,
-                            if (row.wide) 124.dp else 210.dp,
-                            Modifier.rememberedFocus(focus, HomeTags.item(row.id, card.key)),
-                        )
+                        LuzCard(
+                            title = card.title,
+                            subtitle = card.caption,
+                            shape = if (row.wide) CardShape.WIDE else CardShape.POSTER,
+                            progress = card.fraction,
+                            modifier = Modifier
+                                .rememberedFocus(focus, HomeTags.item(row.id, card.key))
+                                .onFocusChanged { if (it.isFocused) featured = card to row },
+                            onClick = card.open,
+                        ) { modifier -> ArtworkImage(card.poster, resolver, null, modifier) }
                     }
                 }
             }
@@ -236,7 +273,7 @@ private suspend fun channelCards(
         HomeCard(
             channel.id.value,
             channel.name,
-            guide[channel.id.value]?.current?.title ?: channel.number?.toString(),
+            guide[channel.id.value]?.current?.title,
             channel.logo,
             null,
         ) { onPlay(playlist, scope, channel.id) }

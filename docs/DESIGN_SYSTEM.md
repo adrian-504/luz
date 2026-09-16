@@ -19,9 +19,14 @@ and type read very differently at 3 m on a TV panel than on a monitor.
 
 ## 2. Information architecture (§9.1)
 
-`Home · Live TV · Guide · Movies · Series · Favorites · Search · Playlists · Settings`
+`Home · Live TV · Guide · Movies · Series · Favorites · Search · Settings`
 
-- **TV**: Android TV uses a side navigation rail (tv-material `NavigationDrawer`, collapsed icons that expand with labels on focus; decided in Phase 5, ADR-0023). tvOS follows `TabView` conventions (Phase 11). Player is full-screen with overlays.
+The app works with one playlist source at a time (the owner's decision, PRODUCT_DIRECTIVE.md), so there is no Playlists
+section: the source lives in Settings.
+
+- **TV**: a line of section names across the top, in the manner of the Apple TV app — the open one in white, the one
+  under the remote in a white pill, the bar dimmed while focus is in the content (ADR-0033, superseding the Phase 5 rail
+  of ADR-0023). tvOS follows `TabView` conventions (Phase 11). Player is full-screen with overlays.
 - **iOS**: tab bar with ≤ 5 primary items (Home, Live, Guide, Library, Search) and Playlists/Settings/Favorites reachable from Home/Library — mapping finalized in Phase 12.
 
 ## 3. Tokens (§10.2)

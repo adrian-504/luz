@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.sp
  */
 object Tokens {
     /** The screen behind everything. */
-    val bgBase = Color(0xFF0B0D10)
+    val bgBase = Color(0xFF000000)
 
     /** Resting cards and rows. */
     val bgSurface1 = Color(0xFF14171C)
@@ -28,13 +28,13 @@ object Tokens {
     val lineSubtle = Color(0xFF333A44)
 
     /** Titles and anything that must be read at 3 m. */
-    val textPrimary = Color(0xFFF2F4F7)
+    val textPrimary = Color(0xFFFFFFFF)
 
-    /** Supporting lines. */
-    val textSecondary = Color(0xFFA9B1BC)
+    /** Supporting lines — white at about 60 %. */
+    val textSecondary = Color(0xFF9E9EA5)
 
-    /** Captions, timestamps. */
-    val textTertiary = Color(0xFF7D8590)
+    /** Captions and counts — white at about 40 %. */
+    val textTertiary = Color(0xFF6E6E76)
 
     /**
      * Primary actions, selection, focus ring, progress. Sampled from the owner's logo (hue 28, the mark's core amber) and lightened until
@@ -58,10 +58,32 @@ object Tokens {
     val stateError = Color(0xFFF85149)
 
     /**
-     * The ring drawn around the focused element. The accent, not white: the owner's directive puts the amber on focus. Paired with the
-     * lift below, never used alone.
+     * The hairline around a focused card, under the lift. White at low opacity, not amber. The owner chose the Apple TV app as the
+     * reference: there, focus is a lift — scale, a soft shadow, a brighter surface — and colour stays in the artwork. The amber is still
+     * the app's accent: progress, selection, the primary action.
      */
-    val focusRing = Color(0xFFFFA24B)
+    val focusRing = Color(0xFFFFFFFF)
+
+    /** The transparent end of a gradient laid over artwork. */
+    val scrimTop = Color(0xFF000000)
+
+    /** The solid end of that gradient, matching the background. */
+    val scrimBottom = Color(0xFF000000)
+
+    /** A menu or a settings pane: dark, and the screen behind it still shows through. */
+    val panel = Color(0xFF0B0B0C).copy(alpha = 0.72f)
+
+    /** A resting card or row: white laid on very faintly. */
+    val raised = Color(0xFFFFFFFF).copy(alpha = 0.14f)
+
+    /** The same surface under the remote. */
+    val raisedFocused = Color(0xFFFFFFFF).copy(alpha = 0.24f)
+
+    /** The one-pixel edge that separates a panel from what is behind it. */
+    val hairline = Color(0xFFFFFFFF).copy(alpha = 0.12f)
+
+    /** What dims the screen behind a menu. */
+    val scrim = Color(0xFF000000).copy(alpha = 0.55f)
 
     val display = 48.sp
     val headline = 32.sp
@@ -79,13 +101,16 @@ object Tokens {
     val safeHorizontal = 48.dp
     val safeVertical = 27.dp
 
-    val radiusSmall = 8.dp
-    val radiusMedium = 12.dp
+    val radiusSmall = 6.dp
+    val radiusMedium = 10.dp
+    val radiusLarge = 18.dp
 
     const val MOTION_FOCUS_MS = 120
     const val MOTION_STANDARD_MS = 200
     const val MOTION_EMPHASIZED_MS = 300
 
-    const val FOCUS_SCALE = 1.06f
-    val focusRingWidth = 3.dp
+    const val FOCUS_SCALE = 1.08f
+    val focusRingWidth = 1.dp
+    val focusElevation = 18.dp
+    const val FOCUS_RING_ALPHA = 0.55f
 }

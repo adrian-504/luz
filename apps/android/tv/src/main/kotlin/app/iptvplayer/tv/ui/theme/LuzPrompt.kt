@@ -2,6 +2,7 @@ package app.iptvplayer.tv.ui.theme
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,14 +50,15 @@ fun LuzPrompt(title: String, initial: String, onConfirm: (String) -> Unit, onCle
     var text by remember { mutableStateOf(initial) }
     BackHandler(enabled = true, onBack = onDismiss)
     Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = SCRIM_ALPHA)).testTag(LuzPromptTags.PROMPT),
+        modifier = Modifier.fillMaxSize().background(Tokens.scrim).testTag(LuzPromptTags.PROMPT),
         contentAlignment = Alignment.Center,
     ) {
         Column(
             modifier = Modifier
                 .widthIn(min = 480.dp, max = 720.dp)
-                .clip(RoundedCornerShape(Tokens.radiusMedium))
-                .background(Tokens.bgSurface2)
+                .clip(RoundedCornerShape(Tokens.radiusLarge))
+                .background(Tokens.panel)
+                .border(1.dp, Tokens.hairline, RoundedCornerShape(Tokens.radiusLarge))
                 .padding(Tokens.space6),
             verticalArrangement = Arrangement.spacedBy(Tokens.space4),
         ) {

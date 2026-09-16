@@ -116,7 +116,7 @@ class RemoteNavigationTest {
         enterMainShell()
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.HOME))
-        repeat(Section.SETTINGS.ordinal) { press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        repeat(Section.SETTINGS.ordinal) { press(KeyEvent.KEYCODE_DPAD_RIGHT) }
         awaitFocus(ShellTags.rail(Section.SETTINGS))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(SettingsTags.entry(SettingsTags.PROVIDERS))
@@ -129,7 +129,7 @@ class RemoteNavigationTest {
         // Back jumps straight to the rail; Right returns to what had focus, not to the start of the screen.
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.SETTINGS))
-        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
         awaitFocus(SettingsTags.ADD_SOURCE)
     }
 
@@ -140,7 +140,11 @@ class RemoteNavigationTest {
         awaitFocus(ShellTags.rail(Section.HOME))
         for (section in Section.entries) {
             if (section != Section.HOME) {
-                press(KeyEvent.KEYCODE_DPAD_DOWN)
+                walkTabsTo(
+                    section,
+                    ::focusedTag,
+                    { key -> press(key) },
+                ) { timeout, condition -> runCatching { rule.waitUntil(timeout, condition) } }
                 awaitFocus(ShellTags.rail(section))
             }
             press(KeyEvent.KEYCODE_DPAD_CENTER)
@@ -157,7 +161,7 @@ class RemoteNavigationTest {
             }
             awaitFocus(entry)
             // No trap: the rail is always reachable from content, and returns to the selected section.
-            press(KeyEvent.KEYCODE_DPAD_LEFT)
+            press(KeyEvent.KEYCODE_DPAD_UP)
             awaitFocus(ShellTags.rail(section))
         }
     }
@@ -167,7 +171,12 @@ class RemoteNavigationTest {
         enterMainShell()
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.HOME))
-        press(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER)
+        walkTabsTo(
+            Section.GUIDE,
+            ::focusedTag,
+            { key -> press(key) },
+        ) { timeout, condition -> runCatching { rule.waitUntil(timeout, condition) } }
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(GuideTags.ADD_SOURCE)
 
         press(KeyEvent.KEYCODE_BACK)
@@ -188,7 +197,7 @@ class RemoteNavigationTest {
         enterMainShell()
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.HOME))
-        repeat(Section.SETTINGS.ordinal) { press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        repeat(Section.SETTINGS.ordinal) { press(KeyEvent.KEYCODE_DPAD_RIGHT) }
         awaitFocus(ShellTags.rail(Section.SETTINGS))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(SettingsTags.entry(SettingsTags.PROVIDERS))
