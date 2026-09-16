@@ -1,7 +1,8 @@
 # Performance Engineering
 
-Spec: §7.4, §8.3, §16. **No metric in this document has been measured yet.** Targets are baselines from the
-specification; quantifications marked *Proposed* refine vague spec wording and require review.
+Spec: §7.4, §8.3, §16. Targets are baselines from the specification; quantifications marked *Proposed* refine vague
+spec wording and require review. **Measured so far:** storage query latency on the reference low-end device (§6.1).
+Everything else in §1 is still a target, not a result.
 
 ## 1. Targets (§16.1)
 
@@ -123,4 +124,71 @@ Same tools in warm mode (process alive, activity/scene recreated or resumed). En
 | XMLTV import host stress test (100k / 1M programmes, gzip bomb) | Runs in `jvmTest`; 1M programmes in ~5.9 s with flat heap (~45 MiB) — informational (ADR-0018) |
 | Guide storage host benchmark (1M programmes) | Runs in `jvmTest`; window P95 2.3 ms, now/next P95 1.5 ms, search P95 13 ms — informational (ADR-0013) |
 | Benchmark modules, tracing, metrics recorder | NOT YET IMPLEMENTED (Phases 5–6) |
-| Any device measurement | NONE — no app exists; host numbers above are not device results |
+| Storage query gate on the reference device | **Implemented and passing (Phase 9)** — `StoragePerformanceTest`, see §6.1 |
+| Any device measurement | Storage queries only (§6.1); launch, frames, jank, memory and playback metrics NOT YET MEASURED |
+
+### 6.1 Storage queries on the reference low-end device (2026-09-16)
+
+`shared/storage` `StoragePerformanceTest` builds a library the size of a large provider (10,000 channels in 120
+categories, 20,000 movies in 40 categories, 60,000 programmes over 600 channels) and asserts the §1 budget of 50 ms.
+It runs on the JVM and, as the real gate, on the owner's **Bbox TV** (Technicolor UZW4020BYT, Android TV 11,
+`armeabi-v7a`, 2.2 GB RAM) — the reference low-end device. P95 of 20 runs; the first, cold run is reported separately
+and has its own 300 ms ceiling.
+
+| Query | Bbox before (2026-09-16) | Bbox after | Budget |
+|---|---|---|---|
+| Now/next, 20 channels | 42 ms | 18–20 ms (cold 58–67 ms) | 50 ms |
+| Guide window, 10 channels × 3 h | 4.5 ms | 4–5 ms | 50 ms |
+| Channel category page | 53 ms | 7–8 ms | 50 ms |
+| Movie page (offset 2,000) | 36 ms | 33–39 ms (cold 157–181 ms) | 50 ms |
+| Channel search | 70 ms | 20–23 ms | 50 ms |
+| Movie search | 105 ms | 20–33 ms | 50 ms |
+| All 10,000 channels (not a budgeted screen) | 185 ms | 181–217 ms | — |
+
+What the numbers needed (ADR-0029): an FTS5 title index for search, member-order indexes for category pages, ranking
+over a bounded candidate list rather than over every match, and a write-ahead log checkpoint when an import publishes —
+that last one alone was a sixfold difference on reads taken right after an import.
+
+### 6.2 Launch and frames on the reference low-end device (2026-09-16)
+
+Measured with `tooling/scripts/measure_launch.sh` and `tooling/scripts/measure_frames.sh` on the **release build**
+installed on the owner's Bbox TV, holding the repository's synthetic 10,000-channel fixture (10,072 channels imported by
+`SeedLargePlaylistTest`; no provider's own data is used for routine measurement). Both scripts take the system's own
+numbers — `am start -W`, the figure logcat reports as "Displayed", and `dumpsys gfxinfo` — never the app's own timing.
+The debug build is not a valid measurement: its cold launch on the same device is 5.1 s against the release build's
+0.8 s.
+
+| Measurement | Result | Target | Verdict |
+|---|---|---|---|
+| Cold launch | P50 780–826 ms, P95 832–888 ms | P50 ≤ 2 s, P90 ≤ 2.5 s | **Met** |
+| Back from Home to the app | P50 153–168 ms, P95 227–229 ms | P90 ≤ 500 ms | **Met** |
+| Scrolling the 10,000-channel list | 1.1 % of frames janky, P50 7 ms, P95 11 ms, P99 28 ms | P95 ≤ 16.7 ms, P99 ≤ 33 ms | **Met** |
+| Moving through Live TV categories | 9.2 % janky, P95 36 ms, P99 101 ms | P95 ≤ 16.7 ms, P99 ≤ 33 ms | **Not met** |
+| Guide: moving down the channels | 25.4 % janky, P95 32 ms, P99 46 ms | P95 ≤ 16.7 ms, P99 ≤ 33 ms | **Not met** |
+| Guide: moving forward in time | 28.4 % janky, P95 85 ms, P99 121 ms | P95 ≤ 16.7 ms, P99 ≤ 33 ms | **Not met** |
+| Memory, 25 minutes of continuous browsing | 81.7 MB at start, 89.0–89.6 MB from the first minute on, no upward drift, no crash | growth ≤ 10 % after warm-up | **Met** (browsing; see below) |
+
+Android's third launch case — the process alive but the activity rebuilt — is not measured; that needs Macrobenchmark,
+which the project has not adopted.
+
+Two fixes came out of this (ADR-0030): the now/next map for a whole category was being assembled and copied on the UI
+thread, and browsing categories rebuilt the channel list at every step because a preview loaded after 250 ms of focus
+(now 600 ms). Together they took category browsing from 28.9 % janky frames, P95 65 ms and P99 150 ms down to the row
+above. What remains is the rebuild itself: when a preview does fire, replacing a screen of rows costs about one 100 ms
+frame on this hardware. The candidate fix is a leaner row and list, which belongs with the interface work scheduled
+after Phase 9 ([PRODUCT_DIRECTIVE.md](PRODUCT_DIRECTIVE.md)) rather than a micro-optimization of components that are
+about to change.
+
+The guide was measured with the repository's 100,000-programme fixture (36,773 programmes kept inside the retention
+window). Both guide movements miss the budget for the same reason as the categories: each step rebuilds what is on
+screen. Everything that only scrolls is comfortably inside budget; everything that reloads content per key press is
+not. That is one piece of work on the row and cell components, and it belongs with the interface work scheduled after
+Phase 9 rather than with QA.
+
+**Memory** was measured by driving the remote continuously for 25 minutes on the release build with the 10,000-channel
+fixture (scrolling the list, moving through categories, returning), sampling `dumpsys meminfo`: 81.7 MB at the first
+sample, then flat between 89.0 and 89.6 MB for the rest of the run with no upward trend and no crash. One leak was
+found and fixed on the way (ADR-0030): the focus memory kept a focus requester for every row ever focused.
+
+The specification's 8-hour **live-playback** soak has NOT been run: the synthetic fixture's stream URLs are unreachable
+by design, so it needs either the owner's provider or a long run against the in-app test server.

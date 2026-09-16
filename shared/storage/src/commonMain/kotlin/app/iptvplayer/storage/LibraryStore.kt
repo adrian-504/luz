@@ -179,25 +179,35 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
     public fun seriesCount(playlistId: PlaylistId): Long =
         active(playlistId, ImportUnit.SERIES)?.let { queries.seriesCount(playlistId.value, it).executeAsOne() } ?: 0
 
+    /** Movies matching [query] through the title index, best match first (FR-SRCH-002). */
     public fun searchMovies(playlistId: PlaylistId, query: String, limit: Int): List<MovieRow> {
         val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return emptyList()
-        val pattern = ContentStore.likePattern(query) ?: return emptyList()
-        return queries.searchMovies(playlistId.value, snapshot, pattern, limit.toLong()).executeAsList().map {
-            movieRow(
-                it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template,
-                it.backdrop_template, it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite,
-            )
+        val ids = content.searchTitles(playlistId, snapshot, ContentType.MOVIE, query, limit)
+        if (ids.isEmpty()) return emptyList()
+        val found = queries.moviesByIds(playlistId.value, snapshot, ids).executeAsList().associateBy { it.id }
+        return ids.mapNotNull { id ->
+            found[id]?.let {
+                movieRow(
+                    it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template,
+                    it.backdrop_template, it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite,
+                )
+            }
         }
     }
 
+    /** Series matching [query] through the title index, best match first (FR-SRCH-002). */
     public fun searchSeries(playlistId: PlaylistId, query: String, limit: Int): List<SeriesRow> {
         val snapshot = active(playlistId, ImportUnit.SERIES) ?: return emptyList()
-        val pattern = ContentStore.likePattern(query) ?: return emptyList()
-        return queries.searchSeries(playlistId.value, snapshot, pattern, limit.toLong()).executeAsList().map {
-            seriesRow(
-                it.id, it.title, it.year, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template, it.provider_series_id,
-                it.is_favorite,
-            )
+        val ids = content.searchTitles(playlistId, snapshot, ContentType.SERIES, query, limit)
+        if (ids.isEmpty()) return emptyList()
+        val found = queries.seriesByIds(playlistId.value, snapshot, ids).executeAsList().associateBy { it.id }
+        return ids.mapNotNull { id ->
+            found[id]?.let {
+                seriesRow(
+                    it.id, it.title, it.year, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
+                    it.provider_series_id, it.is_favorite,
+                )
+            }
         }
     }
 
@@ -362,6 +372,13 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             val order = itemOrder++
             itemCount++
             add {
+                content.searchQueries.insertTitle(
+                    movie.title,
+                    ContentType.MOVIE.name,
+                    playlistId.value,
+                    snapshot.toString(),
+                    movie.id.value,
+                )
                 queries.insertMovie(
                     playlistId.value, snapshot, movie.id.value, movie.title, order, movie.year?.toLong(), movie.duration?.inWholeSeconds,
                     movie.plot, encodeList(movie.genres), movie.rating, poster?.template, backdrop?.template,
@@ -376,6 +393,13 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             val order = itemOrder++
             itemCount++
             add {
+                content.searchQueries.insertTitle(
+                    series.title,
+                    ContentType.SERIES.name,
+                    playlistId.value,
+                    snapshot.toString(),
+                    series.id.value,
+                )
                 queries.insertSeries(
                     playlistId.value, snapshot, series.id.value, series.title, order, series.year?.toLong(), series.plot,
                     encodeList(series.genres), series.rating, poster?.template, backdrop?.template, series.providerSeriesId,
@@ -419,13 +443,20 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             content.transaction {
                 val previous = active(playlistId, unit)
                 content.publishUnit(playlistId, unit, snapshot, itemCount.toLong())
-                if (previous != null && previous != snapshot) queries.deleteLibrarySnapshot(playlistId.value, previous)
+                if (previous != null && previous != snapshot) deleteSnapshot(previous)
             }
+            content.checkpoint()
         }
 
         public fun discard() {
             pending.clear()
-            content.transaction { queries.deleteLibrarySnapshot(playlistId.value, snapshot) }
+            content.transaction { deleteSnapshot(snapshot) }
+        }
+
+        private fun deleteSnapshot(version: Long) {
+            // The title index stores the snapshot as text (Search.sq), so it is cleared separately.
+            content.searchQueries.deleteTitlesOfSnapshot(playlistId.value, version.toString())
+            queries.deleteLibrarySnapshot(playlistId.value, version)
         }
     }
 

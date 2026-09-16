@@ -197,6 +197,8 @@ public class EpgStore(private val driver: SqlDriver) {
                 queries.deleteSnapshot(source.value, previous)
             }
         }
+        // As after a library import: fold the write-ahead log back in so the guide is read at full speed (PERFORMANCE.md §6).
+        driver.execute(null, "PRAGMA wal_checkpoint(TRUNCATE)", 0)
     }
 
     /** Deletes an unpublished snapshot, for example after a failed import. */

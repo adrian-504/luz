@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
@@ -225,10 +226,12 @@ private fun SourceSwitcher(name: String, modifier: Modifier, onSwitch: () -> Uni
 @Composable
 private fun GroupItem(title: String, count: Long?, selected: Boolean, modifier: Modifier, onSelect: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    // Browsing groups previews their channels after a short pause, without pressing OK.
+    // Browsing groups previews their channels after a pause, without pressing OK. The pause is long enough that passing
+    // through categories loads nothing: each preview replaces the whole channel list, which costs frames on a low-end TV
+    // (PERFORMANCE.md §6.2).
     LaunchedEffect(focused) {
         if (focused && !selected) {
-            delay(250)
+            delay(PREVIEW_DELAY)
             onSelect()
         }
     }
@@ -247,11 +250,12 @@ private suspend fun visibleFallback(
     playlist: PlaylistId,
     rows: List<ChannelRow>,
     listState: LazyListState,
-    known: Map<String, NowNextRow>,
+    known: (String) -> Boolean,
     now: Instant,
     visible: List<Int> = listState.layoutInfo.visibleItemsInfo.map { it.index },
 ): Map<String, NowNextRow> {
-    val missing = visible.mapNotNull { rows.getOrNull(it)?.id }.filter { it.value !in known }.take(20)
+    // A predicate, not a set: combining the two guide maps into one would copy thousands of keys where the UI runs.
+    val missing = visible.mapNotNull { rows.getOrNull(it)?.id }.filterNot { known(it.value) }.take(20)
     return if (missing.isEmpty()) emptyMap() else graph.nowNext(playlist, missing, now)
 }
 
@@ -269,7 +273,10 @@ private fun ChannelList(
     val graph = LocalAppGraph.current
     val coroutines = rememberCoroutineScope()
     var channels by remember(scope) { mutableStateOf<List<ChannelRow>?>(null) }
-    var guide by remember(scope) { mutableStateOf<Map<String, NowNextRow>>(emptyMap()) }
+    // Two maps, never merged: the stored guide for the whole list (large) and the handful fetched for what is on screen.
+    // Merging them produced a copy of thousands of entries on the UI thread every time either changed (PERFORMANCE.md §6.2).
+    var storedGuide by remember(scope) { mutableStateOf<Map<String, NowNextRow>>(emptyMap()) }
+    var onScreenGuide by remember(scope) { mutableStateOf<Map<String, NowNextRow>>(emptyMap()) }
     var now by remember { mutableStateOf(Clock.System.now()) }
     val listState = rememberLazyListState()
 
@@ -282,9 +289,9 @@ private fun ChannelList(
         channels = rows
         while (true) {
             now = Clock.System.now()
-            val stored = rows.chunked(500).flatMap { chunk -> graph.nowNext(playlist, chunk.map { it.id }, now).entries }
-                .associate { it.key to it.value }
-            guide = stored + visibleFallback(graph, playlist, rows, listState, stored, now)
+            val stored = graph.storedNowNext(playlist, rows, now)
+            storedGuide = stored
+            onScreenGuide = visibleFallback(graph, playlist, rows, listState, { it in stored }, now)
             delay(1.minutes)
         }
     }
@@ -295,7 +302,9 @@ private fun ChannelList(
             .distinctUntilChanged()
             .collectLatest { visible ->
                 delay(400)
-                guide = guide + visibleFallback(graph, playlist, rows, listState, guide, Clock.System.now(), visible)
+                val known = { id: String -> id in storedGuide || id in onScreenGuide }
+                onScreenGuide = onScreenGuide +
+                    visibleFallback(graph, playlist, rows, listState, known, Clock.System.now(), visible)
             }
     }
 
@@ -324,7 +333,7 @@ private fun ChannelList(
                     val channel = rows[index]
                     ChannelItem(
                         channel = channel,
-                        guide = guide[channel.id.value],
+                        guide = onScreenGuide[channel.id.value] ?: storedGuide[channel.id.value],
                         now = now,
                         modifier = Modifier.rememberedFocus(focus, LiveTags.channel(channel.id)),
                         onPlay = { onPlay(playlist, scope, channel.id) },
@@ -405,3 +414,6 @@ fun EmptyState(message: String, action: String, focus: FocusMemory, actionKey: S
         ActionButton(action, onAction, Modifier.rememberedFocus(focus, actionKey))
     }
 }
+
+/** How long a category must hold focus before its channels are loaded. */
+private val PREVIEW_DELAY = 600.milliseconds

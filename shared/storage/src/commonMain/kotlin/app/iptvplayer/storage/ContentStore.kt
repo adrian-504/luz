@@ -70,10 +70,11 @@ public data class ChannelRow(
  * Sources, live channels, groups, stream locators and favorites (docs/DOMAIN_MODEL.md §9). Imports write a new snapshot
  * through [LiveSnapshotWriter]; readers only ever see the published one.
  */
-public class ContentStore(driver: SqlDriver, private val clock: Clock) {
+public class ContentStore(private val driver: SqlDriver, private val clock: Clock) {
     private val database = IptvDatabase(driver)
     private val queries = database.contentQueries
     internal val libraryQueries = database.libraryQueries
+    internal val searchQueries = database.searchQueries
 
     /** Marks [snapshot] as the published content of [unit] (library units; live channels use their writer). */
     internal fun publishUnit(playlistId: PlaylistId, unit: ImportUnit, snapshot: Long, itemCount: Long) {
@@ -177,9 +178,19 @@ public class ContentStore(driver: SqlDriver, private val clock: Clock) {
             queries.deleteAllChannels(playlistId.value)
             queries.deleteAllGroups(playlistId.value)
             libraryQueries.deleteLibrary(playlistId.value)
+            searchQueries.deleteTitlesOfPlaylist(playlistId.value)
             queries.deletePlaylistRow(playlistId.value)
             queries.deleteProviderRow(providerId)
         }
+    }
+
+    /**
+     * Folds the write-ahead log back into the database file. An import writes tens of thousands of rows; until that log is
+     * folded in, every read has to look through it, which measured 6x slower on the owner's Bbox TV right after an import
+     * (PERFORMANCE.md §6). Callers run this off the main thread after publishing. Busy readers only postpone it.
+     */
+    public fun checkpoint() {
+        driver.execute(null, "PRAGMA wal_checkpoint(TRUNCATE)", 0)
     }
 
     public fun unitState(playlistId: PlaylistId, unit: ImportUnit): UnitStateRecord? =
@@ -247,13 +258,46 @@ public class ContentStore(driver: SqlDriver, private val clock: Clock) {
         }.executeAsList()
     }
 
-    /** Channels whose name contains [query] (case-insensitive for Latin letters): exact, then prefix, then contains. */
+    /**
+     * Channels matching [query] through the title index: exact name first, then names starting with it, then the rest
+     * (FR-SRCH-002). Matching on the index instead of scanning every name is what keeps this inside the 50 ms budget on a
+     * large playlist (PERFORMANCE.md §1).
+     */
     public fun searchChannels(playlistId: PlaylistId, query: String, limit: Int): List<ChannelRow> {
         val snapshot = activeLiveSnapshot(playlistId) ?: return emptyList()
-        val pattern = likePattern(query) ?: return emptyList()
-        return queries.searchChannels(playlistId.value, snapshot, pattern, limit.toLong()) { id, name, number, logo, tvg, favorite ->
+        val ids = searchTitles(playlistId, snapshot, ContentType.CHANNEL, query, limit)
+        if (ids.isEmpty()) return emptyList()
+        val found = queries.channelsByIds(playlistId.value, snapshot, ids) { id, name, number, logo, tvg, favorite ->
             row(id, name, number, logo, tvg, favorite)
-        }.executeAsList()
+        }.executeAsList().associateBy { it.id.value }
+        return ids.mapNotNull { found[it] }
+    }
+
+    /**
+     * The content ids of [type] matching [query], best match first: the title typed exactly, then titles starting with it,
+     * then the rest in the provider's own order.
+     *
+     * The index is read in insertion order and stops at [CANDIDATES]; the ranking happens here, over that handful of rows.
+     * Ranking inside the query instead means reading every match, and a word that appears in all 20,000 titles of a large
+     * provider then costs 280-500 ms on the owner's Bbox TV against a 50 ms budget (PERFORMANCE.md §1, ADR-0029). A query
+     * selective enough to return fewer than [CANDIDATES] rows is ranked exactly, which is every realistic search.
+     */
+    internal fun searchTitles(playlistId: PlaylistId, snapshot: Long, type: ContentType, query: String, limit: Int): List<String> {
+        val match = TitleIndex.match(query) ?: return emptyList()
+        val candidates = (limit * 8).coerceIn(limit, CANDIDATES)
+        // FTS5 columns are untyped, so the snapshot is stored and compared as text.
+        val rows = searchQueries
+            .searchTitles(match, type.name, playlistId.value, snapshot.toString(), candidates.toLong())
+            .executeAsList()
+        val typed = query.trim().lowercase()
+        return rows.sortedBy { row ->
+            val title = row.title?.lowercase()
+            when {
+                title == typed -> 0
+                title?.startsWith(typed) == true -> 1
+                else -> 2
+            }
+        }.mapNotNull { it.content_id }.take(limit)
     }
 
     public fun channelCount(playlistId: PlaylistId): Long =
@@ -326,6 +370,13 @@ public class ContentStore(driver: SqlDriver, private val clock: Clock) {
             val order = channelOrder++
             channelCount++
             add {
+                searchQueries.insertTitle(
+                    channel.name,
+                    ContentType.CHANNEL.name,
+                    playlistId.value,
+                    snapshot.toString(),
+                    channel.id.value,
+                )
                 queries.insertChannel(
                     playlistId.value, snapshot, channel.id.value, channel.name, channel.number?.toLong(), order, logo?.template,
                     channel.tvgId, channel.catchUp?.days?.toLong(), channel.isAdult?.let { if (it) 1L else 0L },
@@ -371,6 +422,7 @@ public class ContentStore(driver: SqlDriver, private val clock: Clock) {
                 )
                 if (previous != null && previous != snapshot) deleteSnapshot(previous)
             }
+            checkpoint()
         }
 
         /** Throws away everything written for this snapshot; the previous snapshot stays active. */
@@ -380,6 +432,7 @@ public class ContentStore(driver: SqlDriver, private val clock: Clock) {
         }
 
         private fun deleteSnapshot(version: Long) {
+            searchQueries.deleteTitlesOfSnapshot(playlistId.value, version.toString())
             queries.deleteMembers(playlistId.value, version)
             queries.deleteMediaSources(playlistId.value, version)
             queries.deleteChannels(playlistId.value, version)
@@ -405,6 +458,8 @@ public class ContentStore(driver: SqlDriver, private val clock: Clock) {
     }
 
     internal companion object {
+        /** How many index rows one search reads before it stops; see [searchTitles]. */
+        const val CANDIDATES = 200
         const val LOCATOR_DIRECT = "DIRECT_URL"
         const val LOCATOR_XTREAM = "XTREAM_STREAM"
 

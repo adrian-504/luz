@@ -12,7 +12,9 @@ diagnostics and low perceived latency — not feature count.
 
 ## Current phase
 
-**Phase 7 (Android Live TV) complete 2026-09-15** (emulator + owner's Bbox TV with their provider; real-provider guide not verified — the provider has none, parked by the owner). **Next: Phase 8 (Android VOD/Series)**; see [docs/ROADMAP.md](docs/ROADMAP.md) for what remains. Open review items are tracked in
+**Phase 8 (Android VOD/Series) complete 2026-09-16** (emulator + the owner's Bbox TV with their own provider: movies,
+series, home and search). **Phase 9 (Android QA) in progress:** the storage query gate passes on that device
+(docs/PERFORMANCE.md §6.1, ADR-0029); launch, frame and memory measurements remain. Open review items are tracked in
 [docs/ROADMAP.md](docs/ROADMAP.md). Work strictly phase by phase.
 
 ## Non-negotiable rules

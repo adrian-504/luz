@@ -25,6 +25,8 @@ CREATE TABLE library_member (
     PRIMARY KEY (playlist_id, snapshot, group_id, item_id)
 );
 
+CREATE INDEX library_member_order ON library_member(playlist_id, snapshot, group_id, sort_order);
+
 CREATE TABLE movie (
     playlist_id TEXT NOT NULL,
     snapshot INTEGER NOT NULL,
@@ -266,6 +268,7 @@ deleteLibrarySnapshot {
 }
 
 deleteLibrary {
+    DELETE FROM title_search WHERE playlist_id = :playlistId;
     DELETE FROM library_member WHERE playlist_id = :playlistId;
     DELETE FROM library_group WHERE playlist_id = :playlistId;
     DELETE FROM movie WHERE playlist_id = :playlistId;
@@ -297,19 +300,16 @@ LIMIT :limit;
 lastWatchedEpisodeOfSeries:
 SELECT * FROM watch_state WHERE content_type = 'EPISODE' AND parent_id = ? ORDER BY last_played_at DESC LIMIT 1;
 
-searchMovies:
+moviesByIds:
 SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
 FROM movie mo
 LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
 LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
-WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.title LIKE '%' || :query || '%' ESCAPE '\'
-ORDER BY CASE WHEN mo.title LIKE :query ESCAPE '\' THEN 0 WHEN mo.title LIKE :query || '%' ESCAPE '\' THEN 1 ELSE 2 END, mo.sort_order
-LIMIT :limit;
+WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.id IN :ids;
 
-searchSeries:
+seriesByIds:
 SELECT s.*, (f.content_id IS NOT NULL) AS is_favorite
 FROM series s
 LEFT JOIN favorite f ON f.content_type = 'SERIES' AND f.content_id = s.id
-WHERE s.playlist_id = :playlistId AND s.snapshot = :snapshot AND s.title LIKE '%' || :query || '%' ESCAPE '\'
-ORDER BY CASE WHEN s.title LIKE :query ESCAPE '\' THEN 0 WHEN s.title LIKE :query || '%' ESCAPE '\' THEN 1 ELSE 2 END, s.sort_order
-LIMIT :limit;
+WHERE s.playlist_id = :playlistId AND s.snapshot = :snapshot AND s.id IN :ids;
+

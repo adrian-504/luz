@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- TV-only app (PLATFORM_STRATEGY.md §3): D-pad input, no touchscreen, Leanback launcher. -->
     <uses-feature
@@ -20,6 +21,13 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.IptvPlayer">
+
+        <!-- Lets `adb shell dumpsys gfxinfo`, Perfetto and Macrobenchmark read frame timings from a release build
+             (PERFORMANCE.md §3.7). It grants measurement, not debugging: the app stays non-debuggable. -->
+        <profileable
+            android:shell="true"
+            tools:targetApi="29" />
+
         <activity
             android:name=".MainActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"

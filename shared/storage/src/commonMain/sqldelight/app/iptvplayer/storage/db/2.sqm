@@ -1,0 +1,25 @@
+-- Migration 2 -> 3 (Phase 9): the title search index. Must match the CREATE statements in Search.sq and Content.sq.
+-- Title search index (FR-SRCH-001/002). One FTS5 table for channels, movies and series: LIKE scans every title, which cost
+-- 70-105 ms on the owner's Bbox TV with 10k channels and 20k movies (PERFORMANCE.md §1 budget is 50 ms).
+CREATE VIRTUAL TABLE title_search USING fts5(
+    title,
+    kind UNINDEXED,
+    playlist_id UNINDEXED,
+    snapshot UNINDEXED,
+    content_id UNINDEXED,
+    tokenize='unicode61 remove_diacritics 2'
+);
+
+CREATE INDEX channel_member_order ON channel_group_member(playlist_id, snapshot, group_id, sort_order);
+
+CREATE INDEX library_member_order ON library_member(playlist_id, snapshot, group_id, sort_order);
+
+-- Fills the index from what is already imported, so search keeps working after an update without waiting for a refresh.
+INSERT INTO title_search(title, kind, playlist_id, snapshot, content_id)
+SELECT name, 'CHANNEL', playlist_id, CAST(snapshot AS TEXT), id FROM channel;
+
+INSERT INTO title_search(title, kind, playlist_id, snapshot, content_id)
+SELECT title, 'MOVIE', playlist_id, CAST(snapshot AS TEXT), id FROM movie;
+
+INSERT INTO title_search(title, kind, playlist_id, snapshot, content_id)
+SELECT title, 'SERIES', playlist_id, CAST(snapshot AS TEXT), id FROM series;

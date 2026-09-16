@@ -1,0 +1,16 @@
+# Baseline profile for Luz (PERFORMANCE.md §5, ADR-0030).
+#
+# Without it the app's own code starts interpreted and is compiled only as it runs, which showed up on the owner's Bbox TV
+# as jank that faded over repeated passes (29% of frames janky on the first pass through the categories, 9% by the third).
+# Compose, AndroidX and tv-material ship their own rules, which AGP merges in; these cover Luz's own classes.
+#
+# Whole packages are listed rather than individual methods: the app is small, these are the paths every screen uses, and a
+# hand-kept method list would rot. A generated profile from a real user journey (Macrobenchmark) can replace this later.
+
+HSPLapp/iptvplayer/tv/**->**(**)**
+HSPLapp/iptvplayer/platform/**->**(**)**
+HSPLapp/iptvplayer/domain/**->**(**)**
+HSPLapp/iptvplayer/storage/**->**(**)**
+HSPLapp/iptvplayer/epg/**->**(**)**
+HSPLapp/iptvplayer/ingestion/**->**(**)**
+HSPLapp/iptvplayer/protocols/**->**(**)**

@@ -33,6 +33,9 @@ class FocusMemory internal constructor(private val saved: MutableState<String?>)
 
     internal fun detach(key: String) {
         attached -= key
+        // Also drop the requester: a list of 10,000 channels would otherwise leave one behind for every row ever focused,
+        // growing for as long as the app runs (PERFORMANCE.md §1 "Memory"). A row that comes back gets a fresh one.
+        requesters -= key
     }
 
     internal fun record(key: String) {

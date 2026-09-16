@@ -15,8 +15,8 @@ a test plan and a review step (§18.1). A phase is closed only by review against
 | **5** | Android TV shell | Remote navigation complete | **Complete on Google TV emulator 2026-09-15; owner's TV device not yet checked** |
 | **6** | Android playback | Live/VOD playback stable | **Verified on the Google TV emulator and the owner's Bbox TV (Android TV 11) 2026-09-15 with synthetic streams** |
 | **7** | Android Live TV | Channel browsing/zapping/EPG complete | **Complete 2026-09-15 on the Google TV emulator and the owner's Bbox TV (device tests + the owner's own Xtream provider). The owner's provider supplies no guide; a guide from a real provider or a user guide link is NOT YET VERIFIED on a device — parked by the owner** |
-| 8 | Android VOD/Series | Library experience complete | Movies, series, continue watching, search UI |
-| 9 | Android QA | Stress/device matrix passes | Performance gates, soak, device matrix |
+| **8** | Android VOD/Series | Library experience complete | **Complete 2026-09-16 — verified by the owner on the Bbox TV with their own provider (20,023 movies, 10,171 series)** |
+| 9 | Android QA | Stress/device matrix passes | **In progress 2026-09-16** — storage query gate passes on the reference device; launch, frames, memory and device matrix remain |
 | 10 | Apple shared/core | Domain parity achieved | XCFramework, Swift bridging, Keychain, URLSession transport, AVPlayer controller + vectors |
 | 11 | tvOS | Native TV experience complete | |
 | 12 | iOS | Touch/mobile experience complete | |
@@ -295,7 +295,7 @@ Scope (to be confirmed at Phase 6 review):
 5. Real-device check on the owner's Google TV, including playback of the owner's own authorized source entered at runtime
    (never committed).
 
-## Phase 8 — Android VOD/Series (in progress)
+## Phase 8 — Android VOD/Series (complete 2026-09-16)
 
 **Primary objective:** the library experience on Android TV (exit criterion: library experience complete) — FR-VOD-001,
 FR-VOD-002, FR-SER-001, FR-WATCH-001, FR-HOME-001 (Android subset), FR-SRCH-001/003 (local search).
@@ -328,6 +328,65 @@ Scope and order (stated at the start of the phase, 2026-09-15):
 
 Not in Phase 8: third-party metadata enrichment (FR-VOD-002 keeps the library usable without it), catch-up playback,
 downloads, unified multi-source library, parental controls.
+
+## Phase 9 — Android QA (in progress)
+
+**Primary objective:** the performance gates of PERFORMANCE.md §1 and §4 met on real hardware, plus stress and soak
+(exit criterion: stress and device matrix pass).
+
+Scope and order (stated at the start of the phase, 2026-09-16):
+
+1. **Storage queries under a large provider's data** — guide, category, page and search queries inside the 50 ms budget
+   on the reference low-end device.
+2. **Launch** — cold and warm launch measured on the device against the 2 s / 500 ms targets.
+3. **Frames** — scrolling long channel lists, poster grids and the guide without visible jank.
+4. **Memory** — a long session on the device with no growth beyond the §1 allowance and no crash.
+5. **Device matrix** — the Bbox TV and the Google TV emulator, with what each was used to confirm recorded.
+
+### Progress (2026-09-16)
+
+| Scope item | Status |
+|---|---|
+| Launch | **Done — ADR-0030:** on the Bbox TV with 10,072 channels, release build: cold P50 780–826 ms (target 2 s), back from Home P50 153–168 ms (target 500 ms). Needed the release build to be signed and `profileable` first; `tooling/scripts/measure_launch.sh` |
+| Frames | **Partly done — ADR-0030:** scrolling the 10,000-channel list meets the budget (1.1 % janky, P95 11 ms). The screens that reload content on every key press do not: Live TV categories 9.2 % janky (from 28.9 % after two fixes) and the guide 25–28 % janky with the 100k-programme fixture. The remaining cost is rebuilding a screen of rows and cells, left for the interface work that follows Phase 9 |
+| Storage queries | **Done — ADR-0029:** FTS5 title index for channels, movies and series, member-order indexes, ranking over a bounded candidate list, and a write-ahead log checkpoint when an import publishes. All six budgeted queries pass on the owner's Bbox TV; the numbers, before and after, are in PERFORMANCE.md §6.1. Schema version 3; existing installs upgrade in place and keep working search without a refresh |
+| Memory | **Done for browsing:** 25 minutes of continuous remote input on the Bbox TV held flat at ~89 MB with no drift or crash, after fixing a focus-requester leak (ADR-0030). The specification's 8-hour live-playback soak needs real streams and has NOT been run |
+| Device matrix | **Done:** what each device has actually confirmed is recorded in TESTING.md §5.1, including the gaps (no mid-range Google TV, no 4K panel) |
+
+**Where Phase 9 stands (2026-09-16).** Everything measured on the owner's Bbox TV, release build, with the repository's
+synthetic fixtures (10,072 channels, 36,773 guide programmes) — never the owner's provider. Storage queries, launch,
+list scrolling and memory meet their targets; 222 device tests pass on that TV (68 domain, 86 protocols, 6 EPG, 14
+storage, 12 ingestion, 18 platform, 18 TV app) and `tooling/scripts/verify.sh` passes on the host.
+
+Two gates are **not** met and are deliberately open:
+
+1. **Frames on screens that reload content per key press** — Live TV categories and the guide. The cost is rebuilding a
+   screen of rows and cells on this hardware; the fix is a leaner row and cell, which is exactly what the interface work
+   in [PRODUCT_DIRECTIVE.md](PRODUCT_DIRECTIVE.md) will rewrite. Doing it twice would be waste, so it is carried into
+   that work rather than closed here.
+2. **The 8-hour live-playback soak** (§16.1) — needs real streams. The synthetic fixture's URLs are unreachable by
+   design, so this needs the owner's provider or a long run against the in-app test server, and has not been run.
+
+## Owner review between Phase 9 and Phase 10 (requested 2026-09-16)
+
+Before any Apple work starts, the owner wants a working session on the product itself, in this order:
+
+1. **Design decisions** — the look, and what is still open in DESIGN_SYSTEM.md.
+2. **Features to add** — what the owner wants that the roadmap does not already carry; anything accepted becomes a
+   requirement and a phase, never an unplanned addition.
+3. **App navigation and behavior** — how the app moves between screens and what it does by default.
+
+The owner gave the substance of that review on 2026-09-16, recorded verbatim in scope in
+[PRODUCT_DIRECTIVE.md](PRODUCT_DIRECTIVE.md): Luz as a premium, dark, cinematic streaming experience with a collapsed
+navigation rail, a dynamic Home, unified multi-provider content, confidence-based channel deduplication and source
+failover, a modern guide, plain-language provider diagnostics, and a later account/QR/companion/sync architecture. The
+review's first task is the audit the owner asked for — every item mapped to already implemented, partly implemented,
+missing, or future architecture, against the code rather than the documents — followed by the ADRs and the phases that
+come out of it. **None of it starts before Phase 9 is finished** (the owner's instruction: "Finish phase 9 then we can
+start with this").
+
+Phase 10 does not start until this review is done. Its outcome may change Phases 11–12 (the Apple apps should follow the
+decisions made here, not the current Android shape).
 
 ## Proposed interim gate: Android TV personal alpha
 

@@ -148,6 +148,16 @@ class AppGraph(context: Context) {
     suspend fun favoriteChannels(playlistId: PlaylistId): List<ChannelRow> = io { content.favoriteChannels(playlistId) }
 
     /**
+     * Stored now/next for a whole channel list, read and assembled off the main thread (PERFORMANCE.md §5). A category of
+     * a large provider holds thousands of channels: building that map where the UI runs cost frames on the owner's Bbox TV.
+     */
+    suspend fun storedNowNext(playlistId: PlaylistId, channels: List<ChannelRow>, now: Instant): Map<String, NowNextRow> = io {
+        buildMap {
+            channels.chunked(GUIDE_BATCH).forEach { chunk -> putAll(epg.nowNext(playlistId.value, chunk.map { it.id.value }, now)) }
+        }
+    }
+
+    /**
      * Now/next from the stored guide; for a few channels (the ones on screen) without stored programmes, from the provider's
      * per-channel guide instead (Xtream sources, SourceService.shortGuide).
      */
@@ -455,3 +465,6 @@ class AppGraph(context: Context) {
         const val KEY_CURRENT_SOURCE = "current_source"
     }
 }
+
+/** How many channels one stored-guide query covers; the whole list is read in batches of this size. */
+private const val GUIDE_BATCH = 500

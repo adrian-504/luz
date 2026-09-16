@@ -34,7 +34,7 @@ Tests are never deleted or weakened to make a build pass.
 | Playback | controller conformance to `state-machine.json`; error mapping; recovery; track selection; TTFF instrumentation | Media3 test utils (`TestExoPlayerBuilder`, robolectric utils); XCTest with local HLS server | JVM/robolectric, emulator, simulator, devices | 6, 11 |
 | UI | screen states (loading/partial/empty/error), navigation | Compose UI test; XCUITest; screenshot tests (evaluate) | emulator/simulator | 5, 11, 12 |
 | Remote / focus | D-pad paths, focus entry, focus restoration after back, no focus traps, guide time-preserving vertical focus, back behavior §9.6 | Compose `performKeyInput` + `assertIsFocused`; `adb shell input keyevent` scripts; tvOS `XCUIRemote.shared.press(_:)` + `hasFocus` | emulator/simulator + devices | 5, 7, 11 |
-| Performance | launch, frame timing, TTFF, search, EPG query | Macrobenchmark + Baseline Profiles; XCTest metrics; kotlinx-benchmark for host microbenchmarks | reference devices | 2, 4, 5–9 |
+| Performance | launch, frame timing, TTFF, search, EPG query | Macrobenchmark + Baseline Profiles; XCTest metrics; kotlinx-benchmark for host microbenchmarks. **Running since Phase 9:** `shared/storage` `StoragePerformanceTest` builds a large provider's library and asserts the 50 ms query budget — run it on a device (`connectedAndroidTest`), where it is the gate; the JVM run only catches gross regressions | reference devices | 2, 4, 5–9 |
 | Stress | 10k/50k/100k channel M3U; 100k/1M programme XMLTV; 50k VOD | generated fixtures | host + devices | 2–4, 9 |
 | Soak | 8 h continuous live playback; 2 h zap loop (switch every 10–30 s); import during playback | scripted remote input, metrics sampling | devices | 9, 11 |
 | Security | canary credential leak tests; XXE/entity expansion; gzip bomb; oversized lines; scheme rejection; backup exclusion | unit/integration harness | all | 1–6 |
@@ -126,6 +126,21 @@ approval. Known tooling issue on the Bbox: its system language is French, so `am
 decimal comma and the Android Gradle Plugin marks `connected*Test` tasks as failed although every test passes (XML reports
 show 0 failures; raw `am instrument` output ends `OK (n tests)` and `INSTRUMENTATION_CODE: -1`). Read the XML reports or
 run `am instrument` directly on such devices; never change the owner's TV language to work around it.
+
+### 5.1 What each device has actually confirmed (Phase 9, 2026-09-16)
+
+| | Google TV emulator (API 34, arm64) | Bbox TV (Technicolor UZW4020BYT, Android TV 11, `armeabi-v7a`, 2.2 GB) |
+|---|---|---|
+| Role | UI, focus and flow tests during development | **The reference low-end device**: every performance and playback claim comes from here |
+| Unit and integration tests (all `shared/*` modules on device) | Run | Run — 68 domain, 86 protocols, 6 EPG, 14 storage, 12 ingestion |
+| App device tests (platform + TV app) | Run | Run — 18 platform, 17 TV app |
+| Playback | Synthetic streams only (no audio device) | Synthetic streams **and** the owner's own provider (live, movies, series, guide) |
+| Storage query budgets | Not a gate (host-class hardware) | **Gate** — PERFORMANCE.md §6.1 |
+| Launch and frame timing | Not measured | **Measured** — PERFORMANCE.md §6.2 |
+| Known limits | Degrades after long sessions ("Unknown API Level"); restart before device runs | French locale makes AGP report `connected*Test` as failed although every test passes — read the XML; screensaver interrupts runs (keep sending `KEYCODE_WAKEUP`) |
+
+Not yet in the matrix, and named as a gap: a mid-range Google TV device, and any device with a different remote layout
+or a 4K panel.
 
 | Platform | Devices | Emulator/simulator |
 |---|---|---|

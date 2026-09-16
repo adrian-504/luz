@@ -49,6 +49,7 @@ import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 object LibraryTags {
     const val CATEGORY_ALL = "library-category-all"
@@ -156,9 +157,10 @@ fun LibrarySection(focus: FocusMemory, unit: ImportUnit, onOpen: (PlaylistId, St
 @Composable
 private fun CategoryItem(title: String, count: Long?, selected: Boolean, modifier: Modifier, onSelect: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
+    // As in Live TV: long enough that passing through categories does not rebuild the grid on every step.
     LaunchedEffect(focused) {
         if (focused && !selected) {
-            delay(250)
+            delay(PREVIEW_DELAY)
             onSelect()
         }
     }
@@ -271,6 +273,8 @@ private fun PosterCard(item: PosterItem, resolver: ((UrlTemplate) -> String?)?, 
         item.caption?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Tokens.textTertiary) }
     }
 }
+
+private val PREVIEW_DELAY = 600.milliseconds
 
 private const val PAGE_SIZE = 120
 private const val LOAD_AHEAD = 24

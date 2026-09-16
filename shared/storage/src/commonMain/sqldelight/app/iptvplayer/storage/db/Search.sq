@@ -1,0 +1,29 @@
+-- Title search index (FR-SRCH-001/002). One FTS5 table for channels, movies and series: LIKE scans every title, which cost
+-- 70-105 ms on the owner's Bbox TV with 10k channels and 20k movies (PERFORMANCE.md §1 budget is 50 ms).
+CREATE VIRTUAL TABLE title_search USING fts5(
+    title,
+    kind UNINDEXED,
+    playlist_id UNINDEXED,
+    snapshot UNINDEXED,
+    content_id UNINDEXED,
+    tokenize='unicode61 remove_diacritics 2'
+);
+
+insertTitle:
+INSERT INTO title_search(title, kind, playlist_id, snapshot, content_id) VALUES (?, ?, ?, ?, ?);
+
+deleteTitlesOfSnapshot:
+DELETE FROM title_search WHERE playlist_id = :playlistId AND snapshot = :snapshot;
+
+deleteTitlesOfPlaylist:
+DELETE FROM title_search WHERE playlist_id = :playlistId;
+
+-- Rows in insertion order (the provider's own order), stopping at :limit. Ranking the matches instead -- bm25, or comparing
+-- every matched title -- means reading all of them, which cost 280-500 ms on the owner's Bbox TV for a word that appears in
+-- every title. ContentStore runs this twice: titles starting with what was typed, then the rest (ADR-0029).
+searchTitles:
+SELECT content_id, title
+FROM title_search
+WHERE title_search MATCH :match AND kind = :kind AND playlist_id = :playlistId AND snapshot = :snapshot
+ORDER BY rowid
+LIMIT :limit;

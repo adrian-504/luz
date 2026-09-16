@@ -223,7 +223,7 @@ class LibraryStoreTest {
     }
 
     @Test
-    fun searchRanksExactThenPrefixThenContainsAndTreatsWildcardsLiterally() {
+    fun searchRanksExactThenPrefixThenRestAndTreatsWildcardsLiterally() {
         addSource()
         importLiveChannel()
         importMovies(
@@ -232,8 +232,14 @@ class LibraryStoreTest {
             movie("mv_3", "Testing 100%", listOf("mg_action"), 1),
         )
         assertEquals(listOf("Test", "Testing 100%", "The Test"), library.searchMovies(playlist, " test ", 10).map { it.title })
-        assertEquals(listOf("Testing 100%"), library.searchMovies(playlist, "0%", 10).map { it.title }, "% is not a wildcard")
+        // ADR-0029: the index matches whole words and word beginnings, so every word typed has to match somewhere in the title.
+        assertEquals(listOf("Testing 100%"), library.searchMovies(playlist, "test 100", 10).map { it.title }, "every word matches")
+        assertTrue(library.searchMovies(playlist, "test zulu", 10).isEmpty(), "a word that matches nothing rules the title out")
+        assertEquals(listOf("Testing 100%"), library.searchMovies(playlist, "100%", 10).map { it.title }, "% is not a wildcard")
+        assertTrue(library.searchMovies(playlist, "%", 10).isEmpty(), "% is not a wildcard")
         assertTrue(library.searchMovies(playlist, "_", 10).isEmpty(), "_ is not a wildcard")
+        // If OR were read as an operator this would return "Test"; it is a word nothing starts with, so there is no match.
+        assertTrue(library.searchMovies(playlist, "\"test\" OR", 10).isEmpty(), "FTS syntax in a query is literal text")
         assertTrue(library.searchMovies(playlist, "   ", 10).isEmpty())
         assertEquals(listOf("News"), content.searchChannels(playlist, "NEW", 10).map { it.name }, "case-insensitive")
         assertEquals(1, library.searchMovies(playlist, "test", 1).size, "limit")
@@ -247,10 +253,11 @@ class LibraryStoreTest {
         // Recreate what a Phase 7 install has on disk: no library tables, schema version 1.
         for (table in listOf(
             "snapshot_allocation", "library_group", "library_member", "movie", "series", "season", "episode",
-            "series_detail_state", "watch_state",
+            "series_detail_state", "watch_state", "title_search",
         )) {
             driver.execute(null, "DROP TABLE $table", 0)
         }
+        driver.execute(null, "DROP INDEX channel_member_order", 0)
         driver.execute(null, "PRAGMA user_version=1", 0)
         driver.close()
 
@@ -258,7 +265,7 @@ class LibraryStoreTest {
         content = ContentStore(driver, clock)
         library = LibraryStore(content, clock)
         assertEquals(
-            2L,
+            3L,
             driver.executeQuery(null, "PRAGMA user_version", {
                 it.next()
                 app.cash.sqldelight.db.QueryResult.Value(it.getLong(0))
@@ -266,6 +273,11 @@ class LibraryStoreTest {
         )
         assertEquals("Example TV", content.sources().single().name, "sources survive the upgrade")
         assertTrue(content.channels(playlist).single().isFavorite, "channels and favorites survive the upgrade")
+        assertEquals(
+            listOf("News"),
+            content.searchChannels(playlist, "news", 10).map { it.name },
+            "the upgrade indexes what is already imported, so search works without a refresh",
+        )
         importMovies(movie("mv_1", "Alpha", listOf("mg_action"), 1))
         assertEquals("Alpha", library.movies(playlist).single().title, "the new tables work after the upgrade")
     }

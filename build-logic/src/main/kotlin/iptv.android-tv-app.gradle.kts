@@ -23,6 +23,16 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    buildTypes {
+        // The performance targets of docs/PERFORMANCE.md apply to the release build, so it has to be installable to be
+        // measured. It is signed with the local debug key — generated on this machine, never committed — until release
+        // hardening (Phase 15) provides a real one. Code shrinking stays off until it is enabled deliberately, with the
+        // rules the reflective libraries need and a device-test run against the shrunk build.
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
     lint {
         warningsAsErrors = true
         abortOnError = true

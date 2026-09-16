@@ -49,3 +49,5 @@ line. Product-scope decisions still go to the owner.
 | [0026](0026-android-transport-secret-store-and-import-service.md) | Android network transport, secret store and the shared import service | Accepted |
 | [0027](0027-live-tv-player-features-tracks-session-switching-guide.md) | Live TV player features: tracks, media session, channel switching, sources and guide navigation | Accepted |
 | [0028](0028-android-library-movies-series-watch-state-artwork.md) | Library on Android: movies, series, watch state, artwork and local search | Accepted |
+| [0029](0029-title-search-index-and-import-checkpoint.md) | Title search index and a checkpoint after every import | Accepted |
+| [0030](0030-tv-launch-and-frame-performance.md) | Measuring and fixing launch and frame performance on the TV | Accepted |
