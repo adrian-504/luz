@@ -16,6 +16,7 @@ import app.iptvplayer.domain.model.CustomisationTarget
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.tv.app.IptvApplication
 import app.iptvplayer.tv.developer.DeveloperStreams
+import app.iptvplayer.tv.ui.library.HomeTags
 import app.iptvplayer.tv.ui.live.LiveTags
 import app.iptvplayer.tv.ui.settings.SettingsTags
 import app.iptvplayer.tv.ui.shell.Section
@@ -148,6 +149,37 @@ class CustomisationFlowTest {
 
         rule.waitUntil(10_000) { runBlocking { graph.channels(playlist, null) }.any { it.id == channel.id } }
         assertTrue(runBlocking { graph.hidden(playlist, CustomisationTarget.CHANNEL) }.isEmpty())
+    }
+
+    @Test
+    fun theViewerChoosesWhichRowsHomeShows() {
+        awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
+        assertEquals("nothing chosen to begin with", null, runBlocking { graph.homeRows() })
+
+        openSettings()
+        awaitFocus(SettingsTags.entry(SettingsTags.PROVIDERS))
+        repeat(4) { if (focusedTag() != SettingsTags.entry(SettingsTags.HOME)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitFocus(SettingsTags.entry(SettingsTags.HOME))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+
+        // Turning a row off records the whole order, so Home keeps the rest exactly as it was.
+        repeat(6) {
+            if (focusedTag() !=
+                SettingsTags.homeRow(HomeTags.MOVIES)
+            ) {
+                press(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_DOWN)
+            }
+        }
+        awaitFocus(SettingsTags.homeRow(HomeTags.MOVIES))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.waitUntil(10_000) { runBlocking { graph.homeRows() }?.contains(HomeTags.MOVIES) == false }
+        assertTrue("the others are kept", runBlocking { graph.homeRows() }!!.contains(HomeTags.SERIES))
+
+        // And back on again. A row that is turned off moves below the ones that are on, so it is found again first.
+        repeat(6) { if (focusedTag() != SettingsTags.homeRow(HomeTags.MOVIES)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitFocus(SettingsTags.homeRow(HomeTags.MOVIES))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.waitUntil(10_000) { runBlocking { graph.homeRows() }?.contains(HomeTags.MOVIES) == true }
     }
 
     @Test

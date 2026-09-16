@@ -40,8 +40,11 @@ import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
+import app.iptvplayer.tv.ui.library.HOME_ROW_TITLES
 import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.sources.SourcesList
+import app.iptvplayer.tv.ui.theme.LuzMenu
+import app.iptvplayer.tv.ui.theme.LuzMenuItem
 import app.iptvplayer.tv.ui.theme.LuzRow
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.launch
@@ -49,7 +52,10 @@ import kotlinx.coroutines.launch
 object SettingsTags {
     const val PROVIDERS = "settings-providers"
     const val ABOUT = "settings-about"
+    const val HOME = "settings-home"
     const val HIDDEN = "settings-hidden"
+
+    fun homeRow(id: String) = "settings-home-$id"
     const val DEVELOPER = "settings-developer"
 
     fun hiddenItem(id: String) = "settings-hidden-$id"
@@ -93,6 +99,7 @@ fun SettingsSection(
     val entries = remember(hasDeveloperStreams, hiddenCount) {
         buildList {
             add(SettingsEntry(SettingsTags.PROVIDERS, R.string.settings_providers, R.string.settings_providers_summary))
+            add(SettingsEntry(SettingsTags.HOME, R.string.settings_home, R.string.settings_home_summary))
             if (hiddenCount > 0) {
                 add(SettingsEntry(SettingsTags.HIDDEN, R.string.settings_hidden, R.plurals.settings_hidden_summary, plural = true))
             }
@@ -159,6 +166,7 @@ fun SettingsSection(
             verticalArrangement = Arrangement.spacedBy(Tokens.space4),
         ) {
             when (selected) {
+                SettingsTags.HOME -> HomeRows(focus)
                 SettingsTags.HIDDEN -> playlist?.let { HiddenItems(focus, it) }
                 SettingsTags.ABOUT -> About()
                 SettingsTags.DEVELOPER -> DeveloperStreamsPane(focus, onPlayDeveloperStream, onSourceAdded)
@@ -280,5 +288,81 @@ private fun HiddenItems(focus: FocusMemory, playlist: PlaylistId) {
             }
             Text(stringResource(R.string.hidden_show_again), style = MaterialTheme.typography.bodySmall, color = Tokens.accent)
         }
+    }
+}
+
+/**
+ * Which rows Home shows, and in what order (PRODUCT_DIRECTIVE.md §3).
+ *
+ * OK turns a row on or off; a long press moves it. A row with nothing in it stays out of Home anyway — this chooses
+ * what the viewer wants to see when there is something to show.
+ */
+@Composable
+private fun HomeRows(focus: FocusMemory) {
+    val graph = LocalAppGraph.current
+    val revision by graph.revision.collectAsState()
+    val scope = rememberCoroutineScope()
+    var chosen by remember { mutableStateOf<List<String>?>(null) }
+    var loaded by remember { mutableStateOf(false) }
+    var moving by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(revision) {
+        chosen = graph.homeRows()
+        loaded = true
+    }
+    if (!loaded) return
+    val order = chosen ?: HOME_ROW_TITLES.map { it.first }
+    val shown = order.toSet()
+    // Chosen rows first in their order, then the ones left out, so turning one back on is easy to find.
+    val entries = order.mapNotNull { id -> HOME_ROW_TITLES.firstOrNull { it.first == id } } +
+        HOME_ROW_TITLES.filterNot { it.first in shown }
+
+    Text(stringResource(R.string.settings_home), style = MaterialTheme.typography.titleLarge, color = Tokens.textPrimary)
+    Text(stringResource(R.string.settings_home_help), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary)
+    entries.forEach { (id, title) ->
+        val visible = id in shown
+        LuzRow(
+            onClick = {
+                val next = if (visible) order.filterNot { it == id } else order + id
+                scope.launch { graph.setHomeRows(next) }
+            },
+            modifier = Modifier.rememberedFocus(focus, SettingsTags.homeRow(id)),
+            onLongClick = { moving = id },
+        ) {
+            Text(
+                stringResource(title),
+                style = MaterialTheme.typography.labelLarge,
+                color = if (visible) Tokens.textPrimary else Tokens.textTertiary,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                stringResource(if (visible) R.string.home_row_shown else R.string.home_row_hidden),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (visible) Tokens.accent else Tokens.textTertiary,
+            )
+        }
+    }
+    moving?.let { id ->
+        val index = order.indexOf(id)
+        LuzMenu(
+            title = stringResource(HOME_ROW_TITLES.first { it.first == id }.second),
+            items = listOfNotNull(
+                if (index > 0) {
+                    LuzMenuItem("up", stringResource(R.string.home_row_up)) {
+                        scope.launch { graph.setHomeRows(order.toMutableList().apply { add(index - 1, removeAt(index)) }) }
+                    }
+                } else {
+                    null
+                },
+                if (index in 0 until order.size - 1) {
+                    LuzMenuItem("down", stringResource(R.string.home_row_down)) {
+                        scope.launch { graph.setHomeRows(order.toMutableList().apply { add(index + 1, removeAt(index)) }) }
+                    }
+                } else {
+                    null
+                },
+                LuzMenuItem("default", stringResource(R.string.home_row_default)) { scope.launch { graph.setHomeRows(null) } },
+            ),
+            onDismiss = { moving = null },
+        )
     }
 }

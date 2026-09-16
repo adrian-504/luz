@@ -45,6 +45,15 @@ import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlin.time.Clock
 
+/** Every row Home can show, in its default order — the list Settings offers the viewer to choose from. */
+val HOME_ROW_TITLES: List<Pair<String, Int>> = listOf(
+    HomeTags.CONTINUE to R.string.home_continue,
+    HomeTags.CHANNELS to R.string.home_favorite_channels,
+    HomeTags.LIVE to R.string.home_live_now,
+    HomeTags.MOVIES to R.string.home_recent_movies,
+    HomeTags.SERIES to R.string.home_series,
+)
+
 object HomeTags {
     fun item(row: String, id: String) = "home-$row-$id"
 
@@ -123,10 +132,13 @@ fun HomeSection(
                 }
             },
         )
+        val chosen = graph.homeRows()
         rows = if (id == null) {
             emptyList()
         } else {
-            val loaded = specs.map { spec -> HomeRow(spec.id, spec.title, spec.load(id), spec.wide) }
+            // The viewer's own choice of rows and their order, when they have made one; otherwise Home's own order.
+            val wanted = chosen?.mapNotNull { key -> specs.firstOrNull { it.id == key } } ?: specs
+            val loaded = wanted.map { spec -> HomeRow(spec.id, spec.title, spec.load(id), spec.wide) }
                 .filter { it.cards.isNotEmpty() }
             // "Live now" is there for a viewer with no favourites yet; once they have some, the favourites row says it better.
             if (loaded.any { it.id == HomeTags.CHANNELS }) loaded.filterNot { it.id == HomeTags.LIVE } else loaded

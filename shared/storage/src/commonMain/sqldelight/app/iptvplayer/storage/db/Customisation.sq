@@ -116,3 +116,19 @@ LEFT JOIN favorite f ON f.content_type = 'CHANNEL' AND f.content_id = c.id
 WHERE m.playlist_id = :playlistId AND m.group_id = :groupId AND m.content_type = 'CHANNEL'
     AND c.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'CHANNEL')
 ORDER BY m.sort_order;
+
+-- Small settings that belong to the app rather than to a source: which Home rows the viewer wants, and in what order.
+-- Deliberately a key and a value: these are preferences, not content, and there will not be many of them.
+CREATE TABLE app_setting (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+setSetting:
+INSERT OR REPLACE INTO app_setting(key, value) VALUES (?, ?);
+
+setting:
+SELECT value FROM app_setting WHERE key = :key;
+
+clearSetting:
+DELETE FROM app_setting WHERE key = :key;

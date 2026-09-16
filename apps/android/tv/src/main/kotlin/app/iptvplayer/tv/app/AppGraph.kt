@@ -207,6 +207,19 @@ class AppGraph(context: Context) {
 
     suspend fun hidden(playlistId: PlaylistId, target: CustomisationTarget): List<String> = io { content.hidden(playlistId, target) }
 
+    /**
+     * Which rows Home shows, in order (PRODUCT_DIRECTIVE.md §3). Null until the viewer chooses, which leaves Home to
+     * decide for itself from what the source holds; an empty list is a real choice — a Home with only the greeting.
+     */
+    suspend fun homeRows(): List<String>? = io {
+        content.preference(HOME_ROWS)?.split(",")?.filter { it.isNotBlank() }
+    }
+
+    suspend fun setHomeRows(rows: List<String>?) {
+        io { content.setPreference(HOME_ROWS, rows?.joinToString(",")) }
+        changed()
+    }
+
     /** The viewer's own groups: making one, filling it, and what is in it (FR-PLM-001, FR-FAV-002). */
     suspend fun createGroup(playlistId: PlaylistId, title: String): String? {
         val id = "ugrp_" + SystemClock.now().toEpochMilliseconds().toString(RADIX)
@@ -541,3 +554,6 @@ private const val GUIDE_BATCH = 500
 
 /** Base for the id a new group gets from the clock: short, and unique enough for one viewer making groups by hand. */
 private const val RADIX = 36
+
+/** Preference key for the Home row choice. */
+private const val HOME_ROWS = "home.rows"

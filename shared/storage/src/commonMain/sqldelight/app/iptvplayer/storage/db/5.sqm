@@ -1,0 +1,5 @@
+-- Migration 5 -> 6: app settings (Customisation.sq). A new table; nothing imported is touched.
+CREATE TABLE app_setting (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);

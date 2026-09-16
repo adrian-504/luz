@@ -339,6 +339,16 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
         customisationQueries.labelsOf(playlistId.value, type.name).executeAsList().associate { it.content_id to it.label }
 
     /**
+     * A small app-wide preference, such as which Home rows the viewer wants and in what order. Null means they have not
+     * chosen — which is not the same as choosing nothing.
+     */
+    public fun preference(key: String): String? = customisationQueries.setting(key).executeAsOneOrNull()
+
+    public fun setPreference(key: String, value: String?) {
+        if (value == null) customisationQueries.clearSetting(key) else customisationQueries.setSetting(key, value)
+    }
+
+    /**
      * The viewer's own groups (FR-PLM-001, FR-FAV-002): a name and the content they put in it. Members are stable
      * content ids, so a refresh — which replaces every imported row — leaves the groups intact; deleting the source
      * removes them, and nothing else does.

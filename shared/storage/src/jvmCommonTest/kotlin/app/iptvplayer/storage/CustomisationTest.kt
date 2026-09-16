@@ -163,6 +163,17 @@ class CustomisationTest {
     }
 
     @Test
+    fun aPreferenceIsRememberedAndCanBeUnset() {
+        assertEquals(null, content.preference("home.rows"), "no choice is different from an empty choice")
+        content.setPreference("home.rows", "continue,movies")
+        assertEquals("continue,movies", content.preference("home.rows"))
+        content.setPreference("home.rows", "")
+        assertEquals("", content.preference("home.rows"), "an empty choice is a choice")
+        content.setPreference("home.rows", null)
+        assertEquals(null, content.preference("home.rows"))
+    }
+
+    @Test
     fun choicesSurviveARefreshAndLeaveWithTheSource() {
         addSource()
         import()

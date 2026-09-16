@@ -244,4 +244,12 @@
     <string name="menu_new_group">New group…</string>
     <string name="menu_rename_group">Rename this group</string>
     <string name="menu_delete_group">Delete this group</string>
+    <string name="settings_home">Home</string>
+    <string name="settings_home_summary">Which rows Home shows</string>
+    <string name="settings_home_help">OK turns a row on or off. Hold OK to move it.</string>
+    <string name="home_row_shown">Shown</string>
+    <string name="home_row_hidden">Hidden</string>
+    <string name="home_row_up">Move up</string>
+    <string name="home_row_down">Move down</string>
+    <string name="home_row_default">Use the default order</string>
 </resources>
