@@ -16,6 +16,7 @@ import app.iptvplayer.tv.ui.live.LiveTags
 import app.iptvplayer.tv.ui.onboarding.FormTags
 import app.iptvplayer.tv.ui.onboarding.OnboardingTags
 import app.iptvplayer.tv.ui.onboarding.SourceType
+import app.iptvplayer.tv.ui.settings.SettingsTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
 import org.junit.Assert.assertFalse
@@ -44,6 +45,9 @@ class RemoteNavigationTest {
         }
     }
 
+    private fun focusedTag() = rule.onAllNodes(isFocused()).fetchSemanticsNodes()
+        .firstNotNullOfOrNull { it.config.getOrNull(SemanticsProperties.TestTag) }
+
     private fun awaitFocus(tag: String) {
         val focused = runCatching {
             rule.waitUntil(timeoutMillis = 5_000) { runCatching { rule.onNodeWithTag(tag).assertIsFocused() }.isSuccess }
@@ -59,7 +63,8 @@ class RemoteNavigationTest {
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
         awaitFocus(OnboardingTags.EXPLORE)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitFocus(ShellTags.item(Section.HOME, 0))
+        // With no sources, Home is its welcome: one action, which is also where focus lands.
+        awaitFocus(ShellTags.ADD_SOURCE)
     }
 
     @Test
@@ -106,22 +111,26 @@ class RemoteNavigationTest {
     }
 
     @Test
-    fun contentToRailLandsOnSelectedSectionAndRowFocusIsRestored() {
+    fun contentToRailLandsOnSelectedSectionAndFocusIsRestored() {
+        // Settings has a list to move around in without any source configured.
         enterMainShell()
-        press(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_RIGHT)
-        awaitFocus(ShellTags.item(Section.HOME, 2))
-
-        // Back jumps straight to the rail; Right returns to the card that had focus.
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.HOME))
-        press(KeyEvent.KEYCODE_DPAD_RIGHT)
-        awaitFocus(ShellTags.item(Section.HOME, 2))
+        repeat(Section.SETTINGS.ordinal) { press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitFocus(ShellTags.rail(Section.SETTINGS))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(SettingsTags.entry(SettingsTags.PROVIDERS))
 
-        // Walking left leaves the row from its first card, so that card is the one restored.
-        press(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_LEFT)
-        awaitFocus(ShellTags.rail(Section.HOME))
+        // Move off the entry the section opens on. The shell hands focus over a moment after the screen appears, so the
+        // press is repeated until it lands rather than assumed.
+        repeat(3) { if (focusedTag() != SettingsTags.ADD_SOURCE) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        awaitFocus(SettingsTags.ADD_SOURCE)
+
+        // Back jumps straight to the rail; Right returns to what had focus, not to the start of the screen.
+        press(KeyEvent.KEYCODE_BACK)
+        awaitFocus(ShellTags.rail(Section.SETTINGS))
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
-        awaitFocus(ShellTags.item(Section.HOME, 0))
+        awaitFocus(SettingsTags.ADD_SOURCE)
     }
 
     @Test
@@ -136,31 +145,19 @@ class RemoteNavigationTest {
             }
             press(KeyEvent.KEYCODE_DPAD_CENTER)
             // Without sources, Live TV, Favorites, the Guide, Movies and Series offer "Add a source"; Playlists lists no sources yet.
-            val singleAction = when (section) {
+            // Without sources every section offers one way forward — add a provider — except Settings, which has its list.
+            val entry = when (section) {
                 Section.LIVE_TV -> LiveTags.emptyAddSource(favorites = false)
                 Section.FAVORITES -> LiveTags.emptyAddSource(favorites = true)
                 Section.GUIDE -> GuideTags.ADD_SOURCE
                 Section.MOVIES, Section.SERIES -> LibraryTags.ADD_SOURCE
                 Section.SEARCH -> SearchTags.ADD_SOURCE
-                Section.PLAYLISTS -> ShellTags.ADD_SOURCE
-                else -> null
+                Section.HOME -> ShellTags.ADD_SOURCE
+                Section.SETTINGS -> SettingsTags.entry(SettingsTags.PROVIDERS)
             }
-            if (singleAction != null) {
-                awaitFocus(singleAction)
-                press(KeyEvent.KEYCODE_DPAD_LEFT)
-                awaitFocus(ShellTags.rail(section))
-                continue
-            }
-            if (section == Section.SETTINGS) {
-                // Debug builds list developer test streams first in Settings.
-                awaitFocus(ShellTags.developerStream("hls-live"))
-                press(KeyEvent.KEYCODE_DPAD_DOWN)
-            }
-            awaitFocus(ShellTags.item(section, 0))
-            press(KeyEvent.KEYCODE_DPAD_RIGHT)
-            awaitFocus(ShellTags.item(section, 1))
+            awaitFocus(entry)
             // No trap: the rail is always reachable from content, and returns to the selected section.
-            press(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_LEFT)
+            press(KeyEvent.KEYCODE_DPAD_LEFT)
             awaitFocus(ShellTags.rail(section))
         }
     }
@@ -177,7 +174,7 @@ class RemoteNavigationTest {
         awaitFocus(ShellTags.rail(Section.GUIDE))
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.HOME))
-        rule.onNodeWithTag(ShellTags.item(Section.HOME, 0)).assertExists()
+        rule.onNodeWithTag(ShellTags.ADD_SOURCE).assertExists()
 
         // On Home with focus in the rail nothing intercepts Back, so the system returns to the TV launcher.
         // The final Back is not sent: leaving the activity would end the test before assertions.
@@ -187,17 +184,20 @@ class RemoteNavigationTest {
     }
 
     @Test
-    fun addSourceFromPlaylistsReturnsToTheSameButton() {
+    fun addSourceFromSettingsReturnsToTheSameButton() {
         enterMainShell()
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.HOME))
-        repeat(Section.PLAYLISTS.ordinal) { press(KeyEvent.KEYCODE_DPAD_DOWN) }
-        awaitFocus(ShellTags.rail(Section.PLAYLISTS))
+        repeat(Section.SETTINGS.ordinal) { press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitFocus(ShellTags.rail(Section.SETTINGS))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitFocus(ShellTags.ADD_SOURCE)
+        awaitFocus(SettingsTags.entry(SettingsTags.PROVIDERS))
+        repeat(3) { if (focusedTag() != SettingsTags.ADD_SOURCE) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        awaitFocus(SettingsTags.ADD_SOURCE)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(OnboardingTags.sourceType(SourceType.XTREAM))
         press(KeyEvent.KEYCODE_BACK)
-        awaitFocus(ShellTags.ADD_SOURCE)
+        // Back from adding a source returns to the button it was started from.
+        awaitFocus(SettingsTags.ADD_SOURCE)
     }
 }

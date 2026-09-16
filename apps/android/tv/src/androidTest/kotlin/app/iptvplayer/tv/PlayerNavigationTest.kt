@@ -12,6 +12,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.iptvplayer.tv.ui.onboarding.OnboardingTags
 import app.iptvplayer.tv.ui.player.PlayerTags
+import app.iptvplayer.tv.ui.settings.SettingsTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
 import org.junit.Rule
@@ -57,15 +58,20 @@ class PlayerNavigationTest {
     private fun openDeveloperStream(id: String) {
         awaitFocus(OnboardingTags.ADD_SOURCE)
         press(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitFocus(ShellTags.item(Section.HOME, 0))
+        awaitFocus(ShellTags.ADD_SOURCE)
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.HOME))
         repeat(Section.SETTINGS.ordinal) { press(KeyEvent.KEYCODE_DPAD_DOWN) }
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitFocus(ShellTags.developerStream("hls-live"))
+        // Settings: pick the developer section, then its streams.
+        awaitFocus(SettingsTags.entry(SettingsTags.PROVIDERS))
+        repeat(3) { if (focusedTag() != SettingsTags.entry(SettingsTags.DEVELOPER)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitFocus(SettingsTags.entry(SettingsTags.DEVELOPER))
+        press(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_DPAD_RIGHT)
+        awaitFocus(SettingsTags.developerStream("hls-live"))
         val order = listOf("hls-live", "ts-live", "hls-vod", "mp4-vod", "not-found", "unsupported", "tracks")
         repeat(order.indexOf(id)) { press(KeyEvent.KEYCODE_DPAD_RIGHT) }
-        awaitFocus(ShellTags.developerStream(id))
+        awaitFocus(SettingsTags.developerStream(id))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
     }
 
@@ -102,7 +108,7 @@ class PlayerNavigationTest {
         press(KeyEvent.KEYCODE_BACK)
         awaitGone(PlayerTags.OVERLAY)
         press(KeyEvent.KEYCODE_BACK)
-        awaitFocus(ShellTags.developerStream("hls-vod"))
+        awaitFocus(SettingsTags.developerStream("hls-vod"))
     }
 
     private fun focusedTag(): String? = focusedTags().singleOrNull()
@@ -161,7 +167,7 @@ class PlayerNavigationTest {
         press(KeyEvent.KEYCODE_BACK)
         awaitGone(PlayerTags.OVERLAY)
         press(KeyEvent.KEYCODE_BACK)
-        awaitFocus(ShellTags.developerStream("tracks"))
+        awaitFocus(SettingsTags.developerStream("tracks"))
     }
 
     @Test
@@ -172,6 +178,6 @@ class PlayerNavigationTest {
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(PlayerTags.RETRY)
         press(KeyEvent.KEYCODE_BACK)
-        awaitFocus(ShellTags.developerStream("not-found"))
+        awaitFocus(SettingsTags.developerStream("not-found"))
     }
 }

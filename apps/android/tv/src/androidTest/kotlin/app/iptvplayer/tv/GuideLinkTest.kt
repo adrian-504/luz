@@ -19,6 +19,7 @@ import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.tv.app.IptvApplication
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.onboarding.FormTags
+import app.iptvplayer.tv.ui.settings.SettingsTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
 import app.iptvplayer.tv.ui.sources.SourcesTags
@@ -69,15 +70,17 @@ class GuideLinkTest {
     }
 
     @Test
-    fun guideLinkIsSavedFromPlaylistsAndTheGuideDownloadsFromIt() {
+    fun guideLinkIsSavedFromSettingsAndTheGuideDownloadsFromIt() {
         val playlist = runBlocking { graph.sources().single().playlistId }
         rule.waitUntil(20_000) { focusedTag()?.startsWith("live-") == true }
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.LIVE_TV))
-        repeat(Section.entries.size) { if (focusedTag() != ShellTags.rail(Section.PLAYLISTS)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
-        awaitFocus(ShellTags.rail(Section.PLAYLISTS))
+        repeat(Section.entries.size) { if (focusedTag() != ShellTags.rail(Section.SETTINGS)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitFocus(ShellTags.rail(Section.SETTINGS))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitFocus(ShellTags.ADD_SOURCE)
+        awaitFocus(SettingsTags.entry(SettingsTags.PROVIDERS))
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        awaitFocus(SettingsTags.ADD_SOURCE)
         repeat(6) { if (focusedTag() != SourcesTags.guideLink(playlist)) press(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT) }
         awaitFocus(SourcesTags.guideLink(playlist))
         press(KeyEvent.KEYCODE_DPAD_CENTER)

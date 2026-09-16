@@ -77,7 +77,8 @@ import app.iptvplayer.tv.ui.live.LiveTags
 import app.iptvplayer.tv.ui.live.LiveTvSection
 import app.iptvplayer.tv.ui.rememberFocusMemory
 import app.iptvplayer.tv.ui.rememberedFocus
-import app.iptvplayer.tv.ui.sources.SourcesList
+import app.iptvplayer.tv.ui.settings.SettingsSection
+import app.iptvplayer.tv.ui.settings.SettingsTags
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -91,20 +92,13 @@ enum class Section(@param:StringRes val title: Int, val icon: ImageVector, val p
     SERIES(R.string.section_series, Icons.Filled.Menu, 8),
     FAVORITES(R.string.section_favorites, Icons.Filled.Favorite, 7),
     SEARCH(R.string.section_search, Icons.Filled.Search, 8),
-    PLAYLISTS(R.string.section_playlists, Icons.Filled.AddCircle, null),
     SETTINGS(R.string.section_settings, Icons.Filled.Settings, null),
 }
 
 object ShellTags {
-    const val ADD_SOURCE = "playlists-add-source"
-    const val TEST_PROVIDER = "developer-add-test-provider"
-    const val PLACEHOLDER_ITEMS = 6
+    const val ADD_SOURCE = "home-add-source"
 
     fun rail(section: Section) = "rail-${section.name}"
-
-    fun item(section: Section, index: Int) = "item-${section.name}-$index"
-
-    fun developerStream(id: String) = "developer-stream-$id"
 }
 
 /**
@@ -183,7 +177,7 @@ fun MainShell(
                     onOpenSeries = onOpenSeries,
                     onPlayContent = onPlayContent,
                     onFirstKey = { homeFirstKey = it },
-                ) { SectionContent(selected, focus, onAddSource, onPlayDeveloperStream, onSourceAdded, onEditGuideLink) }
+                ) { NoSourceYet(focus, onAddSource) }
                 Section.SEARCH -> SearchSection(
                     focus,
                     onPlayChannel = onPlayChannel,
@@ -191,9 +185,9 @@ fun MainShell(
                     onOpenSeries = onOpenSeries,
                     onAddSource = onAddSource,
                 )
+                Section.SETTINGS -> SettingsSection(focus, onAddSource, onEditGuideLink, onPlayDeveloperStream, onSourceAdded)
                 Section.MOVIES -> LibrarySection(focus, ImportUnit.MOVIES, onOpen = onOpenMovie, onAddSource = onAddSource)
                 Section.SERIES -> LibrarySection(focus, ImportUnit.SERIES, onOpen = onOpenSeries, onAddSource = onAddSource)
-                else -> SectionContent(selected, focus, onAddSource, onPlayDeveloperStream, onSourceAdded, onEditGuideLink)
             }
         }
     }
@@ -201,16 +195,12 @@ fun MainShell(
     LaunchedEffect(contentFocusRequests) {
         if (contentFocusRequests > 0) {
             val candidates = when (selected) {
-                Section.PLAYLISTS -> listOf(ShellTags.ADD_SOURCE)
-                Section.SETTINGS -> listOfNotNull(
-                    developerStreams.firstOrNull()?.let { ShellTags.developerStream(it.id) },
-                    ShellTags.item(selected, 0),
-                )
+                Section.SETTINGS -> listOf(SettingsTags.entry(SettingsTags.PROVIDERS), SettingsTags.ADD_SOURCE)
                 Section.LIVE_TV -> listOf(LiveTags.GROUP_ALL, LiveTags.emptyAddSource(favorites = false))
                 Section.FAVORITES -> listOf(LiveTags.emptyAddSource(favorites = true))
                 Section.GUIDE -> listOf(GuideTags.FIRST_CELL, GuideTags.ADD_SOURCE)
                 Section.MOVIES, Section.SERIES -> listOf(LibraryTags.CATEGORY_ALL, LibraryTags.ADD_SOURCE)
-                Section.HOME -> listOfNotNull(homeFirstKey, ShellTags.item(selected, 0))
+                Section.HOME -> listOfNotNull(homeFirstKey, ShellTags.ADD_SOURCE)
                 Section.SEARCH -> listOf(SearchTags.FIELD, SearchTags.ADD_SOURCE)
             }
             // Data-driven sections load asynchronously: wait briefly for their first element, then enter geometrically.
@@ -229,77 +219,15 @@ fun MainShell(
 }
 
 @Composable
-private fun SectionContent(
-    section: Section,
-    focus: FocusMemory,
-    onAddSource: () -> Unit,
-    onPlayDeveloperStream: (String) -> Unit,
-    onSourceAdded: () -> Unit,
-    onEditGuideLink: (PlaylistId) -> Unit,
-) {
-    val body = section.phase?.let { stringResource(R.string.section_placeholder, it) } ?: stringResource(R.string.section_placeholder_later)
-    // Playlists is a real screen since Phase 7; the placeholder line only belongs to sections still to come.
-    PlaceholderPage(title = stringResource(section.title), body = if (section == Section.PLAYLISTS) null else body) {
-        if (section == Section.PLAYLISTS) {
-            ActionButton(
-                stringResource(R.string.playlists_add_source),
-                onAddSource,
-                Modifier.rememberedFocus(focus, ShellTags.ADD_SOURCE),
-                primary = true,
-            )
-            SourcesList(focus, onEditGuideLink)
-            return@PlaceholderPage
-        }
-        if (section == Section.SETTINGS) {
-            DeveloperStreamRow(focus, onPlayDeveloperStream, onSourceAdded)
-        }
-        // Returning to the row with Right restores the card that last had focus.
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(Tokens.space6),
-            // Horizontal padding leaves room for the focus scale; the offset keeps cards aligned with the title.
-            contentPadding = PaddingValues(horizontal = Tokens.space4, vertical = Tokens.space4),
-            modifier = Modifier.padding(top = Tokens.space2).offset(x = -Tokens.space4).focusRestorer(),
-        ) {
-            items(count = ShellTags.PLACEHOLDER_ITEMS, key = { ShellTags.item(section, it) }) { index ->
-                PlaceholderCard(
-                    label = stringResource(R.string.placeholder_item, index + 1),
-                    modifier = Modifier.rememberedFocus(focus, ShellTags.item(section, index)),
-                )
-            }
-        }
-    }
-}
-
-/** Debug builds only: synthetic test streams for trying the player with the remote (empty in release builds). */
-@Composable
-private fun DeveloperStreamRow(focus: FocusMemory, onPlay: (String) -> Unit, onSourceAdded: () -> Unit) {
-    val context = LocalContext.current
-    val graph = LocalAppGraph.current
-    val scope = rememberCoroutineScope()
-    val streams = remember { DeveloperStreams.list(context) }
-    if (streams.isEmpty()) return
-    val testProvider = remember { DeveloperStreams.testProvider(context) }
-    Text(stringResource(R.string.developer_streams_title), style = MaterialTheme.typography.titleLarge, color = Tokens.textPrimary)
-    Text(stringResource(R.string.developer_streams_body), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary)
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), contentPadding = PaddingValues(vertical = Tokens.space2)) {
-        items(count = streams.size, key = { streams[it].id }) { index ->
-            val stream = streams[index]
-            ActionButton(stream.label, { onPlay(stream.id) }, Modifier.rememberedFocus(focus, ShellTags.developerStream(stream.id)))
-        }
-        if (testProvider != null) {
-            item(key = "test-provider") {
-                ActionButton(
-                    stringResource(R.string.developer_add_test_provider),
-                    {
-                        scope.launch {
-                            val (server, username, password) = testProvider
-                            if (graph.addXtream("Test provider", server, username, password) is AddSourceResult.Added) onSourceAdded()
-                        }
-                    },
-                    Modifier.rememberedFocus(focus, ShellTags.TEST_PROVIDER),
-                )
-            }
-        }
+private fun NoSourceYet(focus: FocusMemory, onAddSource: () -> Unit) {
+    // Home before there is anything to show (PRODUCT_DIRECTIVE.md §3): the welcome, and the one thing worth doing.
+    PlaceholderPage(title = stringResource(R.string.home_empty_title), body = stringResource(R.string.home_empty_body)) {
+        ActionButton(
+            stringResource(R.string.playlists_add_source),
+            onAddSource,
+            Modifier.rememberedFocus(focus, ShellTags.ADD_SOURCE),
+            primary = true,
+        )
     }
 }
 

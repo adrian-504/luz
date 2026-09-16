@@ -5,6 +5,9 @@ plugins {
 android {
     namespace = "app.iptvplayer.tv"
 
+    // The About screen shows the version the viewer is running.
+    buildFeatures { buildConfig = true }
+
     defaultConfig {
         applicationId = "app.iptvplayer.tv"
         versionCode = 1

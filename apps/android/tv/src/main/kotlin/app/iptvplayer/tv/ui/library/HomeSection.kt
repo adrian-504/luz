@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -36,19 +37,23 @@ import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.tv.R
+import app.iptvplayer.tv.app.AppGraph
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.live.ChannelScope
 import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.theme.Tokens
+import kotlin.time.Clock
 
 object HomeTags {
     fun item(row: String, id: String) = "home-$row-$id"
 
     const val CONTINUE = "continue"
     const val CHANNELS = "channels"
+    const val LIVE = "live"
     const val MOVIES = "movies"
     const val SERIES = "series"
+    const val GREETING = "home-greeting"
 }
 
 /** A card on a Home row. */
@@ -62,6 +67,12 @@ private data class HomeCard(
 )
 
 private data class HomeRow(val id: String, val title: Int, val cards: List<HomeCard>, val wide: Boolean = false)
+
+/**
+ * What a Home row is made of, before it is loaded. The rows are described rather than written out one after another so
+ * that the order — and later the viewer's own choice of which rows to show (PRODUCT_DIRECTIVE.md §3) — is data.
+ */
+private data class HomeRowSpec(val id: String, val title: Int, val wide: Boolean = false, val load: suspend (PlaylistId) -> List<HomeCard>)
 
 /**
  * Home (FR-HOME-001, Android subset for Phase 8): Continue watching, favorite channels, recently added movies and series of the
@@ -88,42 +99,37 @@ fun HomeSection(
         val source = graph.currentSource()
         playlist = source?.playlistId
         val id = source?.playlistId
+        val specs = listOf(
+            HomeRowSpec(HomeTags.CONTINUE, R.string.home_continue) { p ->
+                graph.continueCards(p, ROW_LIMIT).map { card ->
+                    HomeCard(card.id, card.title, card.subtitle, card.poster, card.fraction) { onPlayContent(p, card.type, card.id) }
+                }
+            },
+            // Favourites first, with what is on them now; a viewer with no favourites yet still gets their channels.
+            HomeRowSpec(HomeTags.CHANNELS, R.string.home_favorite_channels, wide = true) { p ->
+                channelCards(graph, p, favorites = true, onPlay = onPlayChannel)
+            },
+            HomeRowSpec(HomeTags.LIVE, R.string.home_live_now, wide = true) { p ->
+                channelCards(graph, p, favorites = false, onPlay = onPlayChannel)
+            },
+            HomeRowSpec(HomeTags.MOVIES, R.string.home_recent_movies) { p ->
+                graph.recentMovies(p, ROW_LIMIT).map { movie ->
+                    HomeCard(movie.id, movie.title, movie.year?.toString(), movie.poster, null) { onOpenMovie(p, movie.id) }
+                }
+            },
+            HomeRowSpec(HomeTags.SERIES, R.string.home_series) { p ->
+                graph.series(p, null, ROW_LIMIT, 0).map { series ->
+                    HomeCard(series.id, series.title, series.year?.toString(), series.poster, null) { onOpenSeries(p, series.id) }
+                }
+            },
+        )
         rows = if (id == null) {
             emptyList()
         } else {
-            listOf(
-                HomeRow(
-                    HomeTags.CONTINUE,
-                    R.string.home_continue,
-                    graph.continueCards(id, 20).map { card ->
-                        HomeCard(card.id, card.title, card.subtitle, card.poster, card.fraction) { onPlayContent(id, card.type, card.id) }
-                    },
-                ),
-                HomeRow(
-                    HomeTags.CHANNELS,
-                    R.string.home_favorite_channels,
-                    graph.favoriteChannels(id).take(20).map { channel ->
-                        HomeCard(channel.id.value, channel.name, channel.number?.toString(), channel.logo, null) {
-                            onPlayChannel(id, ChannelScope.Favorites, channel.id)
-                        }
-                    },
-                    wide = true,
-                ),
-                HomeRow(
-                    HomeTags.MOVIES,
-                    R.string.home_recent_movies,
-                    graph.recentMovies(id, 20).map { movie ->
-                        HomeCard(movie.id, movie.title, movie.year?.toString(), movie.poster, null) { onOpenMovie(id, movie.id) }
-                    },
-                ),
-                HomeRow(
-                    HomeTags.SERIES,
-                    R.string.home_series,
-                    graph.series(id, null, 20, 0).map { series ->
-                        HomeCard(series.id, series.title, series.year?.toString(), series.poster, null) { onOpenSeries(id, series.id) }
-                    },
-                ),
-            ).filter { it.cards.isNotEmpty() }
+            val loaded = specs.map { spec -> HomeRow(spec.id, spec.title, spec.load(id), spec.wide) }
+                .filter { it.cards.isNotEmpty() }
+            // "Live now" is there for a viewer with no favourites yet; once they have some, the favourites row says it better.
+            if (loaded.any { it.id == HomeTags.CHANNELS }) loaded.filterNot { it.id == HomeTags.LIVE } else loaded
         }
         onFirstKey(rows?.firstOrNull()?.let { HomeTags.item(it.id, it.cards.first().key) })
     }
@@ -138,6 +144,14 @@ fun HomeSection(
         modifier = Modifier.fillMaxSize().padding(start = Tokens.space8, top = Tokens.safeVertical, bottom = Tokens.safeVertical),
         verticalArrangement = Arrangement.spacedBy(Tokens.space6),
     ) {
+        item(key = HomeTags.GREETING) {
+            Text(
+                greeting(),
+                style = MaterialTheme.typography.headlineMedium,
+                color = Tokens.textPrimary,
+                modifier = Modifier.testTag(HomeTags.GREETING),
+            )
+        }
         items(shown.size, key = { shown[it].id }) { index ->
             val row = shown[index]
             Column {
@@ -175,7 +189,8 @@ private fun HomeCardView(card: HomeCard, resolver: ((UrlTemplate) -> String?)?, 
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
         ) {
             Box(Modifier.fillMaxSize()) {
-                ArtworkImage(card.poster, resolver, card.title, Modifier.fillMaxSize())
+                // The name is written under the card already, so an image-less card stays quiet rather than repeating it.
+                ArtworkImage(card.poster, resolver, null, Modifier.fillMaxSize())
                 WatchedBar(card.fraction, Modifier.align(Alignment.BottomStart))
             }
         }
@@ -189,3 +204,41 @@ private fun HomeCardView(card: HomeCard, resolver: ((UrlTemplate) -> String?)?, 
         card.caption?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Tokens.textTertiary, maxLines = 1) }
     }
 }
+
+/** Channel cards with what is on now underneath: the viewer's favourites, or the first channels if they have none yet. */
+private suspend fun channelCards(
+    graph: AppGraph,
+    playlist: PlaylistId,
+    favorites: Boolean,
+    onPlay: (PlaylistId, ChannelScope, ChannelId) -> Unit,
+): List<HomeCard> {
+    val channels = if (favorites) {
+        graph.favoriteChannels(playlist).take(ROW_LIMIT)
+    } else {
+        graph.channels(playlist, null).take(ROW_LIMIT)
+    }
+    if (channels.isEmpty()) return emptyList()
+    val scope = if (favorites) ChannelScope.Favorites else ChannelScope.All
+    val guide = graph.storedNowNext(playlist, channels, Clock.System.now())
+    return channels.map { channel ->
+        HomeCard(
+            channel.id.value,
+            channel.name,
+            guide[channel.id.value]?.current?.title ?: channel.number?.toString(),
+            channel.logo,
+            null,
+        ) { onPlay(playlist, scope, channel.id) }
+    }
+}
+
+private const val ROW_LIMIT = 20
+
+/** "Good evening" and its neighbours, by the TV's own clock (PRODUCT_DIRECTIVE.md §3). */
+@Composable
+private fun greeting(): String = stringResource(
+    when (java.time.LocalTime.now().hour) {
+        in 5..11 -> R.string.home_greeting_morning
+        in 12..17 -> R.string.home_greeting_afternoon
+        else -> R.string.home_greeting_evening
+    },
+)

@@ -119,6 +119,16 @@ a panel with the colour pushed flat.
 
 Minimum hit target 44 × 44 pt (iOS) / 48 × 48 dp (Android). Swipe gestures always have a visible alternative.
 
+### 3.8 Components
+
+- `LuzRow` — one row of a list (a channel, a category, a settings entry). Focus is drawn, not recomposed: the ring and
+  the raised background are painted from the focus state, and a full-width row does not scale (ADR-0031). A long press
+  on a remote arrives as key repeats, which the row translates into the secondary action.
+- `LuzMenu` — the panel behind a long press (ADR-0032). It belongs to the screen, not to the list that raised it, so it
+  dims everything behind; Back closes it and focus returns to the row it came from.
+- `ActionButton` — `primary = true` marks the single action a screen steers towards, which fills with the accent when
+  focused. Every other control lifts and takes the ring.
+
 ## 4. Screen state contract (§10.3)
 
 Every screen specification (written at the start of its phase) must define:

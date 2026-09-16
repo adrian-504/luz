@@ -39,14 +39,17 @@ fun rememberArtworkResolver(playlistId: PlaylistId?): ((UrlTemplate) -> String?)
 }
 
 /**
- * Artwork with a designed fallback (DOMAIN_MODEL.md Artwork): the title on a neutral card, covered by the image once it loads.
+ * Artwork with a designed fallback (DOMAIN_MODEL.md Artwork): the title on a neutral card, covered by the image once it
+ * loads. Pass a null [fallbackTitle] where the name is already written beside the image — a channel card on Home, for
+ * instance — so the same words are not printed twice.
+ *
  * Cache keys are the stored template, so no URL carrying a login is ever used as a cache key.
  */
 @Composable
 fun ArtworkImage(
     template: UrlTemplate?,
     resolver: ((UrlTemplate) -> String?)?,
-    fallbackTitle: String,
+    fallbackTitle: String?,
     modifier: Modifier = Modifier,
     widthPx: Int = 300,
     heightPx: Int = 450,
@@ -54,15 +57,17 @@ fun ArtworkImage(
     val context = LocalContext.current
     val url = remember(template, resolver) { template?.let { resolver?.invoke(it) } }
     Box(modifier = modifier.clip(RoundedCornerShape(Tokens.radiusSmall)).background(Tokens.bgSurface2)) {
-        Text(
-            fallbackTitle,
-            style = MaterialTheme.typography.titleSmall,
-            color = Tokens.textSecondary,
-            textAlign = TextAlign.Center,
-            maxLines = 4,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.align(Alignment.Center).padding(Tokens.space3),
-        )
+        if (fallbackTitle != null) {
+            Text(
+                fallbackTitle,
+                style = MaterialTheme.typography.titleSmall,
+                color = Tokens.textSecondary,
+                textAlign = TextAlign.Center,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.align(Alignment.Center).padding(Tokens.space3),
+            )
+        }
         if (url != null && template != null) {
             val request = remember(url) {
                 ImageRequest.Builder(context)
