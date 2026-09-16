@@ -218,4 +218,19 @@
     <string name="about_local">Everything Luz imports stays on this device. Your login is kept in the TV\'s secure storage and never leaves it except to reach your provider.</string>
     <string name="home_empty_title">Welcome to Luz</string>
     <string name="home_empty_body">Add your provider to get started. Luz will bring in your channels, films and series, and the TV guide if your provider offers one.</string>
+    <string name="prompt_save">Save</string>
+    <string name="prompt_use_original">Use the provider\'s name</string>
+    <string name="prompt_name_label">Name</string>
+    <string name="menu_hide_channel">Hide this channel</string>
+    <string name="menu_rename_category">Rename this category</string>
+    <string name="menu_hide_category">Hide this category</string>
+    <string name="settings_hidden">Hidden items</string>
+    <string name="hidden_empty">Nothing is hidden.</string>
+    <string name="hidden_show_again">Show again</string>
+    <string name="hidden_channel">Channel</string>
+    <string name="hidden_category">Category</string>
+    <plurals name="settings_hidden_summary">
+        <item quantity="one">%1$d item hidden — bring it back</item>
+        <item quantity="other">%1$d items hidden — bring them back</item>
+    </plurals>
 </resources>

@@ -5,6 +5,13 @@ import app.iptvplayer.domain.id.PlaylistId
 import kotlin.time.Duration
 import kotlin.time.Instant
 
+/**
+ * What a viewer can hide or rename (FR-PLM-001). Not the same set as playable content: a category is not something you
+ * watch, and the provider itself can be renamed. The provider's own names and rows are never changed — these choices sit
+ * beside them and can be undone.
+ */
+public enum class CustomisationTarget { CHANNEL, CHANNEL_GROUP, MOVIE, SERIES, PLAYLIST }
+
 /** User state is stored separately from imported content and is never deleted by imports. */
 public data class Favorite(
     public val id: FavoriteId,

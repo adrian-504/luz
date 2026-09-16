@@ -1,0 +1,17 @@
+-- Migration 3 -> 4: the viewer's own choices about imported content (Customisation.sq). New tables only; nothing that
+-- the provider imported is touched, so an install carries its channels, guide, watch state and favorites across.
+CREATE TABLE user_hidden (
+    playlist_id TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, content_type, content_id)
+);
+
+CREATE TABLE user_label (
+    playlist_id TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    PRIMARY KEY (playlist_id, content_type, content_id)
+);

@@ -1,0 +1,48 @@
+-- What the viewer has decided about the imported content: what to hide, and what to call things (FR-PLM-001).
+--
+-- Kept in its own tables, never written into the provider's rows: a refresh replaces every channel, group, film and
+-- series, and these choices survive it because they are keyed by the same stable ids that favorites and watch state use.
+-- Removing the source removes them; nothing else does.
+CREATE TABLE user_hidden (
+    playlist_id TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, content_type, content_id)
+);
+
+CREATE TABLE user_label (
+    playlist_id TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    PRIMARY KEY (playlist_id, content_type, content_id)
+);
+
+hide:
+INSERT OR REPLACE INTO user_hidden(playlist_id, content_type, content_id, created_at) VALUES (?, ?, ?, ?);
+
+unhide:
+DELETE FROM user_hidden WHERE playlist_id = :playlistId AND content_type = :contentType AND content_id = :contentId;
+
+hiddenOf:
+SELECT content_id FROM user_hidden
+WHERE playlist_id = :playlistId AND content_type = :contentType
+ORDER BY created_at;
+
+hiddenCount:
+SELECT COUNT(*) FROM user_hidden WHERE playlist_id = :playlistId;
+
+setLabel:
+INSERT OR REPLACE INTO user_label(playlist_id, content_type, content_id, label) VALUES (?, ?, ?, ?);
+
+clearLabel:
+DELETE FROM user_label WHERE playlist_id = :playlistId AND content_type = :contentType AND content_id = :contentId;
+
+labelsOf:
+SELECT content_id, label FROM user_label WHERE playlist_id = :playlistId AND content_type = :contentType;
+
+deleteCustomisation {
+    DELETE FROM user_hidden WHERE playlist_id = :playlistId;
+    DELETE FROM user_label WHERE playlist_id = :playlistId;
+}

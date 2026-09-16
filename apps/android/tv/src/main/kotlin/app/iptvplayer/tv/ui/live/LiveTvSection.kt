@@ -40,6 +40,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.model.CustomisationTarget
 import app.iptvplayer.storage.ChannelRow
 import app.iptvplayer.storage.GroupRow
 import app.iptvplayer.storage.NowNextRow
@@ -52,6 +53,7 @@ import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.theme.LuzMenu
 import app.iptvplayer.tv.ui.theme.LuzMenuItem
+import app.iptvplayer.tv.ui.theme.LuzPrompt
 import app.iptvplayer.tv.ui.theme.LuzRow
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
@@ -124,6 +126,8 @@ fun LiveTvSection(
     // A channel's menu and its information panel belong to the screen, so they dim all of it, rail included.
     var menuFor by remember { mutableStateOf<Pair<ChannelRow, NowNextRow?>?>(null) }
     var infoFor by remember { mutableStateOf<Pair<ChannelRow, NowNextRow?>?>(null) }
+    var groupMenuFor by remember { mutableStateOf<GroupRow?>(null) }
+    var renaming by remember { mutableStateOf<GroupRow?>(null) }
 
     LaunchedEffect(revision) {
         val source = graph.currentSource()
@@ -203,6 +207,7 @@ fun LiveTvSection(
                             group.channelCount,
                             scope == ChannelScope.Group(group.id),
                             Modifier.rememberedFocus(focus, LiveTags.group(group.id)),
+                            onMenu = { groupMenuFor = group },
                         ) {
                             scopeKey = ChannelScope.Group(group.id).key()
                             handOverFocus = true
@@ -240,8 +245,38 @@ fun LiveTvSection(
                         stringResource(if (channel.isFavorite) R.string.menu_remove_favorite else R.string.menu_add_favorite),
                     ) { coroutines.launch { graph.setFavorite(channel.id, !channel.isFavorite) } },
                     LuzMenuItem("info", stringResource(R.string.menu_information)) { infoFor = channel to guide },
+                    LuzMenuItem("hide", stringResource(R.string.menu_hide_channel)) {
+                        coroutines.launch { graph.hide(current, CustomisationTarget.CHANNEL, channel.id.value) }
+                    },
                 ),
                 onDismiss = back,
+            )
+        }
+        groupMenuFor?.let { group ->
+            LuzMenu(
+                title = group.title,
+                items = listOf(
+                    LuzMenuItem("rename", stringResource(R.string.menu_rename_category)) { renaming = group },
+                    LuzMenuItem("hide-category", stringResource(R.string.menu_hide_category)) {
+                        coroutines.launch { graph.hide(current, CustomisationTarget.CHANNEL_GROUP, group.id) }
+                    },
+                ),
+                onDismiss = {
+                    groupMenuFor = null
+                    coroutines.launch { returnFocusTo(focus, LiveTags.group(group.id)) }
+                },
+            )
+        }
+        renaming?.let { group ->
+            LuzPrompt(
+                title = stringResource(R.string.menu_rename_category),
+                initial = group.title,
+                onConfirm = { coroutines.launch { graph.setLabel(current, CustomisationTarget.CHANNEL_GROUP, group.id, it) } },
+                onClear = { coroutines.launch { graph.setLabel(current, CustomisationTarget.CHANNEL_GROUP, group.id, "") } },
+                onDismiss = {
+                    renaming = null
+                    coroutines.launch { returnFocusTo(focus, LiveTags.group(group.id)) }
+                },
             )
         }
         infoFor?.let { (channel, guide) ->
@@ -274,10 +309,17 @@ private fun SourceSwitcher(name: String, modifier: Modifier, onSwitch: () -> Uni
 }
 
 @Composable
-private fun GroupItem(title: String, count: Long?, selected: Boolean, modifier: Modifier, onSelect: () -> Unit) {
+private fun GroupItem(
+    title: String,
+    count: Long?,
+    selected: Boolean,
+    modifier: Modifier,
+    onMenu: (() -> Unit)? = null,
+    onSelect: () -> Unit,
+) {
     // Moving through categories changes nothing: OK chooses one (ADR-0032). Loading a category's channels on every step
     // meant redrawing the whole screen while the viewer was still looking for the category they wanted.
-    LuzRow(onClick = onSelect, modifier = modifier, selected = selected) {
+    LuzRow(onClick = onSelect, modifier = modifier, selected = selected, onLongClick = onMenu) {
         Text(
             title,
             style = MaterialTheme.typography.labelLarge,

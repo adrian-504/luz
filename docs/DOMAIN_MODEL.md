@@ -347,3 +347,14 @@ bounded per import (first 1 000 kept + counts per code). Codes are stable (e.g.,
 
 Snapshot mechanism (per unit): rows carry `snapshot_version`; PUBLISH flips the unit's active version in one
 transaction and deletes the previous version afterwards. Readers filter on the active version.
+
+## User customisation (FR-PLM-001)
+
+`CustomisationTarget` names what a viewer can hide or rename: a channel, a channel group, a film, a series, or the
+source itself. Two tables hold the choices (`user_hidden`, `user_label`), keyed by playlist and the same stable content
+ids as favourites and watch state.
+
+They are deliberately not columns on the imported rows. An import replaces every channel, group, film and series it
+brings in; a choice stored beside that data would be lost with it. Storing them separately also keeps the provider's own
+names and lists intact and recoverable: hiding is a filter applied on the way out, and a rename is a label read in place
+of the title, so clearing it brings the provider's own name back.

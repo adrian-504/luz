@@ -8,6 +8,7 @@ import androidx.core.content.edit
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.model.ContentType
+import app.iptvplayer.domain.model.CustomisationTarget
 import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.domain.playback.PlaybackMode
@@ -188,6 +189,36 @@ class AppGraph(context: Context) {
         io { content.setFavorite(channelId, favorite) }
         changed()
     }
+
+    /**
+     * The viewer's own choices about this source (FR-PLM-001): hide something, bring it back, or give it another name.
+     * Each one changes what the screens show and nothing about what the provider sent, so a refresh keeps them and
+     * clearing a name brings the provider's own back.
+     */
+    suspend fun hide(playlistId: PlaylistId, target: CustomisationTarget, id: String) {
+        io { content.hide(playlistId, target, id) }
+        changed()
+    }
+
+    suspend fun unhide(playlistId: PlaylistId, target: CustomisationTarget, id: String) {
+        io { content.unhide(playlistId, target, id) }
+        changed()
+    }
+
+    suspend fun hidden(playlistId: PlaylistId, target: CustomisationTarget): List<String> = io { content.hidden(playlistId, target) }
+
+    suspend fun channelNames(playlistId: PlaylistId, ids: List<String>): Map<String, String> = io { content.channelNames(playlistId, ids) }
+
+    suspend fun groupNames(playlistId: PlaylistId, ids: List<String>): Map<String, String> = io { content.groupNames(playlistId, ids) }
+
+    suspend fun hiddenCount(playlistId: PlaylistId): Long = io { content.hiddenCount(playlistId) }
+
+    suspend fun setLabel(playlistId: PlaylistId, target: CustomisationTarget, id: String, label: String) {
+        io { content.setLabel(playlistId, target, id, label) }
+        changed()
+    }
+
+    suspend fun labels(playlistId: PlaylistId, target: CustomisationTarget): Map<String, String> = io { content.labels(playlistId, target) }
 
     suspend fun addXtream(name: String?, server: String, username: String, password: String): AddSourceResult =
         adding { service.addXtream(name, server, username, password) }

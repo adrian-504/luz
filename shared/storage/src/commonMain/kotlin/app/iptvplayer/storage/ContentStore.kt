@@ -12,6 +12,7 @@ import app.iptvplayer.domain.model.Channel
 import app.iptvplayer.domain.model.ChannelGroup
 import app.iptvplayer.domain.model.ContentRef
 import app.iptvplayer.domain.model.ContentType
+import app.iptvplayer.domain.model.CustomisationTarget
 import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.domain.model.MediaHeaders
@@ -75,6 +76,7 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
     private val queries = database.contentQueries
     internal val libraryQueries = database.libraryQueries
     internal val searchQueries = database.searchQueries
+    private val customisationQueries = database.customisationQueries
 
     /** Marks [snapshot] as the published content of [unit] (library units; live channels use their writer). */
     internal fun publishUnit(playlistId: PlaylistId, unit: ImportUnit, snapshot: Long, itemCount: Long) {
@@ -179,6 +181,7 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
             queries.deleteAllGroups(playlistId.value)
             libraryQueries.deleteLibrary(playlistId.value)
             searchQueries.deleteTitlesOfPlaylist(playlistId.value)
+            customisationQueries.deleteCustomisation(playlistId.value)
             queries.deletePlaylistRow(playlistId.value)
             queries.deleteProviderRow(providerId)
         }
@@ -298,6 +301,54 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
                 else -> 2
             }
         }.mapNotNull { it.content_id }.take(limit)
+    }
+
+    /**
+     * The viewer's own choices about this source (FR-PLM-001): what to hide, and what to call a category.
+     *
+     * They live in their own tables, keyed by the same stable ids as favorites, so a refresh — which replaces every
+     * imported row — leaves them untouched. Nothing here changes what the provider sent: hiding is a filter on the way
+     * out, and a rename is a label beside the original title, which is still there if the label is cleared.
+     */
+    public fun hide(playlistId: PlaylistId, type: CustomisationTarget, id: String) {
+        customisationQueries.hide(playlistId.value, type.name, id, clock.now().toEpochMilliseconds())
+    }
+
+    public fun unhide(playlistId: PlaylistId, type: CustomisationTarget, id: String) {
+        customisationQueries.unhide(playlistId.value, type.name, id)
+    }
+
+    /** The ids of [type] the viewer has hidden, oldest first. */
+    public fun hidden(playlistId: PlaylistId, type: CustomisationTarget): List<String> =
+        customisationQueries.hiddenOf(playlistId.value, type.name).executeAsList()
+
+    public fun hiddenCount(playlistId: PlaylistId): Long = customisationQueries.hiddenCount(playlistId.value).executeAsOne()
+
+    /** Renames one thing for this viewer. A blank [label] restores the provider's own name. */
+    public fun setLabel(playlistId: PlaylistId, type: CustomisationTarget, id: String, label: String) {
+        val trimmed = label.trim()
+        if (trimmed.isEmpty()) {
+            customisationQueries.clearLabel(playlistId.value, type.name, id)
+        } else {
+            customisationQueries.setLabel(playlistId.value, type.name, id, trimmed)
+        }
+    }
+
+    /** The viewer's names for [type], by content id. */
+    public fun labels(playlistId: PlaylistId, type: CustomisationTarget): Map<String, String> =
+        customisationQueries.labelsOf(playlistId.value, type.name).executeAsList().associate { it.content_id to it.label }
+
+    /** Names for [ids], including things the viewer has hidden — the hidden list has to name what it offers back. */
+    public fun channelNames(playlistId: PlaylistId, ids: List<String>): Map<String, String> {
+        val snapshot = activeLiveSnapshot(playlistId) ?: return emptyMap()
+        if (ids.isEmpty()) return emptyMap()
+        return queries.channelNames(playlistId.value, snapshot, ids).executeAsList().associate { it.id to it.name }
+    }
+
+    public fun groupNames(playlistId: PlaylistId, ids: List<String>): Map<String, String> {
+        val snapshot = activeLiveSnapshot(playlistId) ?: return emptyMap()
+        if (ids.isEmpty()) return emptyMap()
+        return queries.groupNames(playlistId.value, snapshot, ids).executeAsList().associate { it.id to it.title }
     }
 
     public fun channelCount(playlistId: PlaylistId): Long =

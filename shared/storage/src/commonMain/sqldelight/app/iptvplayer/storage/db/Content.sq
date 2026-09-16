@@ -196,11 +196,14 @@ deleteAllMediaSources:
 DELETE FROM media_source WHERE playlist_id = ?;
 
 groupsWithCounts:
-SELECT g.id, g.title, COUNT(m.channel_id) AS channel_count
+SELECT g.id, COALESCE(l.label, g.title) AS title, COUNT(m.channel_id) AS channel_count
 FROM channel_group g
 LEFT JOIN channel_group_member m ON m.playlist_id = g.playlist_id AND m.snapshot = g.snapshot AND m.group_id = g.id
+    AND m.channel_id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = g.playlist_id AND content_type = 'CHANNEL')
+LEFT JOIN user_label l ON l.playlist_id = g.playlist_id AND l.content_type = 'CHANNEL_GROUP' AND l.content_id = g.id
 WHERE g.playlist_id = :playlistId AND g.snapshot = :snapshot
-GROUP BY g.id, g.title, g.sort_order
+    AND g.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = g.playlist_id AND content_type = 'CHANNEL_GROUP')
+GROUP BY g.id, title, g.sort_order
 ORDER BY g.sort_order;
 
 channelsInGroup:
@@ -209,6 +212,7 @@ FROM channel_group_member m
 JOIN channel c ON c.playlist_id = m.playlist_id AND c.snapshot = m.snapshot AND c.id = m.channel_id
 LEFT JOIN favorite f ON f.content_type = 'CHANNEL' AND f.content_id = c.id
 WHERE m.playlist_id = :playlistId AND m.snapshot = :snapshot AND m.group_id = :groupId
+    AND c.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'CHANNEL')
 ORDER BY m.sort_order, c.sort_order;
 
 allChannels:
@@ -216,6 +220,7 @@ SELECT c.id, c.name, c.number, c.logo_template, c.tvg_id, (f.content_id IS NOT N
 FROM channel c
 LEFT JOIN favorite f ON f.content_type = 'CHANNEL' AND f.content_id = c.id
 WHERE c.playlist_id = :playlistId AND c.snapshot = :snapshot
+    AND c.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'CHANNEL')
 ORDER BY c.sort_order;
 
 favoriteChannels:
@@ -239,9 +244,20 @@ removeFavorite:
 DELETE FROM favorite WHERE content_type = ? AND content_id = ?;
 
 -- Local search (FR-SRCH-001/002, Phase 8 subset): exact name, then prefix, then contains; provider order within a rank.
+-- Names for ids, hidden rows included: the list that offers to bring something back has to be able to name it.
+channelNames:
+SELECT id, name FROM channel WHERE playlist_id = :playlistId AND snapshot = :snapshot AND id IN :ids;
+
+groupNames:
+SELECT g.id, COALESCE(l.label, g.title) AS title
+FROM channel_group g
+LEFT JOIN user_label l ON l.playlist_id = g.playlist_id AND l.content_type = 'CHANNEL_GROUP' AND l.content_id = g.id
+WHERE g.playlist_id = :playlistId AND g.snapshot = :snapshot AND g.id IN :ids;
+
 channelsByIds:
 SELECT c.id, c.name, c.number, c.logo_template, c.tvg_id, (f.content_id IS NOT NULL) AS is_favorite
 FROM channel c
 LEFT JOIN favorite f ON f.content_type = 'CHANNEL' AND f.content_id = c.id
-WHERE c.playlist_id = :playlistId AND c.snapshot = :snapshot AND c.id IN :ids;
+WHERE c.playlist_id = :playlistId AND c.snapshot = :snapshot AND c.id IN :ids
+    AND c.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'CHANNEL');
 
