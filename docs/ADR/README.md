@@ -51,3 +51,4 @@ line. Product-scope decisions still go to the owner.
 | [0028](0028-android-library-movies-series-watch-state-artwork.md) | Library on Android: movies, series, watch state, artwork and local search | Accepted |
 | [0029](0029-title-search-index-and-import-checkpoint.md) | Title search index and a checkpoint after every import | Accepted |
 | [0030](0030-tv-launch-and-frame-performance.md) | Measuring and fixing launch and frame performance on the TV | Accepted |
+| [0031](0031-design-tokens-in-one-platform-neutral-file.md) | One platform-neutral source for the design tokens, and the Luz amber accent | Accepted |

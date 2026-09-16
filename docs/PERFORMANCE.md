@@ -171,7 +171,23 @@ The debug build is not a valid measurement: its cold launch on the same device i
 Android's third launch case — the process alive but the activity rebuilt — is not measured; that needs Macrobenchmark,
 which the project has not adopted.
 
-Two fixes came out of this (ADR-0030): the now/next map for a whole category was being assembled and copied on the UI
+**After the interface foundation (ADR-0031, 2026-09-16)**, with Luz's own row replacing the Material list item:
+
+| Measurement | Before (Material row) | After (Luz row) | Target |
+|---|---|---|---|
+| Channel list, remote repeat rate | 1.1 % janky, P95 11 ms, P99 28 ms | 2.7 % janky, P95 15 ms, P99 26 ms | **Met** |
+| Channel list, button held down | not measured | 26 % janky, P95 30 ms, P99 36 ms | not met under burst input |
+| Live TV categories, button held down | not measured | 61 % janky, P95 129 ms | not met |
+
+The custom row is marginally more expensive than Material's at a normal repeat rate and stays inside budget; it got
+there only after focus stopped being a recomposition and became a draw (see ADR-0031). Holding the button down is a
+different matter: the device cannot keep up with a burst of focus moves, and on the categories every settled move also
+reloads the channel list. Per-frame profiling puts that cost in recording the draw commands for a fresh screenful of
+text (24–39 ms) plus the GPU upload (9–17 ms) — the price of replacing what is on screen, not of the row component.
+The two-pane category preview is what the navigation work replaces next ([PRODUCT_DIRECTIVE.md](PRODUCT_DIRECTIVE.md)
+level 2), so the remaining gap is carried into that work rather than optimised in a screen that is about to go.
+
+Two earlier fixes came out of the first pass (ADR-0030): the now/next map for a whole category was being assembled and copied on the UI
 thread, and browsing categories rebuilt the channel list at every step because a preview loaded after 250 ms of focus
 (now 600 ms). Together they took category browsing from 28.9 % janky frames, P95 65 ms and P99 150 ms down to the row
 above. What remains is the rebuild itself: when a preview does fire, replacing a screen of rows costs about one 100 ms

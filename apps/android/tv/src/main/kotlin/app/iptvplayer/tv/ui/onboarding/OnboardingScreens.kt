@@ -40,6 +40,7 @@ fun WelcomeScreen(onAddSource: () -> Unit, onExplore: () -> Unit) {
                 stringResource(R.string.welcome_add_source),
                 onAddSource,
                 Modifier.rememberedFocus(focus, OnboardingTags.ADD_SOURCE),
+                primary = true,
             )
             ActionButton(stringResource(R.string.welcome_explore), onExplore, Modifier.rememberedFocus(focus, OnboardingTags.EXPLORE))
         }

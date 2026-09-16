@@ -46,6 +46,7 @@ import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.live.EmptyState
 import app.iptvplayer.tv.ui.rememberedFocus
+import app.iptvplayer.tv.ui.theme.LuzRow
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -164,13 +165,17 @@ private fun CategoryItem(title: String, count: Long?, selected: Boolean, modifie
             onSelect()
         }
     }
-    ListItem(
-        selected = selected,
-        onClick = onSelect,
-        headlineContent = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        trailingContent = count?.let { { Text(it.toString(), style = MaterialTheme.typography.bodySmall) } },
-        modifier = modifier.onFocusChanged { focused = it.isFocused },
-    )
+    LuzRow(onClick = onSelect, modifier = modifier.onFocusChanged { focused = it.isFocused }, selected = selected) {
+        Text(
+            title,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) Tokens.accent else Tokens.textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        count?.let { Text(it.toString(), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary) }
+    }
 }
 
 @Composable
@@ -274,7 +279,7 @@ private fun PosterCard(item: PosterItem, resolver: ((UrlTemplate) -> String?)?, 
     }
 }
 
-private val PREVIEW_DELAY = 600.milliseconds
+private val PREVIEW_DELAY = 900.milliseconds
 
 private const val PAGE_SIZE = 120
 private const val LOAD_AHEAD = 24

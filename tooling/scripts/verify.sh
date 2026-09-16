@@ -15,20 +15,23 @@ done
 if [ -z "$PY" ]; then echo "verify.sh: no working Python 3.8+ found (set PYTHON=...)"; exit 1; fi
 echo "Using $("$PY" -c 'import sys; print(sys.executable, sys.version.split()[0])')"
 
-echo "== 1/7 Documentation (links, anchors, ADRs, placeholders)"
+echo "== 1/8 Documentation (links, anchors, ADRs, placeholders)"
 "$PY" tooling/scripts/check_docs.py
 
-echo "== 2/7 Fixtures (manifest, formats, reserved hosts, canary credentials, state machine)"
+echo "== 2/8 Fixtures (manifest, formats, reserved hosts, canary credentials, state machine)"
 "$PY" tooling/scripts/check_fixtures.py
 
-echo "== 3/7 Secret scan and source text"
+echo "== 3/8 Secret scan and source text"
 "$PY" tooling/scripts/scan_secrets.py
 "$PY" tooling/scripts/check_source_text.py
 
-echo "== 4/7 Large stress fixtures (generate + streaming verify)"
+echo "== 4/8 Design tokens (generated files match tooling/design/tokens.json)"
+"$PY" tooling/scripts/generate_design_tokens.py --check
+
+echo "== 5/8 Large stress fixtures (generate + streaming verify)"
 "$PY" tooling/scripts/generate_large_fixtures.py --verify
 
-echo "== 5/7 Stress fixture determinism"
+echo "== 6/8 Stress fixture determinism"
 CHECK_DIR="tooling/fixtures/generated/.determinism-check"
 "$PY" tooling/scripts/generate_large_fixtures.py --out "$CHECK_DIR" > /dev/null
 if "$PY" - "$CHECK_DIR" <<'PYCHECK'
@@ -44,10 +47,10 @@ else
   echo "determinism: FAILED (outputs differ between runs)"; exit 1
 fi
 
-echo "== 6/7 Reference ID vectors (Python reference implementation)"
+echo "== 7/8 Reference ID vectors (Python reference implementation)"
 "$PY" tooling/scripts/generate_id_vectors.py --check
 
-echo "== 7/7 Gradle build, tests and formatting (shared core, Android TV app)"
+echo "== 8/8 Gradle build, tests and formatting (shared core, Android TV app)"
 if [ -z "${JAVA_HOME:-}" ]; then
   for candidate in /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home /usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home; do
     if [ -x "$candidate/bin/java" ]; then export JAVA_HOME="$candidate"; break; fi

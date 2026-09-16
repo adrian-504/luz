@@ -26,9 +26,11 @@ and type read very differently at 3 m on a TV panel than on a monitor.
 
 ## 3. Tokens (§10.2)
 
-Token names are shared; each platform implements them in its theme layer (Compose `MaterialTheme`/TV theme
-extension; SwiftUI environment/asset catalog). This document is the canonical source; code generation from a
-token file is deferred until drift becomes a real problem.
+**The tokens live in [`tooling/design/tokens.json`](../tooling/design/tokens.json)**, in no platform's language, and
+`tooling/scripts/generate_design_tokens.py` writes the platform files from it (ADR-0031). Today it writes the Android
+token object; the Apple apps read the same file when they arrive, so the two platforms cannot drift by hand-editing one
+of them. `verify.sh` fails if a generated file no longer matches the source. Change the JSON, run the script, never edit
+a generated file. This document explains the intent behind the values; the JSON is the values.
 
 ### 3.1 Color (dark-first)
 
@@ -43,12 +45,19 @@ token file is deferred until drift becomes a real problem.
 | `text.primary` | `#F2F4F7` | titles, body | ≈ 18:1 |
 | `text.secondary` | `#A9B1BC` | metadata | ≈ 9:1 |
 | `text.tertiary` | `#7D8590` | timestamps, hints (≥ 4.5:1) | ≈ 5:1 |
-| `accent` | `#4C8DFF` | the single restrained accent: progress, selection, primary action | ≈ 6:1 |
+| `accent` | `#FFA24B` | the single restrained accent: primary action, selection, focus ring, progress | ≈ 9.4:1 |
+| `accentPressed` | `#E8842A` | the accent while a control is held | — |
+| `onAccent` | `#140C04` | text and icons on top of the accent | ≈ 11:1 on `accent` |
 | `state.live` | `#E5484D` | LIVE badge, now-line | — |
 | `state.success` | `#3FB950` | healthy source | — |
 | `state.warning` | `#E3B341` | cleartext source, partial import | — |
 | `state.error` | `#F85149` | errors | — |
-| `focus.ring` | `#F2F4F7` | TV focus border (Android) | — |
+| `focus.ring` | `#FFA24B` | TV focus border | — |
+
+The amber is the Luz mark's own colour, sampled from the owner's artwork (hue 28°) and lightened until it reads on the
+near-black base. It is an **accent, not a theme**: surfaces, text and chrome stay black, charcoal and the neutral text
+ramp, and a screen should look almost monochrome until something is focused, selected, playing or in progress. If a
+screen looks orange, the accent is being overused.
 
 Contrast values are calculated from sRGB relative luminance (WCAG 2.x formula), not measured on panels.
 A light theme is not planned for V1 TV; iOS may follow system appearance later (decision in Phase 12).
@@ -94,9 +103,14 @@ with cross-fades; player overlay auto-hides after 5 s of inactivity (live) — t
 
 ### 3.6 Focus (TV)
 
-- Android TV: focused item scales to 1.05–1.08 (`motion.focus`), gains a 2–3 dp `focus.ring` border and elevated
-  surface; unfocused items never use the ring color.
-- tvOS: system focus effects (lift, parallax on posters, highlight) — do not re-implement.
+Focus is **a lift first and a colour second**, so it still reads for a viewer who cannot separate amber from grey, and on
+a panel with the colour pushed flat.
+
+- Android TV: focused item scales by `focus.scale` (`motion.focus`), gains a `focus.ring` border at `focus.ringWidth`
+  and an elevated surface; unfocused items never use the ring colour.
+- tvOS: use the system focus effects (lift, parallax on posters, highlight) — do not re-implement them. Where tvOS draws
+  a border of our own (guide cells, rows that are not focusable images), it uses the same `focus.ring` and width, so the
+  two platforms agree on what "focused" means without fighting the platform's own idea of it.
 - Focus must be restored to the last focused item when returning to a screen and preserved across data refreshes
   (stable lazy-list keys = stable domain IDs).
 - Guide: focused programme cell uses `bg.surface3` fill + ring; the time under focus is shown in the time header.

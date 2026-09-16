@@ -241,7 +241,12 @@ private fun SectionContent(
     // Playlists is a real screen since Phase 7; the placeholder line only belongs to sections still to come.
     PlaceholderPage(title = stringResource(section.title), body = if (section == Section.PLAYLISTS) null else body) {
         if (section == Section.PLAYLISTS) {
-            ActionButton(stringResource(R.string.playlists_add_source), onAddSource, Modifier.rememberedFocus(focus, ShellTags.ADD_SOURCE))
+            ActionButton(
+                stringResource(R.string.playlists_add_source),
+                onAddSource,
+                Modifier.rememberedFocus(focus, ShellTags.ADD_SOURCE),
+                primary = true,
+            )
             SourcesList(focus, onEditGuideLink)
             return@PlaceholderPage
         }

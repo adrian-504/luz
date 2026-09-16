@@ -102,6 +102,7 @@ fun MovieDetailScreen(playlistId: PlaylistId, movieId: String, onPlay: (fromStar
                 },
                 { onPlay(false) },
                 Modifier.rememberedFocus(focus, DetailTags.PLAY),
+                primary = true,
             )
             if (resume != null) {
                 ActionButton(

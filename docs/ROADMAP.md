@@ -380,13 +380,39 @@ The owner gave the substance of that review on 2026-09-16, recorded verbatim in 
 [PRODUCT_DIRECTIVE.md](PRODUCT_DIRECTIVE.md): Luz as a premium, dark, cinematic streaming experience with a collapsed
 navigation rail, a dynamic Home, unified multi-provider content, confidence-based channel deduplication and source
 failover, a modern guide, plain-language provider diagnostics, and a later account/QR/companion/sync architecture. The
-review's first task is the audit the owner asked for — every item mapped to already implemented, partly implemented,
-missing, or future architecture, against the code rather than the documents — followed by the ADRs and the phases that
-come out of it. **None of it starts before Phase 9 is finished** (the owner's instruction: "Finish phase 9 then we can
+review's first task, the audit the owner asked for, is **done**: [DIRECTIVE_AUDIT.md](DIRECTIVE_AUDIT.md) maps every
+item to built, partial, missing or later against the code at commit `0a44903`, names the one structural conflict (every
+screen reads a single current source, while the directive wants one library across providers) and proposes an order of
+work. What follows is the owner's decisions on that order, then the ADRs and phases that come out of it. **None of it starts before Phase 9 is finished** (the owner's instruction: "Finish phase 9 then we can
 start with this").
 
 Phase 10 does not start until this review is done. Its outcome may change Phases 11–12 (the Apple apps should follow the
 decisions made here, not the current Android shape).
+
+## Interface phase — Luz design and navigation (after Phase 9, before Phase 10)
+
+The work that comes out of the owner's review. It does not renumber the specification's phases: Phase 10 (Apple shared
+core) follows it. Order agreed with the owner on 2026-09-16, after the one-source decision removed the unified-library
+work:
+
+1. **Design foundation** — accent and tokens, the row and cell components, motion.
+2. **Home and navigation** — dynamic rows, an item screen for channels, context menus, Settings with real sections.
+3. **Personalisation** — hide, rename, custom groups, favourite groups, Home layout.
+4. **Provider diagnostics** — one screen that answers "why isn't this working?" from data the app already collects.
+5. **Guide** — the cinematic timeline, logos, programme detail.
+
+Everything designed here has to fit Apple later (the owner's constraint, 2026-09-16): tokens live in one
+platform-neutral file, and components are described by intent so SwiftUI can implement the same system natively.
+
+### Progress
+
+| Step | Status |
+|---|---|
+| 1. Design foundation | **Done — ADR-0031:** tokens moved to `tooling/design/tokens.json` with a generator and a gate check; the accent is now the Luz amber (it was blue); focus is a lift plus an amber ring, drawn rather than recomposed; Luz's own list row replaces the Material one in Live TV and the library. Channel-list scrolling is inside the frame budget (2.7 % janky, P95 15 ms); 18 TV app device tests pass on the Bbox TV. What is still out of budget — holding the button through the two-pane category preview — is carried into step 2, which replaces that screen |
+| 2. Home and navigation | Not started |
+| 3. Personalisation | Not started |
+| 4. Provider diagnostics | Not started |
+| 5. Guide | Not started |
 
 ## Proposed interim gate: Android TV personal alpha
 

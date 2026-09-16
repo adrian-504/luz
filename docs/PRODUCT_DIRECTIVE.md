@@ -60,6 +60,11 @@ never "which provider → which playlist → which group → which channel → w
 
 ## 4. Providers and content
 
+> **Owner decision, 2026-09-16: Luz works with one playlist source.** Everything below that depends on several providers
+> at once is dropped, not deferred — multi-provider unified browsing and search, provider filters, cross-provider
+> channel deduplication, source scoring and automatic failover between sources. What survives is recorded in
+> [DIRECTIVE_AUDIT.md](DIRECTIVE_AUDIT.md) §6.1.
+
 - **Provider management in plain language**: explain Xtream vs M3U vs M3U+EPG by what the provider gave the user, with
   no IPTV jargon.
 - **Multiple providers presented as one library** by default; provider is an optional filter, never a step.

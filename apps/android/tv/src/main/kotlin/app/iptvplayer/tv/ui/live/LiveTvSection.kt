@@ -50,6 +50,7 @@ import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.rememberedFocus
+import app.iptvplayer.tv.ui.theme.LuzRow
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -235,13 +236,17 @@ private fun GroupItem(title: String, count: Long?, selected: Boolean, modifier: 
             onSelect()
         }
     }
-    ListItem(
-        selected = selected,
-        onClick = onSelect,
-        headlineContent = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        trailingContent = count?.let { { Text(it.toString(), style = MaterialTheme.typography.bodySmall) } },
-        modifier = modifier.onFocusChanged { focused = it.isFocused },
-    )
+    LuzRow(onClick = onSelect, modifier = modifier.onFocusChanged { focused = it.isFocused }, selected = selected) {
+        Text(
+            title,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) Tokens.accent else Tokens.textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        count?.let { Text(it.toString(), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary) }
+    }
 }
 
 /** Now/next for on-screen channels missing from [known], from the provider's per-channel guide (at most 20 channels). */
@@ -356,48 +361,44 @@ private fun ChannelItem(
     onToggleFavorite: () -> Unit,
 ) {
     val current = guide?.current
-    ListItem(
-        selected = false,
-        onClick = onPlay,
-        onLongClick = onToggleFavorite,
-        leadingContent = {
+    LuzRow(onClick = onPlay, modifier = modifier, onLongClick = onToggleFavorite) {
+        Text(
+            channel.number?.toString() ?: "",
+            style = MaterialTheme.typography.labelLarge,
+            color = Tokens.textTertiary,
+            maxLines = 1,
+            modifier = Modifier.width(48.dp),
+        )
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                channel.number?.toString() ?: "",
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.width(44.dp),
+                channel.name,
+                style = MaterialTheme.typography.bodyLarge,
+                color = Tokens.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-        },
-        headlineContent = { Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        supportingContent = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    current?.let { stringResource(R.string.live_now, it.title) } ?: stringResource(R.string.live_no_guide),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (current != null) {
-                    val progress = ((now - current.start) / (current.end - current.start)).toFloat().coerceIn(0f, 1f)
-                    Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(Tokens.lineSubtle)) {
-                        Box(Modifier.fillMaxWidth(progress).height(3.dp).background(Tokens.accent))
-                    }
-                }
-                guide?.next?.let {
-                    Text(
-                        stringResource(R.string.live_next, it.title),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = Tokens.textTertiary,
-                    )
+            Text(
+                current?.let { stringResource(R.string.live_now, it.title) } ?: stringResource(R.string.live_no_guide),
+                style = MaterialTheme.typography.bodySmall,
+                color = Tokens.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (current != null) {
+                val progress = ((now - current.start) / (current.end - current.start)).toFloat().coerceIn(0f, 1f)
+                Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(Tokens.lineSubtle)) {
+                    Box(Modifier.fillMaxWidth(progress).height(3.dp).background(Tokens.accent))
                 }
             }
-        },
-        trailingContent = if (channel.isFavorite) {
-            { Icon(Icons.Filled.Favorite, contentDescription = stringResource(R.string.section_favorites)) }
-        } else {
-            null
-        },
-        modifier = modifier,
-    )
+        }
+        if (channel.isFavorite) {
+            Icon(
+                Icons.Filled.Favorite,
+                contentDescription = stringResource(R.string.section_favorites),
+                tint = Tokens.accent,
+            )
+        }
+    }
 }
 
 @Composable
@@ -411,9 +412,9 @@ fun EmptyState(message: String, action: String, focus: FocusMemory, actionKey: S
         verticalArrangement = Arrangement.spacedBy(Tokens.space4),
     ) {
         Text(message, style = MaterialTheme.typography.titleLarge, color = Tokens.textSecondary)
-        ActionButton(action, onAction, Modifier.rememberedFocus(focus, actionKey))
+        ActionButton(action, onAction, Modifier.rememberedFocus(focus, actionKey), primary = true)
     }
 }
 
 /** How long a category must hold focus before its channels are loaded. */
-private val PREVIEW_DELAY = 600.milliseconds
+private val PREVIEW_DELAY = 900.milliseconds
