@@ -7,9 +7,11 @@ import android.util.Log
 import androidx.core.content.edit
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.domain.playback.PlaybackMode
+import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.ingestion.AddSourceFailure
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.ingestion.ShortGuideReport
@@ -24,10 +26,16 @@ import app.iptvplayer.protocols.media.ResolveResult
 import app.iptvplayer.storage.BundledSqliteDriver
 import app.iptvplayer.storage.ChannelRow
 import app.iptvplayer.storage.ContentStore
+import app.iptvplayer.storage.ContinueItem
 import app.iptvplayer.storage.EpgStore
+import app.iptvplayer.storage.EpisodeRow
 import app.iptvplayer.storage.GroupRow
 import app.iptvplayer.storage.GuideProgramme
+import app.iptvplayer.storage.LibraryGroupRow
+import app.iptvplayer.storage.MovieRow
 import app.iptvplayer.storage.NowNextRow
+import app.iptvplayer.storage.SeasonRow
+import app.iptvplayer.storage.SeriesRow
 import app.iptvplayer.storage.SourceRecord
 import app.iptvplayer.storage.UnitStateRecord
 import app.iptvplayer.storage.db.IptvDatabase
@@ -43,10 +51,28 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.InetAddress
 import java.net.URI
+import kotlin.time.Duration
 import kotlin.time.Instant
 
+data class SearchResults(val query: String, val channels: List<ChannelRow>, val movies: List<MovieRow>, val series: List<SeriesRow>)
+
+/** A movie or episode on Home's "Continue watching" row. */
+data class ContinueCard(
+    val type: ContentType,
+    val id: String,
+    val title: String,
+    val subtitle: String?,
+    val poster: UrlTemplate?,
+    val fraction: Float?,
+)
+
 /** Import activity per source, for the UI. */
-data class SourceActivity(val liveRunning: Boolean = false, val guideRunning: Boolean = false)
+data class SourceActivity(
+    val liveRunning: Boolean = false,
+    val guideRunning: Boolean = false,
+    val moviesRunning: Boolean = false,
+    val seriesRunning: Boolean = false,
+)
 
 /**
  * Application-scoped composition root (ARCHITECTURE.md §10): one database, the Keystore secret store, the shared import
@@ -61,12 +87,14 @@ class AppGraph(context: Context) {
         val file = appContext.getDatabasePath("iptv.db").apply { parentFile?.mkdirs() }
         BundledSqliteDriver.open(file.path, IptvDatabase.Schema)
     }
+    private val secrets by lazy { KeystoreSecretStore(appContext) }
     private val content by lazy { ContentStore(driver, SystemClock) }
+    private val library get() = service.library
     private val epg by lazy { EpgStore(driver) }
     private val service by lazy {
         SourceService(
             OkHttpTransport(::networkAvailable),
-            KeystoreSecretStore(appContext),
+            secrets,
             content,
             epg,
             SystemClock,
@@ -81,6 +109,11 @@ class AppGraph(context: Context) {
     val activity: StateFlow<Map<PlaylistId, SourceActivity>> = mutableActivity.asStateFlow()
 
     private fun changed() = mutableRevision.update { it + 1 }
+
+    private val mutableWatchRevision = MutableStateFlow(0)
+
+    /** Increments after watch progress is saved, so detail screens and Home refresh without reloading channel lists. */
+    val watchRevision: StateFlow<Int> = mutableWatchRevision.asStateFlow()
 
     private fun networkAvailable(): Boolean {
         val manager = appContext.getSystemService(ConnectivityManager::class.java) ?: return true
@@ -193,7 +226,7 @@ class AppGraph(context: Context) {
                 is AddSourceResult.Added -> {
                     logImport("live", result.live, started)
                     changed()
-                    refreshGuide(result.playlistId)
+                    refreshGuideAndLibrary(result.playlistId)
                 }
                 is AddSourceResult.Rejected -> Log.i(LOG_TAG, "add rejected: ${result.reason}")
             }
@@ -213,6 +246,36 @@ class AppGraph(context: Context) {
                 changed()
             }
             refreshGuideNow(playlistId)
+            refreshLibraryNow(playlistId)
+        }
+    }
+
+    /**
+     * Staged background import after a source is added: guide first (Live TV is already usable), then movies, then series, so
+     * a large provider's library never delays channels (ROADMAP Phase 8).
+     */
+    private fun refreshGuideAndLibrary(playlistId: PlaylistId) {
+        scope.launch {
+            refreshGuideNow(playlistId)
+            refreshLibraryNow(playlistId)
+        }
+    }
+
+    private suspend fun refreshLibraryNow(playlistId: PlaylistId) {
+        for (unit in listOf(ImportUnit.MOVIES, ImportUnit.SERIES)) {
+            val running: (SourceActivity, Boolean) -> SourceActivity =
+                if (unit == ImportUnit.MOVIES) { a, on -> a.copy(moviesRunning = on) } else { a, on -> a.copy(seriesRunning = on) }
+            track(playlistId) { running(it, true) }
+            try {
+                val started = android.os.SystemClock.elapsedRealtime()
+                logImport(unit.name.lowercase(), io { service.refreshLibrary(playlistId, unit) }, started)
+            } catch (e: Exception) {
+                // A failed library import must not break channels or the guide; the unit is marked failed in storage.
+                Log.i(LOG_TAG, "${unit.name.lowercase()}: exception ${e::class.simpleName}")
+            } finally {
+                track(playlistId) { running(it, false) }
+                changed()
+            }
         }
     }
 
@@ -237,6 +300,110 @@ class AppGraph(context: Context) {
     }
 
     /** Resolves a channel to a playable request, or null when it has no usable stream or its credentials are missing. */
+    // --- Library (Phase 8) ---
+
+    suspend fun libraryState(playlistId: PlaylistId, unit: ImportUnit): UnitStateRecord? = io { content.unitState(playlistId, unit) }
+
+    suspend fun libraryGroups(playlistId: PlaylistId, unit: ImportUnit): List<LibraryGroupRow> = io { library.groups(playlistId, unit) }
+
+    suspend fun movies(playlistId: PlaylistId, groupId: String?, limit: Int, offset: Int): List<MovieRow> =
+        io { library.movies(playlistId, groupId, limit, offset) }
+
+    suspend fun recentMovies(playlistId: PlaylistId, limit: Int): List<MovieRow> = io { library.recentMovies(playlistId, limit) }
+
+    suspend fun movie(playlistId: PlaylistId, id: String): MovieRow? = io { library.movie(playlistId, id) }
+
+    suspend fun series(playlistId: PlaylistId, groupId: String?, limit: Int, offset: Int): List<SeriesRow> =
+        io { library.series(playlistId, groupId, limit, offset) }
+
+    suspend fun seriesById(playlistId: PlaylistId, id: String): SeriesRow? = io { library.seriesById(playlistId, id) }
+
+    suspend fun seasons(playlistId: PlaylistId, seriesId: String): List<SeasonRow> = io { library.seasons(playlistId, seriesId) }
+
+    suspend fun episodes(playlistId: PlaylistId, seriesId: String): List<EpisodeRow> = io { library.episodes(playlistId, seriesId) }
+
+    suspend fun episode(playlistId: PlaylistId, id: String): EpisodeRow? = io { library.episode(playlistId, id) }
+
+    /** Loads a series' seasons and episodes from the provider when needed; returns false when the provider did not answer. */
+    suspend fun loadSeriesDetail(playlistId: PlaylistId, seriesId: String): Boolean = io {
+        val error = service.loadSeriesDetail(playlistId, seriesId)
+        if (error != null) Log.i(LOG_TAG, "series detail: error=${error.code}")
+        error == null
+    }
+
+    suspend fun setFavorite(type: ContentType, id: String, favorite: Boolean) {
+        io { content.setFavorite(type, id, favorite) }
+        changed()
+    }
+
+    /** "Continue watching" cards with titles and artwork, most recent first (FR-HOME-001). */
+    suspend fun continueCards(playlistId: PlaylistId, limit: Int): List<ContinueCard> = io {
+        library.continueWatching(playlistId, limit).mapNotNull { item ->
+            when (item.type) {
+                ContentType.MOVIE -> library.movie(playlistId, item.id)?.let {
+                    ContinueCard(item.type, item.id, it.title, null, it.poster, item.progress.fraction)
+                }
+                ContentType.EPISODE -> library.episode(playlistId, item.id)?.let { episode ->
+                    val series = library.seriesById(playlistId, episode.seriesId)
+                    ContinueCard(
+                        item.type,
+                        item.id,
+                        series?.title ?: episode.title.orEmpty(),
+                        "S${episode.seasonNumber} E${episode.episodeNumber}",
+                        series?.poster,
+                        item.progress.fraction,
+                    )
+                }
+                else -> null
+            }
+        }
+    }
+
+    /** Local search over the current source (FR-SRCH-001/003): no network, results grouped by type. */
+    suspend fun search(playlistId: PlaylistId, query: String, limit: Int = 30): SearchResults = io {
+        SearchResults(
+            query = query,
+            channels = content.searchChannels(playlistId, query, limit),
+            movies = library.searchMovies(playlistId, query, limit),
+            series = library.searchSeries(playlistId, query, limit),
+        )
+    }
+
+    suspend fun lastWatchedEpisodeId(seriesId: String): String? = io { library.lastWatchedEpisode(seriesId)?.first }
+
+    suspend fun continueWatching(playlistId: PlaylistId, limit: Int): List<ContinueItem> =
+        io { library.continueWatching(playlistId, limit) }
+
+    /** A movie or episode ready to play, resuming from its saved position unless [fromStart]. */
+    suspend fun contentPlaybackRequest(playlistId: PlaylistId, type: ContentType, id: String, fromStart: Boolean): PlaybackRequest? = io {
+        val resolved = service.resolveContent(playlistId, type, id) as? ResolveResult.Resolved ?: return@io null
+        val resume = library.progress(type, id)?.takeIf { !fromStart && !it.completed && it.position.isPositive() }?.position
+        PlaybackRequest(resolved.source, PlaybackMode.VOD, startPosition = resume)
+    }
+
+    suspend fun saveProgress(
+        playlistId: PlaylistId,
+        type: ContentType,
+        id: String,
+        parentId: String?,
+        position: Duration,
+        duration: Duration?,
+        ended: Boolean,
+        newSession: Boolean,
+    ) {
+        io { library.saveProgress(playlistId, type, id, parentId, position, duration, ended, newSession) }
+        mutableWatchRevision.update { it + 1 }
+    }
+
+    /**
+     * Artwork URLs are stored as templates; the few that embed the login (some panels do) are completed from the secret store
+     * once per source and kept in memory. Image caches are keyed by the template, never by a URL with credentials.
+     */
+    suspend fun artworkResolver(playlistId: PlaylistId): (UrlTemplate) -> String? = io {
+        val bundle = content.source(playlistId)?.credentialRef?.let { secrets.get(it) }
+        return@io { template: UrlTemplate -> template.expand(bundle?.username, bundle?.password)?.unsafeRawValue() }
+    }
+
     suspend fun playbackRequest(playlistId: PlaylistId, channelId: ChannelId): PlaybackRequest? = io {
         when (val resolved = service.resolveChannel(playlistId, channelId)) {
             is ResolveResult.Resolved -> PlaybackRequest(resolved.source, PlaybackMode.LIVE)

@@ -10,6 +10,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.iptvplayer.tv.ui.guide.GuideTags
+import app.iptvplayer.tv.ui.library.LibraryTags
+import app.iptvplayer.tv.ui.library.SearchTags
 import app.iptvplayer.tv.ui.live.LiveTags
 import app.iptvplayer.tv.ui.onboarding.FormTags
 import app.iptvplayer.tv.ui.onboarding.OnboardingTags
@@ -133,11 +135,13 @@ class RemoteNavigationTest {
                 awaitFocus(ShellTags.rail(section))
             }
             press(KeyEvent.KEYCODE_DPAD_CENTER)
-            // Without sources, Live TV, Favorites and the Guide offer "Add a source"; Playlists lists no sources yet.
+            // Without sources, Live TV, Favorites, the Guide, Movies and Series offer "Add a source"; Playlists lists no sources yet.
             val singleAction = when (section) {
                 Section.LIVE_TV -> LiveTags.emptyAddSource(favorites = false)
                 Section.FAVORITES -> LiveTags.emptyAddSource(favorites = true)
                 Section.GUIDE -> GuideTags.ADD_SOURCE
+                Section.MOVIES, Section.SERIES -> LibraryTags.ADD_SOURCE
+                Section.SEARCH -> SearchTags.ADD_SOURCE
                 Section.PLAYLISTS -> ShellTags.ADD_SOURCE
                 else -> null
             }

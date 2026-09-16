@@ -96,7 +96,7 @@ absent from logcat). Shared `commonTest` suites also run on the device (`connect
 | Malformed XMLTV | `xmltv/malformed.xml` | Created |
 | HLS live stream fixture | `media/segments/` served as a sliding live window; `hls/live-media.m3u8` (manifest) | Media generated and played in Phase 6 |
 | VOD fixture | `media/vod-10s.mp4`, `media/segments/index.m3u8`; `hls/vod-media.m3u8` (manifest) | Media generated and played in Phase 6 |
-| Subtitle/audio-track fixture | `media/multi-track-8s.mp4` (two audio languages, text subtitles); `hls/master-multi-audio-subs.m3u8` (manifest only) | MP4 media generated and played in Phase 7; HLS renditions not generated |
+| Subtitle/audio-track fixture | `media/multi-track-30s.mp4` (two audio languages, text subtitles); `hls/master-multi-audio-subs.m3u8` (manifest only) | MP4 media generated and played in Phase 7; HLS renditions not generated |
 
 Additional fixtures beyond the spec: timezone variants, XXE and entity-expansion attacks, HLS-disguised-as-M3U
 detection, playback state-machine conformance vectors.
@@ -108,7 +108,7 @@ detection, playback state-machine conformance vectors.
 output byte-reproducible): a 10 s progressive MP4 and 30 s of 2 s MPEG-TS segments with an HLS playlist, ~1.3 MB, committed.
 `apps/android/testing` packages them and serves them from an in-process HTTP server as HLS VOD, a sliding HLS live window,
 a real-time paced continuous `.ts` live stream and progressive MP4, with injectable faults (status codes, response delay,
-stall, malformed playlist, random bytes, HTML body). Phase 7 adds an 8 s MP4 with English and Spanish audio tracks and an
+stall, malformed playlist, random bytes, HTML body). Phase 7 adds a 30 s MP4 with English and Spanish audio tracks and an
 English text subtitle track for track selection; HLS alternate renditions and WebVTT segments are not generated yet. No
 third-party or copyrighted media is used.
 

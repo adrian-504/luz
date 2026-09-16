@@ -48,3 +48,4 @@ line. Product-scope decisions still go to the owner.
 | [0025](0025-bundled-sqlite-driver-for-sqldelight.md) | Bundled SQLite (AndroidX) behind SQLDelight on Android and JVM | Accepted |
 | [0026](0026-android-transport-secret-store-and-import-service.md) | Android network transport, secret store and the shared import service | Accepted |
 | [0027](0027-live-tv-player-features-tracks-session-switching-guide.md) | Live TV player features: tracks, media session, channel switching, sources and guide navigation | Accepted |
+| [0028](0028-android-library-movies-series-watch-state-artwork.md) | Library on Android: movies, series, watch state, artwork and local search | Accepted |

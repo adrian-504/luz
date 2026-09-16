@@ -215,7 +215,7 @@ committed). Candidate dependencies already named in docs (kotlinx.coroutines, ko
 kotlinx-io, SQLDelight or Room KMP, OkHttp, Media3, Coil) are **not yet approved** — each passes this policy
 when first introduced.
 
-**Current dependency set (Phase 7):** adds Media3 `media3-session` 1.11.1 for the system media session (ADR-0027), OkHttp 5.5.0 (with Okio) for the Android transport (ADR-0026) and AndroidX
+**Current dependency set (Phase 8):** adds Coil 3.6.2 (`coil-compose`, `coil-network-okhttp`) for artwork (ADR-0028). **Phase 7:** adds Media3 `media3-session` 1.11.1 for the system media session (ADR-0027), OkHttp 5.5.0 (with Okio) for the Android transport (ADR-0026) and AndroidX
 `sqlite-bundled` 2.7.1 for storage on Android and JVM tests (ADR-0025). Phase 6: Android playback adds Media3 1.11.1 `exoplayer` and `exoplayer-hls`
 (ADR-0024); the shared modules gain the AGP Kotlin Multiplatform Android library plugin (same AGP). Phase 5: the Android TV app adds the AndroidX set of ADR-0023 (AGP 9.4.0, Compose BOM
 2026.09.00, tv-material 1.1.0, material-icons-core 1.7.8, activity-compose 1.13.0, navigation-compose 2.10.1; tests:

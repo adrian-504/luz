@@ -17,11 +17,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -51,6 +53,7 @@ fun TvTextField(
     var focused by remember { mutableStateOf(false) }
     val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     Column(modifier = Modifier.widthIn(max = 760.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = Tokens.textSecondary)
         BasicTextField(
@@ -77,6 +80,22 @@ fun TvTextField(
                     when (event.nativeKeyEvent.keyCode) {
                         android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER -> {
                             if (event.type == KeyEventType.KeyUp) keyboard?.show()
+                            true
+                        }
+                        // Single-line fields: Compose would use Up/Down to move the cursor and keep focus; on a remote they
+                        // must move to the item above or below (for example from Search to its results).
+                        android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_DPAD_UP -> {
+                            if (event.type == KeyEventType.KeyDown) {
+                                focusManager.moveFocus(
+                                    if (event.nativeKeyEvent.keyCode ==
+                                        android.view.KeyEvent.KEYCODE_DPAD_DOWN
+                                    ) {
+                                        FocusDirection.Down
+                                    } else {
+                                        FocusDirection.Up
+                                    },
+                                )
+                            }
                             true
                         }
                         android.view.KeyEvent.KEYCODE_BACK -> {

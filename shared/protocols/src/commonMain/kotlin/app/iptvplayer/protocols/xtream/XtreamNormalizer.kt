@@ -149,7 +149,9 @@ internal class XtreamNormalizer(
         val providerId = obj.string("series_id") ?: return missingId("series_id")
         val name = cleanName(obj.string("name")) ?: return noName()
         if (!seenIds.add("series|$providerId")) return duplicate()
-        val backdrop = (obj.array("backdrop_path")?.firstOrNull() as? kotlinx.serialization.json.JsonPrimitive)?.content
+        val backdropUrl = (obj.array("backdrop_path")?.firstOrNull() as? kotlinx.serialization.json.JsonPrimitive)?.content
+        val poster = artwork(obj.string("cover"), ArtworkKind.POSTER)
+        val backdrop = artwork(backdropUrl, ArtworkKind.BACKDROP)
         val series = Series(
             id = seriesId(providerId),
             playlistId = playlistId,
@@ -159,13 +161,13 @@ internal class XtreamNormalizer(
             plot = obj.string("plot")?.take(DomainLimits.MAX_DESCRIPTION_LENGTH),
             genres = obj.string("genre")?.split(',', '/')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList(),
             rating = obj.string("rating")?.takeUnless { it == "0" },
-            poster = artwork(obj.string("cover"), ArtworkKind.POSTER)?.id,
-            backdrop = artwork(backdrop, ArtworkKind.BACKDROP)?.id,
+            poster = poster?.id,
+            backdrop = backdrop?.id,
             providerSeriesId = providerId,
             externalIds = ExternalIds(tmdb = obj.string("tmdb")),
             lastModifiedAt = obj.epochSeconds("last_modified"),
         )
-        return ContentItem.SeriesItem(series)
+        return ContentItem.SeriesItem(series, poster, backdrop)
     }
 
     fun seriesId(providerSeriesId: String): SeriesId =
@@ -203,15 +205,17 @@ internal class XtreamNormalizer(
         for (number in seasonNumbers) {
             val meta = seasonMeta[number]
             val seasonId = SeasonId(StableIds.derive(DerivedIdKind.SEASON, seriesId.value, listOf(number.toString())))
+            val seasonPoster = artwork(meta?.string("cover"), ArtworkKind.SEASON_POSTER)
             items += ContentItem.SeasonItem(
                 Season(
                     seasonId,
                     seriesId,
                     number,
                     cleanName(meta?.string("name")),
-                    artwork(meta?.string("cover"), ArtworkKind.SEASON_POSTER)?.id,
+                    seasonPoster?.id,
                     meta?.int("episode_count"),
                 ),
+                seasonPoster,
             )
             for (episode in episodesBySeason[number].orEmpty()) episode(episode, seriesId, seasonId)?.let { items += it }
         }
@@ -240,6 +244,7 @@ internal class XtreamNormalizer(
                 protocolFor(extension),
             )
         val info = obj.obj("info")
+        val still = artwork(info?.string("movie_image"), ArtworkKind.THUMBNAIL)
         val episode = Episode(
             id = episodeId,
             seasonId = seasonId,
@@ -249,11 +254,11 @@ internal class XtreamNormalizer(
             plot = info?.string("plot")?.take(DomainLimits.MAX_DESCRIPTION_LENGTH),
             duration = info?.let { duration(it) },
             airDate = info?.string("releasedate") ?: info?.string("air_date"),
-            still = artwork(info?.string("movie_image"), ArtworkKind.THUMBNAIL)?.id,
+            still = still?.id,
             mediaSourceIds = listOf(mediaSource.id),
             providerEpisodeId = providerId,
         )
-        return ContentItem.EpisodeItem(episode, mediaSource)
+        return ContentItem.EpisodeItem(episode, mediaSource, still)
     }
 
     /** `get_short_epg`: base64 title/description; UTC epoch timestamps are authoritative over local time strings. */

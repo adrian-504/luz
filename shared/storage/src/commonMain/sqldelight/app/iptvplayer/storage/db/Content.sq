@@ -235,3 +235,12 @@ VALUES (?, ?, (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM favorite), ?);
 
 removeFavorite:
 DELETE FROM favorite WHERE content_type = ? AND content_id = ?;
+
+-- Local search (FR-SRCH-001/002, Phase 8 subset): exact name, then prefix, then contains; provider order within a rank.
+searchChannels:
+SELECT c.id, c.name, c.number, c.logo_template, c.tvg_id, (f.content_id IS NOT NULL) AS is_favorite
+FROM channel c
+LEFT JOIN favorite f ON f.content_type = 'CHANNEL' AND f.content_id = c.id
+WHERE c.playlist_id = :playlistId AND c.snapshot = :snapshot AND c.name LIKE '%' || :query || '%' ESCAPE '\'
+ORDER BY CASE WHEN c.name LIKE :query ESCAPE '\' THEN 0 WHEN c.name LIKE :query || '%' ESCAPE '\' THEN 1 ELSE 2 END, c.sort_order
+LIMIT :limit;

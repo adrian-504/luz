@@ -11,6 +11,8 @@ import app.iptvplayer.domain.id.EpgChannelKey
 import app.iptvplayer.domain.id.EpgSourceId
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.id.ProviderId
+import app.iptvplayer.domain.model.ContentKind
+import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.EpgChannel
 import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.model.ImportUnit
@@ -50,6 +52,7 @@ import app.iptvplayer.storage.ChannelEpgLinkRow
 import app.iptvplayer.storage.ContentStore
 import app.iptvplayer.storage.EpgStore
 import app.iptvplayer.storage.GuideProgramme
+import app.iptvplayer.storage.LibraryStore
 import app.iptvplayer.storage.ProgramRow
 import app.iptvplayer.storage.SourceRecord
 import kotlin.time.Duration.Companion.days
@@ -123,6 +126,8 @@ public class SourceService(
     private val epg: EpgStore,
     private val clock: Clock,
     private val platform: PlatformCapabilities,
+    /** Movies, series and watch state; shares the database of [content]. */
+    public val library: LibraryStore = LibraryStore(content, clock),
     private val newId: () -> String = { Uuid.random().toString() },
 ) {
     private val fetcher = HttpFetcher(transport)
@@ -265,13 +270,25 @@ public class SourceService(
         val bundle = source.credentialRef?.let { secrets.get(it) }
         content.markUnit(playlistId, ImportUnit.LIVE, ImportStatus.RUNNING)
         val writer = content.beginLiveSnapshot(playlistId)
+        // An M3U playlist lists movies and episodes in the same file: they go to the library units in the same pass.
+        val m3u = source.type != PlaylistType.XTREAM
+        val movies = if (m3u) library.beginSnapshot(playlistId, ImportUnit.MOVIES) else null
+        val shows = if (m3u) library.beginSnapshot(playlistId, ImportUnit.SERIES) else null
         val sensitiveHeaders = ArrayList<ContentItem.SensitiveHeader>()
         var epgHint: UrlTemplate? = null
         val emit: (ContentItem) -> Unit = { item ->
             when (item) {
-                is ContentItem.Group -> if (item.group.contentKind == app.iptvplayer.domain.model.ContentKind.LIVE) writer.group(item.group)
+                is ContentItem.Group -> when (item.group.contentKind) {
+                    ContentKind.LIVE -> writer.group(item.group)
+                    ContentKind.MOVIE -> movies?.group(item.group)
+                    ContentKind.SERIES -> shows?.group(item.group)
+                }
                 is ContentItem.ChannelItem -> writer.channel(item.channel, item.mediaSource, item.logo?.url)
                 is ContentItem.GroupMembership -> writer.membership(item.channelId, item.groupId.value)
+                is ContentItem.MovieItem -> movies?.movie(item.movie, item.mediaSource, item.poster?.url)
+                is ContentItem.SeriesItem -> shows?.series(item.series, item.poster?.url, item.backdrop?.url)
+                is ContentItem.SeasonItem -> shows?.season(item.season, item.poster?.url)
+                is ContentItem.EpisodeItem -> shows?.episode(item.episode, item.mediaSource, item.still?.url)
                 is ContentItem.EpgHint -> if (epgHint == null) epgHint = item.url
                 is ContentItem.SensitiveHeader -> sensitiveHeaders += item
                 else -> Unit
@@ -284,18 +301,89 @@ public class SourceService(
             }
         } catch (e: Exception) {
             writer.discard()
+            movies?.discard()
+            shows?.discard()
             content.markUnit(playlistId, ImportUnit.LIVE, ImportStatus.FAILED, "EXCEPTION")
             throw e
         }
         if (outcome.status == ImportStatus.FAILED) {
             writer.discard()
+            movies?.discard()
+            shows?.discard()
             content.markUnit(playlistId, ImportUnit.LIVE, ImportStatus.FAILED, outcome.error?.code)
             return outcome
         }
         for (header in sensitiveHeaders) secrets.put(header.ref, SecretBundle(secretHeaders = mapOf(header.name to header.value)))
         writer.publish()
+        movies?.publish()
+        shows?.publish()
         if (source.epgTemplate == null) epgHint?.let { content.setEpgTemplate(playlistId, it) }
         return outcome.copy(itemCount = writer.channelCount)
+    }
+
+    /**
+     * Imports an Xtream source's movies ([ImportUnit.MOVIES]) or series list ([ImportUnit.SERIES]) into a new snapshot and
+     * publishes it; on failure the previous library stays. Seasons and episodes are loaded per series with [loadSeriesDetail].
+     * M3U sources get their library from [refreshLive] (same file), so this returns their current state.
+     */
+    public suspend fun refreshLibrary(playlistId: PlaylistId, unit: ImportUnit): UnitOutcome {
+        require(unit == ImportUnit.MOVIES || unit == ImportUnit.SERIES) { "library units are MOVIES and SERIES" }
+        val source = content.source(playlistId) ?: return UnitOutcome(unit, ImportStatus.FAILED, 0, DomainError.Storage("SOURCE_MISSING"))
+        if (source.type != PlaylistType.XTREAM) {
+            val state = content.unitState(playlistId, unit)
+            return UnitOutcome(unit, state?.status ?: ImportStatus.NEVER, state?.itemCount?.toInt() ?: 0, null)
+        }
+        val endpoint = source.sourceTemplate?.let { XtreamEndpoint.parse(it.template) }
+            ?: return UnitOutcome(unit, ImportStatus.FAILED, 0, DomainError.Storage("ENDPOINT_MISSING"))
+        val credentials = credentialsOf(source.credentialRef?.let { secrets.get(it) }) ?: return missingCredentials(unit)
+        content.markUnit(playlistId, unit, ImportStatus.RUNNING)
+        val writer = library.beginSnapshot(playlistId, unit)
+        val result = try {
+            xtream.importUnit(unit, endpoint, credentials, playlistId, source.account) { item ->
+                when (item) {
+                    is ContentItem.Group -> writer.group(item.group)
+                    is ContentItem.MovieItem -> writer.movie(item.movie, item.mediaSource, item.poster?.url)
+                    is ContentItem.SeriesItem -> writer.series(item.series, item.poster?.url, item.backdrop?.url)
+                    else -> Unit
+                }
+            }
+        } catch (e: Exception) {
+            writer.discard()
+            content.markUnit(playlistId, unit, ImportStatus.FAILED, "EXCEPTION")
+            throw e
+        }
+        if (result.status == ImportStatus.FAILED) {
+            writer.discard()
+            content.markUnit(playlistId, unit, ImportStatus.FAILED, result.error?.code)
+            return UnitOutcome(unit, ImportStatus.FAILED, 0, result.error)
+        }
+        writer.publish()
+        return UnitOutcome(unit, result.status, writer.itemCount, result.error)
+    }
+
+    /**
+     * Loads the seasons and episodes of one Xtream series (`get_series_info`) into the active series snapshot, once per
+     * snapshot unless [force]. M3U series already have their episodes. Returns the error when the provider could not answer.
+     */
+    public suspend fun loadSeriesDetail(playlistId: PlaylistId, seriesId: String, force: Boolean = false): DomainError? {
+        val source = content.source(playlistId) ?: return DomainError.Storage("SOURCE_MISSING")
+        if (source.type != PlaylistType.XTREAM || (!force && library.hasSeriesDetail(playlistId, seriesId))) return null
+        val providerSeriesId = library.seriesById(playlistId, seriesId)?.providerSeriesId ?: return DomainError.Storage("SERIES_MISSING")
+        val endpoint = source.sourceTemplate?.let { XtreamEndpoint.parse(it.template) } ?: return DomainError.Storage("ENDPOINT_MISSING")
+        val credentials = credentialsOf(source.credentialRef?.let { secrets.get(it) })
+            ?: return DomainError.Auth(AuthFailure.MISSING_CREDENTIALS)
+        val (items, error) = xtream.seriesInfo(endpoint, credentials, playlistId, providerSeriesId, source.account)
+        if (error != null) return error
+        val seasons = items.filterIsInstance<ContentItem.SeasonItem>()
+        val episodes = items.filterIsInstance<ContentItem.EpisodeItem>()
+        library.replaceSeriesDetail(
+            playlistId,
+            seriesId,
+            seasons.map { it.season },
+            seasons.associate { it.season.id.value to it.poster?.url },
+            episodes.map { Triple(it.episode, it.mediaSource, it.still?.url) },
+        )
+        return null
     }
 
     private suspend fun importXtreamLive(source: SourceRecord, bundle: SecretBundle?, emit: (ContentItem) -> Unit): UnitOutcome {
@@ -478,6 +566,26 @@ public class SourceService(
     ): ResolveResult? {
         val source = content.source(playlistId) ?: return null
         val media = content.mediaSources(playlistId, channelId).firstOrNull() ?: return null
+        return resolve(source, media, preferred)
+    }
+
+    /** Builds the playable stream for a movie or episode immediately before playback. */
+    public suspend fun resolveContent(
+        playlistId: PlaylistId,
+        type: ContentType,
+        id: String,
+        preferred: PreferredStreamFormat = PreferredStreamFormat.AUTO,
+    ): ResolveResult? {
+        val source = content.source(playlistId) ?: return null
+        val media = library.mediaSources(playlistId, type, id).firstOrNull() ?: return null
+        return resolve(source, media, preferred)
+    }
+
+    private suspend fun resolve(
+        source: SourceRecord,
+        media: app.iptvplayer.domain.model.MediaSource,
+        preferred: PreferredStreamFormat,
+    ): ResolveResult {
         val bundle = source.credentialRef?.let { secrets.get(it) }
         val headerSecrets = media.headers.sensitive.values.associateWith { ref -> secrets.get(ref)?.secretHeaders?.values?.firstOrNull() }
             .filterValues { it != null }.mapValues { it.value!! }

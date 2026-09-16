@@ -55,6 +55,8 @@ import androidx.tv.material3.NavigationDrawerItem
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.model.ContentType
+import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.LocalAppGraph
@@ -65,6 +67,11 @@ import app.iptvplayer.tv.ui.PlaceholderPage
 import app.iptvplayer.tv.ui.RestoreFocusEffect
 import app.iptvplayer.tv.ui.guide.GuideSection
 import app.iptvplayer.tv.ui.guide.GuideTags
+import app.iptvplayer.tv.ui.library.HomeSection
+import app.iptvplayer.tv.ui.library.LibrarySection
+import app.iptvplayer.tv.ui.library.LibraryTags
+import app.iptvplayer.tv.ui.library.SearchSection
+import app.iptvplayer.tv.ui.library.SearchTags
 import app.iptvplayer.tv.ui.live.ChannelScope
 import app.iptvplayer.tv.ui.live.LiveTags
 import app.iptvplayer.tv.ui.live.LiveTvSection
@@ -112,7 +119,11 @@ fun MainShell(
     onPlayChannel: (PlaylistId, ChannelScope, ChannelId) -> Unit = { _, _, _ -> },
     onSourceAdded: () -> Unit = {},
     onEditGuideLink: (PlaylistId) -> Unit = {},
+    onOpenMovie: (PlaylistId, String) -> Unit = { _, _ -> },
+    onOpenSeries: (PlaylistId, String) -> Unit = { _, _ -> },
+    onPlayContent: (PlaylistId, ContentType, String) -> Unit = { _, _, _ -> },
 ) {
+    var homeFirstKey by remember { mutableStateOf<String?>(null) }
     var selected by rememberSaveable { mutableStateOf(initialSection) }
     val focusManager = LocalFocusManager.current
     var railHasFocus by remember { mutableStateOf(false) }
@@ -165,6 +176,23 @@ fun MainShell(
                 Section.LIVE_TV -> LiveTvSection(focus, favoritesOnly = false, onPlay = onPlayChannel, onAddSource = onAddSource)
                 Section.FAVORITES -> LiveTvSection(focus, favoritesOnly = true, onPlay = onPlayChannel, onAddSource = onAddSource)
                 Section.GUIDE -> GuideSection(focus, onPlay = onPlayChannel, onAddSource = onAddSource)
+                Section.HOME -> HomeSection(
+                    focus,
+                    onPlayChannel = onPlayChannel,
+                    onOpenMovie = onOpenMovie,
+                    onOpenSeries = onOpenSeries,
+                    onPlayContent = onPlayContent,
+                    onFirstKey = { homeFirstKey = it },
+                ) { SectionContent(selected, focus, onAddSource, onPlayDeveloperStream, onSourceAdded, onEditGuideLink) }
+                Section.SEARCH -> SearchSection(
+                    focus,
+                    onPlayChannel = onPlayChannel,
+                    onOpenMovie = onOpenMovie,
+                    onOpenSeries = onOpenSeries,
+                    onAddSource = onAddSource,
+                )
+                Section.MOVIES -> LibrarySection(focus, ImportUnit.MOVIES, onOpen = onOpenMovie, onAddSource = onAddSource)
+                Section.SERIES -> LibrarySection(focus, ImportUnit.SERIES, onOpen = onOpenSeries, onAddSource = onAddSource)
                 else -> SectionContent(selected, focus, onAddSource, onPlayDeveloperStream, onSourceAdded, onEditGuideLink)
             }
         }
@@ -181,7 +209,9 @@ fun MainShell(
                 Section.LIVE_TV -> listOf(LiveTags.GROUP_ALL, LiveTags.emptyAddSource(favorites = false))
                 Section.FAVORITES -> listOf(LiveTags.emptyAddSource(favorites = true))
                 Section.GUIDE -> listOf(GuideTags.FIRST_CELL, GuideTags.ADD_SOURCE)
-                else -> listOf(ShellTags.item(selected, 0))
+                Section.MOVIES, Section.SERIES -> listOf(LibraryTags.CATEGORY_ALL, LibraryTags.ADD_SOURCE)
+                Section.HOME -> listOfNotNull(homeFirstKey, ShellTags.item(selected, 0))
+                Section.SEARCH -> listOf(SearchTags.FIELD, SearchTags.ADD_SOURCE)
             }
             // Data-driven sections load asynchronously: wait briefly for their first element, then enter geometrically.
             repeat(20) {

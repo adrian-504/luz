@@ -73,6 +73,33 @@ public data class ChannelRow(
 public class ContentStore(driver: SqlDriver, private val clock: Clock) {
     private val database = IptvDatabase(driver)
     private val queries = database.contentQueries
+    internal val libraryQueries = database.libraryQueries
+
+    /** Marks [snapshot] as the published content of [unit] (library units; live channels use their writer). */
+    internal fun publishUnit(playlistId: PlaylistId, unit: ImportUnit, snapshot: Long, itemCount: Long) {
+        queries.upsertUnitState(
+            playlistId.value,
+            unit.name,
+            snapshot,
+            ImportStatus.PUBLISHED.name,
+            itemCount,
+            null,
+            clock.now().toEpochMilliseconds(),
+            null,
+        )
+    }
+
+    /** Runs [block] in one database transaction (used by the library store). */
+    internal fun <T> transaction(block: () -> T): T = database.transactionWithResult { block() }
+
+    /**
+     * A new snapshot number for [playlistId], larger than any before for this playlist. Units share the media_source table, so
+     * two units must never publish the same snapshot number (a later delete of one would remove the other's rows).
+     */
+    internal fun allocateSnapshot(playlistId: PlaylistId): Long = database.transactionWithResult {
+        libraryQueries.allocateSnapshot(playlistId.value, clock.now().toEpochMilliseconds())
+        libraryQueries.allocatedSnapshot(playlistId.value).executeAsOne()
+    }
 
     public fun addSource(
         playlistId: PlaylistId,
@@ -149,6 +176,7 @@ public class ContentStore(driver: SqlDriver, private val clock: Clock) {
             queries.deleteAllMediaSources(playlistId.value)
             queries.deleteAllChannels(playlistId.value)
             queries.deleteAllGroups(playlistId.value)
+            libraryQueries.deleteLibrary(playlistId.value)
             queries.deletePlaylistRow(playlistId.value)
             queries.deleteProviderRow(providerId)
         }
@@ -186,7 +214,7 @@ public class ContentStore(driver: SqlDriver, private val clock: Clock) {
 
     public fun beginLiveSnapshot(playlistId: PlaylistId, batchSize: Int = 500): LiveSnapshotWriter {
         val previous = unitState(playlistId, ImportUnit.LIVE)?.activeSnapshot ?: 0L
-        return LiveSnapshotWriter(playlistId, maxOf(previous + 1, clock.now().toEpochMilliseconds()), batchSize)
+        return LiveSnapshotWriter(playlistId, maxOf(previous + 1, allocateSnapshot(playlistId)), batchSize)
     }
 
     private fun activeLiveSnapshot(playlistId: PlaylistId): Long? = unitState(playlistId, ImportUnit.LIVE)?.activeSnapshot
@@ -219,28 +247,46 @@ public class ContentStore(driver: SqlDriver, private val clock: Clock) {
         }.executeAsList()
     }
 
+    /** Channels whose name contains [query] (case-insensitive for Latin letters): exact, then prefix, then contains. */
+    public fun searchChannels(playlistId: PlaylistId, query: String, limit: Int): List<ChannelRow> {
+        val snapshot = activeLiveSnapshot(playlistId) ?: return emptyList()
+        val pattern = likePattern(query) ?: return emptyList()
+        return queries.searchChannels(playlistId.value, snapshot, pattern, limit.toLong()) { id, name, number, logo, tvg, favorite ->
+            row(id, name, number, logo, tvg, favorite)
+        }.executeAsList()
+    }
+
     public fun channelCount(playlistId: PlaylistId): Long =
         activeLiveSnapshot(playlistId)?.let { queries.channelCount(playlistId.value, it).executeAsOne() } ?: 0
 
     public fun setFavorite(channelId: ChannelId, favorite: Boolean) {
+        setFavorite(ContentType.CHANNEL, channelId.value, favorite)
+    }
+
+    /** Favorites are user state keyed by content type and stable id; imports never delete them. */
+    public fun setFavorite(type: ContentType, id: String, favorite: Boolean) {
         if (favorite) {
-            queries.addFavorite(ContentType.CHANNEL.name, channelId.value, clock.now().toEpochMilliseconds())
+            queries.addFavorite(type.name, id, clock.now().toEpochMilliseconds())
         } else {
-            queries.removeFavorite(ContentType.CHANNEL.name, channelId.value)
+            queries.removeFavorite(type.name, id)
         }
     }
 
     /** The playable sources of [channelId] in the active snapshot, best first. */
     public fun mediaSources(playlistId: PlaylistId, channelId: ChannelId): List<MediaSource> {
         val snapshot = activeLiveSnapshot(playlistId) ?: return emptyList()
-        return queries.mediaSourcesForOwner(playlistId.value, snapshot, channelId.value).executeAsList().map { row ->
+        return mediaSources(playlistId, snapshot, ContentType.CHANNEL, channelId.value)
+    }
+
+    internal fun mediaSources(playlistId: PlaylistId, snapshot: Long, ownerType: ContentType, ownerId: String): List<MediaSource> =
+        queries.mediaSourcesForOwner(playlistId.value, snapshot, ownerId).executeAsList().map { row ->
             val locator = when (row.locator_kind) {
                 LOCATOR_XTREAM -> MediaLocator.XtreamStream(XtreamStreamKind.valueOf(row.xtream_kind!!), row.stream_id!!, row.extension)
                 else -> MediaLocator.DirectUrl(UrlTemplate(row.url_template!!))
             }
             MediaSource(
                 id = MediaSourceId(row.id),
-                owner = ContentRef(ContentType.CHANNEL, row.owner_id),
+                owner = ContentRef(ownerType, row.owner_id),
                 locator = locator,
                 protocolHint = StreamProtocol.valueOf(row.protocol),
                 headers = MediaHeaders(
@@ -254,7 +300,6 @@ public class ContentStore(driver: SqlDriver, private val clock: Clock) {
                 priority = row.priority.toInt(),
             )
         }
-    }
 
     private fun row(id: String, name: String, number: Long?, logo: String?, tvgId: String?, favorite: Boolean?) =
         ChannelRow(ChannelId(id), name, number?.toInt(), logo?.let { UrlTemplate(it) }, tvgId, favorite == true)
@@ -295,22 +340,7 @@ public class ContentStore(driver: SqlDriver, private val clock: Clock) {
             add { queries.insertMember(playlistId.value, snapshot, groupId, channelId.value, order) }
         }
 
-        private fun insertSource(source: MediaSource) {
-            val locator = source.locator
-            queries.insertMediaSource(
-                playlistId.value, snapshot, source.id.value, source.owner.id,
-                if (locator is MediaLocator.XtreamStream) LOCATOR_XTREAM else LOCATOR_DIRECT,
-                (locator as? MediaLocator.DirectUrl)?.template?.template,
-                (locator as? MediaLocator.XtreamStream)?.kind?.name,
-                (locator as? MediaLocator.XtreamStream)?.streamId,
-                (locator as? MediaLocator.XtreamStream)?.extension,
-                source.protocolHint.name, source.headers.userAgent, source.headers.referrer,
-                encodeMap(
-                    source.headers.custom,
-                ),
-                encodeMap(source.headers.sensitive.mapValues { it.value.value }), source.priority.toLong(),
-            )
-        }
+        private fun insertSource(source: MediaSource) = insertMediaSource(playlistId, snapshot, source)
 
         private fun add(write: () -> Unit) {
             pending += write
@@ -357,7 +387,24 @@ public class ContentStore(driver: SqlDriver, private val clock: Clock) {
         }
     }
 
-    private companion object {
+    internal fun insertMediaSource(playlistId: PlaylistId, snapshot: Long, source: MediaSource) {
+        val locator = source.locator
+        queries.insertMediaSource(
+            playlistId.value, snapshot, source.id.value, source.owner.id,
+            if (locator is MediaLocator.XtreamStream) LOCATOR_XTREAM else LOCATOR_DIRECT,
+            (locator as? MediaLocator.DirectUrl)?.template?.template,
+            (locator as? MediaLocator.XtreamStream)?.kind?.name,
+            (locator as? MediaLocator.XtreamStream)?.streamId,
+            (locator as? MediaLocator.XtreamStream)?.extension,
+            source.protocolHint.name, source.headers.userAgent, source.headers.referrer,
+            encodeMap(
+                source.headers.custom,
+            ),
+            encodeMap(source.headers.sensitive.mapValues { it.value.value }), source.priority.toLong(),
+        )
+    }
+
+    internal companion object {
         const val LOCATOR_DIRECT = "DIRECT_URL"
         const val LOCATOR_XTREAM = "XTREAM_STREAM"
 
@@ -370,6 +417,10 @@ public class ContentStore(driver: SqlDriver, private val clock: Clock) {
                 },
             ).toString()
         }
+
+        /** [query] trimmed with LIKE wildcards escaped; null when blank. */
+        internal fun likePattern(query: String): String? =
+            query.trim().ifEmpty { null }?.replace("\\", "\\\\")?.replace("%", "\\%")?.replace("_", "\\_")
 
         fun decodeMap(text: String?): Map<String, String> =
             text?.let { Json.parseToJsonElement(it).jsonObject.mapValues { entry -> entry.value.jsonPrimitive.content } }.orEmpty()

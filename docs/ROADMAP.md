@@ -295,6 +295,40 @@ Scope (to be confirmed at Phase 6 review):
 5. Real-device check on the owner's Google TV, including playback of the owner's own authorized source entered at runtime
    (never committed).
 
+## Phase 8 — Android VOD/Series (in progress)
+
+**Primary objective:** the library experience on Android TV (exit criterion: library experience complete) — FR-VOD-001,
+FR-VOD-002, FR-SER-001, FR-WATCH-001, FR-HOME-001 (Android subset), FR-SRCH-001/003 (local search).
+
+Scope and order (stated at the start of the phase, 2026-09-15):
+
+1. **Storage** — movies, series, seasons, episodes and library categories in unit snapshots like live channels; watch state
+   (position, duration, completed ≥ 95 %, last played, play count); schema migration 1 → 2 so existing installs keep
+   their sources, logins and favorites.
+2. **Import** — Xtream VOD and series units and M3U movies/episodes from the same pass as channels; staged in the
+   background after channels and guide (a large provider's movies must not delay Live TV); Xtream seasons and episodes
+   loaded lazily with `get_series_info` when a series is opened (IPTV_PROTOCOLS.md).
+3. **Playback** — resolve movies and episodes; player controls for VOD (seek, progress, resume from the saved position,
+   next episode); watch state saved while playing.
+4. **Artwork** — posters and backdrops with a designed fallback; image loading library evaluated in an ADR.
+5. **Screens** — Movies (categories, poster grid, detail), Series (grid, detail with seasons and episodes), Home
+   (continue watching, favorites, recently added), Search (local, grouped by type, per keystroke, no network).
+6. **Verification** — JVM and device tests for each part, the emulator, and the owner's Bbox TV with their provider.
+
+### Progress (2026-09-15)
+
+| Scope item | Status |
+|---|---|
+| Storage and migration | **Done — ADR-0028:** library tables in unit snapshots, unique snapshot allocation, watch state; version-1 databases upgrade in place (JVM test) |
+| Import | **Done:** Xtream movies/series lists, `get_series_info` on first open (once per snapshot), M3U library from the channel pass; staged after the guide in the background (JVM tests with fixtures) |
+| Playback and watch state | **Done:** resolve movies/episodes, resume, progress saved every 10 s / at the end / on exit, next episode, VOD progress bar and seeking (device tests) |
+| Artwork | **Done — Coil 3.6.2 (ADR-0028)** with template cache keys and a text fallback |
+| Screens | **Done:** Movies, Series, movie and series detail, Home (Continue watching, favorite channels, recently added, series), Search (channels, movies, series). Device tests on the emulator |
+| Owner's Bbox TV with their provider | **NOT YET VERIFIED** |
+
+Not in Phase 8: third-party metadata enrichment (FR-VOD-002 keeps the library usable without it), catch-up playback,
+downloads, unified multi-source library, parental controls.
+
 ## Proposed interim gate: Android TV personal alpha
 
 The spec's private-beta gate (§21.1) requires all three primary platforms, so the first beta would come only

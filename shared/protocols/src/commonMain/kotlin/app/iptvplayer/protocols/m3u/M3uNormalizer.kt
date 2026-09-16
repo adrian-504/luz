@@ -311,14 +311,16 @@ internal class M3uNormalizer(
         val seriesId =
             SeriesId(StableIds.derive(DerivedIdKind.SERIES, playlistId.value, listOf("m3u", TextNormalization.normKey(seriesTitle))))
         if (seriesSeen.add(seriesId)) {
+            val poster = artwork(entry.attributes["tvg-logo"], ArtworkKind.POSTER, entry.line)
             emit(
                 ContentItem.SeriesItem(
                     Series(
                         id = seriesId, playlistId = playlistId, groupIds = groupTitles.map { group(ContentKind.SERIES, it) },
                         title = seriesTitle, year = null, plot = null, genres = emptyList(), rating = null,
-                        poster = artwork(entry.attributes["tvg-logo"], ArtworkKind.POSTER, entry.line)?.id, backdrop = null,
+                        poster = poster?.id, backdrop = null,
                         providerSeriesId = null, externalIds = ExternalIds(), lastModifiedAt = null,
                     ),
+                    poster,
                 ),
             )
             counts = counts.copy(series = counts.series + 1)
@@ -349,6 +351,7 @@ internal class M3uNormalizer(
                     providerEpisodeId = null,
                 ),
                 mediaSource,
+                still,
             ),
         )
         counts = counts.copy(episodes = counts.episodes + 1)

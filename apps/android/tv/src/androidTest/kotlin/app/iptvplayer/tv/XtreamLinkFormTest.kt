@@ -74,7 +74,10 @@ class XtreamLinkFormTest {
         rule.onNodeWithTag(FormTags.SUBMIT).performSemanticsAction(SemanticsActions.RequestFocus)
         rule.awaitKeyboardReleased()
         awaitFocus(FormTags.SUBMIT)
-        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.pressOkUntil {
+            runBlocking { graph.sources() }.isNotEmpty() ||
+                rule.onAllNodes(hasTestTag(FormTags.WORKING)).fetchSemanticsNodes().isNotEmpty()
+        }
 
         runCatching { rule.waitUntil(20_000) { runBlocking { graph.sources() }.isNotEmpty() } }.onFailure {
             val present = listOf(FormTags.WORKING, FormTags.ERROR, FormTags.BUSY, FormTags.SUBMIT).filter { tag ->

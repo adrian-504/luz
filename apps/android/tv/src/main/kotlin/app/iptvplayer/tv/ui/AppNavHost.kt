@@ -13,13 +13,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.developer.DeveloperStreams
+import app.iptvplayer.tv.ui.library.ContentPlayerRoute
+import app.iptvplayer.tv.ui.library.MovieDetailScreen
+import app.iptvplayer.tv.ui.library.SeriesDetailScreen
 import app.iptvplayer.tv.ui.live.ChannelScope
 import app.iptvplayer.tv.ui.onboarding.GuideLinkFormScreen
 import app.iptvplayer.tv.ui.onboarding.M3uFormScreen
@@ -43,6 +49,16 @@ object Routes {
     const val PLAYER = "player/{streamId}"
     const val CHANNEL = "channel/{playlist}/{scope}/{channel}"
     const val GUIDE_LINK = "guide-link/{playlist}"
+    const val MOVIE = "movie/{playlist}/{id}"
+    const val SERIES = "series/{playlist}/{id}"
+    const val CONTENT = "content/{playlist}/{type}/{id}?fromStart={fromStart}"
+
+    fun movie(playlist: PlaylistId, id: String) = "movie/${Uri.encode(playlist.value)}/${Uri.encode(id)}"
+
+    fun series(playlist: PlaylistId, id: String) = "series/${Uri.encode(playlist.value)}/${Uri.encode(id)}"
+
+    fun content(playlist: PlaylistId, type: ContentType, id: String, fromStart: Boolean) =
+        "content/${Uri.encode(playlist.value)}/${type.name}/${Uri.encode(id)}?fromStart=$fromStart"
 
     fun guideLink(playlist: PlaylistId) = "guide-link/${Uri.encode(playlist.value)}"
 
@@ -109,6 +125,42 @@ fun AppNavHost() {
                 onPlayChannel = { playlist, scope, channel -> navController.navigate(Routes.channel(playlist, scope, channel)) },
                 onSourceAdded = { navController.showLiveTv() },
                 onEditGuideLink = { navController.navigate(Routes.guideLink(it)) },
+                onOpenMovie = { playlist, id -> navController.navigate(Routes.movie(playlist, id)) },
+                onOpenSeries = { playlist, id -> navController.navigate(Routes.series(playlist, id)) },
+                onPlayContent = { playlist, type, id -> navController.navigate(Routes.content(playlist, type, id, fromStart = false)) },
+            )
+        }
+        composable(Routes.MOVIE) { entry ->
+            val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
+            val id = Uri.decode(entry.arguments?.getString("id").orEmpty())
+            MovieDetailScreen(
+                playlist,
+                id,
+                onPlay = { fromStart -> navController.navigate(Routes.content(playlist, ContentType.MOVIE, id, fromStart)) },
+            )
+        }
+        composable(Routes.SERIES) { entry ->
+            val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
+            val id = Uri.decode(entry.arguments?.getString("id").orEmpty())
+            SeriesDetailScreen(playlist, id, onPlayEpisode = { episode, fromStart ->
+                navController.navigate(Routes.content(playlist, ContentType.EPISODE, episode, fromStart))
+            })
+        }
+        composable(
+            Routes.CONTENT,
+            arguments = listOf(
+                navArgument("fromStart") {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
+            ),
+        ) { entry ->
+            val arguments = entry.arguments
+            ContentPlayerRoute(
+                PlaylistId(Uri.decode(arguments?.getString("playlist").orEmpty())),
+                ContentType.valueOf(arguments?.getString("type") ?: ContentType.MOVIE.name),
+                Uri.decode(arguments?.getString("id").orEmpty()),
+                arguments?.getBoolean("fromStart") ?: false,
             )
         }
         composable(Routes.GUIDE_LINK) { entry ->

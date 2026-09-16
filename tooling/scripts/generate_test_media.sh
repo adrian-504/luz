@@ -28,22 +28,27 @@ ffmpeg "${common[@]}" -t 10 -movflags +faststart "$out/vod-10s.mp4"
 ffmpeg "${common[@]}" -t 30 -f hls -hls_time 2 -hls_list_size 0 -hls_segment_type mpegts \
   -hls_segment_filename "$out/segments/seg-%02d.ts" "$out/segments/index.m3u8"
 
-# 8 s progressive MP4 with two audio languages (440 Hz "eng", 660 Hz "spa") and an English text subtitle track, for
-# audio/subtitle track selection tests. Subtitle cues are generated here; the timestamps are what tests rely on.
+# 30 s progressive MP4 with two audio languages (440 Hz "eng", 660 Hz "spa") and an English text subtitle track, for
+# audio/subtitle track selection tests. It is long enough for a test to walk the player overlay while it plays.
+# Subtitle cues are generated here; the timestamps are what tests rely on.
 subs=$(mktemp -t iptv-subs).srt
 trap 'rm -f "$subs"' EXIT
-printf '1\n00:00:00,000 --> 00:00:04,000\nSubtitle cue one\n\n2\n00:00:04,000 --> 00:00:08,000\nSubtitle cue two\n' > "$subs"
+for i in $(seq 0 9); do
+  from=$(printf '00:00:%02d,000' $((i * 3)))
+  to=$(printf '00:00:%02d,000' $((i * 3 + 3)))
+  printf '%d\n%s --> %s\nSubtitle cue %d\n\n' $((i + 1)) "$from" "$to" $((i + 1)) >> "$subs"
+done
 ffmpeg -hide_banner -loglevel error -y \
   -f lavfi -i "testsrc2=size=426x240:rate=25" \
   -f lavfi -i "sine=frequency=440:sample_rate=48000" \
   -f lavfi -i "sine=frequency=660:sample_rate=48000" \
   -i "$subs" \
-  -map 0:v -map 1:a -map 2:a -map 3:s -t 8 \
+  -map 0:v -map 1:a -map 2:a -map 3:s -t 30 \
   -threads 1 -c:v libx264 -profile:v baseline -level 3.0 -pix_fmt yuv420p -preset veryfast -b:v 180k -maxrate 220k -bufsize 440k \
   -g 50 -keyint_min 50 -sc_threshold 0 -bf 0 \
   -c:a aac -b:a 48k -ac 2 -c:s mov_text \
   -metadata:s:a:0 language=eng -metadata:s:a:1 language=spa -metadata:s:s:0 language=eng \
   -disposition:a:0 default -disposition:a:1 0 -disposition:s:0 0 \
-  -map_metadata -1 -fflags +bitexact -flags:v +bitexact -flags:a +bitexact -movflags +faststart "$out/multi-track-8s.mp4"
+  -map_metadata -1 -fflags +bitexact -flags:v +bitexact -flags:a +bitexact -movflags +faststart "$out/multi-track-30s.mp4"
 
 ls -l "$out" "$out/segments" | awk 'NR>1 {print $5, $9}'

@@ -4,6 +4,7 @@ import app.iptvplayer.domain.capability.PlatformCapabilities
 import app.iptvplayer.domain.capability.Support
 import app.iptvplayer.domain.error.NetworkErrorKind
 import app.iptvplayer.domain.id.CredentialRef
+import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.domain.model.PlaylistType
@@ -71,6 +72,11 @@ private class ProviderSimulation : HttpTransport {
                 action == "get_live_categories" -> 200 to Fixtures.liveCategoriesJson
                 action == "get_live_streams" -> 200 to liveStreams
                 action == "get_short_epg" -> 200 to Fixtures.shortEpgJson
+                action == "get_vod_categories" -> 200 to Fixtures.vodCategoriesJson
+                action == "get_vod_streams" -> 200 to Fixtures.vodStreamsJson
+                action == "get_series_categories" -> 200 to Fixtures.seriesCategoriesJson
+                action == "get_series" -> 200 to Fixtures.seriesJson
+                action == "get_series_info" -> 200 to Fixtures.seriesInfoJson
                 else -> 200 to "[]".encodeToByteArray()
             }
             url.startsWith("http://panel.example.com:8080/xmltv.php") && credentialsOk -> 200 to xmltv
@@ -312,6 +318,54 @@ class SourceServiceTest {
             "#EXTM3U a",
             SourceService.readFirstLine(app.iptvplayer.domain.ports.ByteArraySource("#EXTM3U a\nrest".encodeToByteArray()), 1024),
         )
+    }
+
+    @Test
+    fun xtreamMoviesAndSeriesImportAndResolveForPlayback() = runTest {
+        val added = assertIs<AddSourceResult.Added>(
+            service.addXtream(null, "http://panel.example.com:8080/", ProviderSimulation.CANARY_USER, ProviderSimulation.CANARY_PASSWORD),
+        )
+        val playlist = added.playlistId
+        val library = service.library
+
+        val movies = service.refreshLibrary(playlist, ImportUnit.MOVIES)
+        assertEquals(ImportStatus.PUBLISHED, movies.status)
+        assertEquals(3, movies.itemCount, "vod-streams.json has three movies")
+        assertEquals(listOf("Example Film", "Example Documentary (2024)", "Example Short"), library.movies(playlist).map { it.title })
+
+        val series = service.refreshLibrary(playlist, ImportUnit.SERIES)
+        assertEquals(2, series.itemCount, "series.json: two series, one without id rejected")
+        val show = library.series(playlist).first { it.title == "Example Series" }
+        assertTrue(library.episodes(playlist, show.id).isEmpty(), "episodes load when the series is opened")
+
+        assertEquals(null, service.loadSeriesDetail(playlist, show.id))
+        assertEquals(3, library.episodes(playlist, show.id).size, "series-info.json: three episodes")
+        assertEquals(2, library.seasons(playlist, show.id).size)
+        val infoRequests = transport.requests.count { "get_series_info" in it }
+        service.loadSeriesDetail(playlist, show.id)
+        assertEquals(infoRequests, transport.requests.count { "get_series_info" in it }, "loaded once per series snapshot")
+
+        val movie =
+            assertIs<ResolveResult.Resolved>(service.resolveContent(playlist, ContentType.MOVIE, library.movies(playlist).first().id))
+        assertTrue(movie.source.url.unsafeRawValue().startsWith("http://panel.example.com:8080/movie/canary-user/"), "movie stream path")
+        val episodeId = library.episodes(playlist, show.id).first().id
+        val episode = assertIs<ResolveResult.Resolved>(service.resolveContent(playlist, ContentType.EPISODE, episodeId))
+        assertTrue(
+            episode.source.url.unsafeRawValue().startsWith("http://panel.example.com:8080/series/canary-user/"),
+            "episode stream path",
+        )
+        assertEquals(3, content.channels(playlist).size, "live channels are untouched by library imports")
+        assertDatabaseHasNoSecrets()
+    }
+
+    @Test
+    fun m3uMoviesComeFromTheSamePlaylistPass() = runTest {
+        val added = assertIs<AddSourceResult.Added>(
+            service.addM3u(null, "http://lists.example.com/get.php?username=canary-user&password=${ProviderSimulation.CANARY_PASSWORD}"),
+        )
+        assertEquals(1, service.library.movies(added.playlistId).size, "small-valid.m3u has one movie")
+        assertEquals(ImportStatus.PUBLISHED, service.refreshLibrary(added.playlistId, ImportUnit.MOVIES).status)
+        assertTrue(transport.requests.none { "get_vod" in it }, "M3U sources do not call the Xtream API")
     }
 
     @Test

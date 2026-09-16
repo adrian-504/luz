@@ -44,3 +44,6 @@ xcuserdata/
 tooling/fixtures/generated/
 __pycache__/
 *.pyc
+
+# The owner's original artwork drop; the copy the build uses lives in tooling/branding/.
+/Luz IPTV App Icon.png

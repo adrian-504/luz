@@ -34,11 +34,14 @@ public sealed interface ContentItem {
 
     public data class MovieItem(public val movie: Movie, public val mediaSource: MediaSource, public val poster: Artwork?) : ContentItem
 
-    public data class SeriesItem(public val series: Series) : ContentItem
+    /** [poster] and [backdrop] are the artwork that [Series.poster] / [Series.backdrop] reference. */
+    public data class SeriesItem(public val series: Series, public val poster: Artwork? = null, public val backdrop: Artwork? = null) :
+        ContentItem
 
-    public data class SeasonItem(public val season: Season) : ContentItem
+    public data class SeasonItem(public val season: Season, public val poster: Artwork? = null) : ContentItem
 
-    public data class EpisodeItem(public val episode: Episode, public val mediaSource: MediaSource) : ContentItem
+    public data class EpisodeItem(public val episode: Episode, public val mediaSource: MediaSource, public val still: Artwork? = null) :
+        ContentItem
 
     /** A channel as defined by an EPG source (`<channel id>`). */
     public data class EpgChannelItem(public val channel: EpgChannel, public val icon: Artwork?) : ContentItem

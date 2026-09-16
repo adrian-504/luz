@@ -21,6 +21,8 @@ dependencies {
     implementation(libs.navigation.compose)
     implementation(project(":apps:android:platform"))
     implementation(project(":shared:epg"))
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
     debugImplementation(project(":apps:android:testing"))
 
     androidTestImplementation(platform(libs.compose.bom))

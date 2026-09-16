@@ -21,6 +21,16 @@ object TestPanel {
     private data class TestChannel(val id: Int, val name: String, val category: String, val epgId: String?)
 
     private val categories = listOf("1" to "News", "2" to "Sports", "3" to "Documentaries & Kids")
+
+    // Library: synthetic titles only. Movies and episodes play the 30 s HLS test video.
+    private val vodCategories = listOf("11" to "Test Films", "12" to "Test Shorts")
+    private val movies = listOf(
+        Triple(5001, "Test Movie One", "11"),
+        Triple(5002, "Test Movie Two", "11"),
+        Triple(5003, "Test Short", "12"),
+    )
+    private val seriesCategories = listOf("21" to "Test Shows")
+    private const val SERIES_ID = 7001
     private val channels = listOf(
         TestChannel(101, "Test News HD", "1", "news.test"),
         TestChannel(102, "Test News 2", "1", null),
@@ -53,8 +63,47 @@ object TestPanel {
                 """{"num":${index + 1},"name":"${c.name}","stream_type":"live","stream_id":${c.id},"stream_icon":"","epg_channel_id":${c.epgId?.let { "\"$it\"" } ?: "null"},"category_id":"${c.category}","tv_archive":0}"""
             }
             "get_short_epg" -> shortEpg(params(query)["stream_id"])
-            "get_vod_categories", "get_series_categories", "get_vod_streams", "get_series" -> "[]"
+            "get_vod_categories" -> categoryJson(vodCategories)
+            "get_vod_streams" -> movies.withIndex().joinToString(",", "[", "]") { (index, m) ->
+                """{"num":${index + 1},"name":"${m.second}","stream_type":"movie","stream_id":${m.first},"stream_icon":"",""" +
+                    """"rating":"7","added":"${Instant.now().epochSecond - index * 3600}","category_id":"${m.third}","container_extension":"m3u8"}"""
+            }
+            "get_series_categories" -> categoryJson(seriesCategories)
+            "get_series" -> seriesListJson()
+            "get_series_info" -> if (params(query)["series_id"] == SERIES_ID.toString()) seriesInfo() else EMPTY_SERIES_INFO
             else -> "[]"
+        }
+    }
+
+    private fun categoryJson(list: List<Pair<String, String>>) =
+        list.joinToString(",", "[", "]") { (id, name) -> """{"category_id":"$id","category_name":"$name","parent_id":0}""" }
+
+    private fun seriesListJson() =
+        """[{"num":1,"name":"Test Series","series_id":$SERIES_ID,"cover":"","plot":"A synthetic test series.",""" +
+            """"genre":"Test","releaseDate":"2026-01-01","category_id":"21"}]"""
+
+    private const val EMPTY_SERIES_INFO = """{"seasons":[],"info":{},"episodes":{}}"""
+
+    /** `get_series_info` for the test series: season 1 with three episodes, season 2 with one. */
+    private fun seriesInfo(): String {
+        fun episode(id: Int, season: Int, number: Int) =
+            """{"id":"$id","episode_num":$number,"title":"Test Episode $number","container_extension":"m3u8",""" +
+                """"season":$season,"info":{"duration_secs":30}}"""
+        return """{"seasons":[{"season_number":1,"name":"Season 1"},{"season_number":2,"name":"Season 2"}],""" +
+            """"info":{"name":"Test Series"},""" +
+            """"episodes":{"1":[${episode(8101, 1, 1)},${episode(8102, 1, 2)},${episode(8103, 1, 3)}],"2":[${episode(8201, 2, 1)}]}}"""
+    }
+
+    /** `/movie/{user}/{password}/{id}.m3u8` and `/series/...`: true when the login and title exist. */
+    fun libraryTarget(route: String): Boolean {
+        val kind = route.removePrefix("/").substringBefore('/')
+        val parts = route.removePrefix("/$kind/").split('/')
+        if (parts.size != 3 || parts[0] != USERNAME || URLDecoder.decode(parts[1], "UTF-8") != PASSWORD) return false
+        val id = parts[2].substringBefore('.').toIntOrNull() ?: return false
+        return when (kind) {
+            "movie" -> movies.any { it.first == id }
+            "series" -> id in setOf(8101, 8102, 8103, 8201)
+            else -> false
         }
     }
 

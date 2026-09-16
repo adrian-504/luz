@@ -16,6 +16,11 @@ val embedFixtures = tasks.register<EmbedFixtureBytes>("embedFixtures") {
             "smallValidXmltv" to fixtures.file("xmltv/small-valid.xml").asFile,
             "htmlErrorBody" to fixtures.file("xtream/html-error-body.html").asFile,
             "shortEpgJson" to fixtures.file("xtream/short-epg.json").asFile,
+            "vodCategoriesJson" to fixtures.file("xtream/partial-failure/vod-categories.json").asFile,
+            "vodStreamsJson" to fixtures.file("xtream/vod-streams.json").asFile,
+            "seriesCategoriesJson" to fixtures.file("xtream/partial-failure/series-categories.json").asFile,
+            "seriesJson" to fixtures.file("xtream/series.json").asFile,
+            "seriesInfoJson" to fixtures.file("xtream/series-info.json").asFile,
         ),
     )
     packageName.set("app.iptvplayer.ingestion.fixtures")

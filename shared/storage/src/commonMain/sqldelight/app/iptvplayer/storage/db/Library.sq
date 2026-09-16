@@ -1,0 +1,315 @@
+-- Movies and series (docs/DOMAIN_MODEL.md; ROADMAP Phase 8). Imported rows carry the snapshot of their unit (VOD or SERIES)
+-- like live channels; URLs are templates and secrets never appear here (ADR-0015). Keep in sync with 1.sqm.
+
+CREATE TABLE snapshot_allocation (
+    playlist_id TEXT PRIMARY KEY NOT NULL,
+    last_snapshot INTEGER NOT NULL
+);
+
+CREATE TABLE library_group (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    unit TEXT NOT NULL,
+    id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, snapshot, id)
+);
+
+CREATE TABLE library_member (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    group_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, snapshot, group_id, item_id)
+);
+
+CREATE TABLE movie (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    year INTEGER,
+    duration_seconds INTEGER,
+    plot TEXT,
+    genres TEXT,
+    rating TEXT,
+    poster_template TEXT,
+    backdrop_template TEXT,
+    added_at INTEGER,
+    PRIMARY KEY (playlist_id, snapshot, id)
+);
+
+CREATE INDEX movie_order ON movie(playlist_id, snapshot, sort_order);
+
+CREATE TABLE series (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    year INTEGER,
+    plot TEXT,
+    genres TEXT,
+    rating TEXT,
+    poster_template TEXT,
+    backdrop_template TEXT,
+    provider_series_id TEXT,
+    last_modified_at INTEGER,
+    PRIMARY KEY (playlist_id, snapshot, id)
+);
+
+CREATE INDEX series_order ON series(playlist_id, snapshot, sort_order);
+
+CREATE TABLE season (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    series_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    season_number INTEGER NOT NULL,
+    title TEXT,
+    poster_template TEXT,
+    episode_count INTEGER,
+    PRIMARY KEY (playlist_id, snapshot, id)
+);
+
+CREATE TABLE episode (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    series_id TEXT NOT NULL,
+    season_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    season_number INTEGER NOT NULL,
+    episode_number INTEGER NOT NULL,
+    sort_order INTEGER NOT NULL,
+    title TEXT,
+    plot TEXT,
+    duration_seconds INTEGER,
+    air_date TEXT,
+    still_template TEXT,
+    PRIMARY KEY (playlist_id, snapshot, id)
+);
+
+CREATE INDEX episode_series ON episode(playlist_id, snapshot, series_id, season_number, episode_number);
+
+-- Xtream seasons/episodes are loaded when a series is opened; this remembers for which series snapshot.
+CREATE TABLE series_detail_state (
+    playlist_id TEXT NOT NULL,
+    series_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, series_id)
+);
+
+-- User state: survives imports. parent_id is the series of an episode.
+CREATE TABLE watch_state (
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    playlist_id TEXT NOT NULL,
+    parent_id TEXT,
+    position_ms INTEGER NOT NULL,
+    duration_ms INTEGER,
+    completed INTEGER NOT NULL DEFAULT 0,
+    last_played_at INTEGER NOT NULL,
+    play_count INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (content_type, content_id)
+);
+
+CREATE INDEX watch_recent ON watch_state(last_played_at);
+
+allocateSnapshot:
+INSERT INTO snapshot_allocation(playlist_id, last_snapshot) VALUES (:playlistId, :candidate)
+ON CONFLICT(playlist_id) DO UPDATE SET last_snapshot = MAX(excluded.last_snapshot, snapshot_allocation.last_snapshot + 1);
+
+allocatedSnapshot:
+SELECT last_snapshot FROM snapshot_allocation WHERE playlist_id = ?;
+
+insertLibraryGroup:
+INSERT OR IGNORE INTO library_group(playlist_id, snapshot, unit, id, title, sort_order) VALUES (?, ?, ?, ?, ?, ?);
+
+insertLibraryMember:
+INSERT OR IGNORE INTO library_member(playlist_id, snapshot, group_id, item_id, sort_order) VALUES (?, ?, ?, ?, ?);
+
+insertMovie:
+INSERT OR IGNORE INTO movie(playlist_id, snapshot, id, title, sort_order, year, duration_seconds, plot, genres, rating, poster_template,
+    backdrop_template, added_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+insertSeries:
+INSERT OR IGNORE INTO series(playlist_id, snapshot, id, title, sort_order, year, plot, genres, rating, poster_template, backdrop_template,
+    provider_series_id, last_modified_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+insertSeason:
+INSERT OR REPLACE INTO season(playlist_id, snapshot, series_id, id, season_number, title, poster_template, episode_count)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+insertEpisode:
+INSERT OR REPLACE INTO episode(playlist_id, snapshot, series_id, season_id, id, season_number, episode_number, sort_order, title, plot,
+    duration_seconds, air_date, still_template)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+libraryGroups:
+SELECT g.id, g.title, COUNT(m.item_id) AS item_count
+FROM library_group g
+LEFT JOIN library_member m ON m.playlist_id = g.playlist_id AND m.snapshot = g.snapshot AND m.group_id = g.id
+WHERE g.playlist_id = :playlistId AND g.snapshot = :snapshot AND g.unit = :unit
+GROUP BY g.id, g.title, g.sort_order
+ORDER BY g.sort_order;
+
+movies:
+SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
+FROM movie mo
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot
+ORDER BY mo.sort_order
+LIMIT :limit OFFSET :offset;
+
+moviesInGroup:
+SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
+FROM library_member m
+JOIN movie mo ON mo.playlist_id = m.playlist_id AND mo.snapshot = m.snapshot AND mo.id = m.item_id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+WHERE m.playlist_id = :playlistId AND m.snapshot = :snapshot AND m.group_id = :groupId
+ORDER BY m.sort_order
+LIMIT :limit OFFSET :offset;
+
+recentMovies:
+SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
+FROM movie mo
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.added_at IS NOT NULL
+ORDER BY mo.added_at DESC
+LIMIT :limit;
+
+movieById:
+SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
+FROM movie mo
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.id = :id;
+
+movieCount:
+SELECT COUNT(*) FROM movie WHERE playlist_id = ? AND snapshot = ?;
+
+seriesList:
+SELECT s.*, (f.content_id IS NOT NULL) AS is_favorite
+FROM series s
+LEFT JOIN favorite f ON f.content_type = 'SERIES' AND f.content_id = s.id
+WHERE s.playlist_id = :playlistId AND s.snapshot = :snapshot
+ORDER BY s.sort_order
+LIMIT :limit OFFSET :offset;
+
+seriesInGroup:
+SELECT s.*, (f.content_id IS NOT NULL) AS is_favorite
+FROM library_member m
+JOIN series s ON s.playlist_id = m.playlist_id AND s.snapshot = m.snapshot AND s.id = m.item_id
+LEFT JOIN favorite f ON f.content_type = 'SERIES' AND f.content_id = s.id
+WHERE m.playlist_id = :playlistId AND m.snapshot = :snapshot AND m.group_id = :groupId
+ORDER BY m.sort_order
+LIMIT :limit OFFSET :offset;
+
+seriesById:
+SELECT s.*, (f.content_id IS NOT NULL) AS is_favorite
+FROM series s
+LEFT JOIN favorite f ON f.content_type = 'SERIES' AND f.content_id = s.id
+WHERE s.playlist_id = :playlistId AND s.snapshot = :snapshot AND s.id = :id;
+
+seriesCount:
+SELECT COUNT(*) FROM series WHERE playlist_id = ? AND snapshot = ?;
+
+seasonsOfSeries:
+SELECT * FROM season WHERE playlist_id = ? AND snapshot = ? AND series_id = ? ORDER BY season_number;
+
+episodesOfSeries:
+SELECT e.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed
+FROM episode e
+LEFT JOIN watch_state w ON w.content_type = 'EPISODE' AND w.content_id = e.id
+WHERE e.playlist_id = :playlistId AND e.snapshot = :snapshot AND e.series_id = :seriesId
+ORDER BY e.season_number, e.episode_number, e.sort_order;
+
+episodeById:
+SELECT e.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed
+FROM episode e
+LEFT JOIN watch_state w ON w.content_type = 'EPISODE' AND w.content_id = e.id
+WHERE e.playlist_id = :playlistId AND e.snapshot = :snapshot AND e.id = :id;
+
+deleteSeriesDetail:
+DELETE FROM episode WHERE playlist_id = :playlistId AND snapshot = :snapshot AND series_id = :seriesId;
+
+deleteSeriesSeasons:
+DELETE FROM season WHERE playlist_id = :playlistId AND snapshot = :snapshot AND series_id = :seriesId;
+
+deleteMediaSourcesForOwners:
+DELETE FROM media_source WHERE playlist_id = :playlistId AND snapshot = :snapshot AND owner_id IN :owners;
+
+setSeriesDetailState:
+INSERT OR REPLACE INTO series_detail_state(playlist_id, series_id, snapshot, fetched_at) VALUES (?, ?, ?, ?);
+
+seriesDetailState:
+SELECT * FROM series_detail_state WHERE playlist_id = ? AND series_id = ?;
+
+deleteLibrarySnapshot {
+    DELETE FROM library_member WHERE playlist_id = :playlistId AND snapshot = :snapshot;
+    DELETE FROM library_group WHERE playlist_id = :playlistId AND snapshot = :snapshot;
+    DELETE FROM movie WHERE playlist_id = :playlistId AND snapshot = :snapshot;
+    DELETE FROM series WHERE playlist_id = :playlistId AND snapshot = :snapshot;
+    DELETE FROM season WHERE playlist_id = :playlistId AND snapshot = :snapshot;
+    DELETE FROM episode WHERE playlist_id = :playlistId AND snapshot = :snapshot;
+    DELETE FROM media_source WHERE playlist_id = :playlistId AND snapshot = :snapshot;
+    DELETE FROM series_detail_state WHERE playlist_id = :playlistId AND snapshot = :snapshot;
+}
+
+deleteLibrary {
+    DELETE FROM library_member WHERE playlist_id = :playlistId;
+    DELETE FROM library_group WHERE playlist_id = :playlistId;
+    DELETE FROM movie WHERE playlist_id = :playlistId;
+    DELETE FROM series WHERE playlist_id = :playlistId;
+    DELETE FROM season WHERE playlist_id = :playlistId;
+    DELETE FROM episode WHERE playlist_id = :playlistId;
+    DELETE FROM series_detail_state WHERE playlist_id = :playlistId;
+    DELETE FROM snapshot_allocation WHERE playlist_id = :playlistId;
+    DELETE FROM watch_state WHERE playlist_id = :playlistId;
+}
+
+upsertWatchState:
+INSERT INTO watch_state(content_type, content_id, playlist_id, parent_id, position_ms, duration_ms, completed, last_played_at, play_count)
+VALUES (:type, :id, :playlistId, :parentId, :positionMs, :durationMs, :completed, :now, 1)
+ON CONFLICT(content_type, content_id) DO UPDATE SET
+    position_ms = excluded.position_ms, duration_ms = COALESCE(excluded.duration_ms, watch_state.duration_ms),
+    completed = excluded.completed, last_played_at = excluded.last_played_at, parent_id = excluded.parent_id,
+    play_count = watch_state.play_count + (CASE WHEN :newSession THEN 1 ELSE 0 END);
+
+watchState:
+SELECT * FROM watch_state WHERE content_type = ? AND content_id = ?;
+
+inProgress:
+SELECT * FROM watch_state
+WHERE playlist_id = :playlistId AND content_type IN ('MOVIE', 'EPISODE') AND completed = 0 AND position_ms > 0
+ORDER BY last_played_at DESC
+LIMIT :limit;
+
+lastWatchedEpisodeOfSeries:
+SELECT * FROM watch_state WHERE content_type = 'EPISODE' AND parent_id = ? ORDER BY last_played_at DESC LIMIT 1;
+
+searchMovies:
+SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
+FROM movie mo
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.title LIKE '%' || :query || '%' ESCAPE '\'
+ORDER BY CASE WHEN mo.title LIKE :query ESCAPE '\' THEN 0 WHEN mo.title LIKE :query || '%' ESCAPE '\' THEN 1 ELSE 2 END, mo.sort_order
+LIMIT :limit;
+
+searchSeries:
+SELECT s.*, (f.content_id IS NOT NULL) AS is_favorite
+FROM series s
+LEFT JOIN favorite f ON f.content_type = 'SERIES' AND f.content_id = s.id
+WHERE s.playlist_id = :playlistId AND s.snapshot = :snapshot AND s.title LIKE '%' || :query || '%' ESCAPE '\'
+ORDER BY CASE WHEN s.title LIKE :query ESCAPE '\' THEN 0 WHEN s.title LIKE :query || '%' ESCAPE '\' THEN 1 ELSE 2 END, s.sort_order
+LIMIT :limit;

@@ -117,6 +117,18 @@ Every screen specification (written at the start of its phase) must define:
 | Error | Human-readable message + hint + retry + diagnostics entry; never raw exception text |
 | Offline | Cached content usable with an unobtrusive offline indicator (§13.1) |
 
+## 4.5 Branding (owner's artwork)
+
+The app is called **Luz**. `tooling/branding/luz-icon-source.png` is the owner's icon artwork; everything else is generated
+from it by `tooling/scripts/generate_branding.py` (Pillow, development machine only) and committed:
+
+| Asset | Where | Notes |
+|---|---|---|
+| Launcher / settings icon | `mipmap-*/ic_launcher.png` (48–192 px) | the tile with rounded, transparent corners |
+| Android TV banner | `drawable-*/tv_banner.png` (320×180 dp) | the play mark and the "LUZ / IPTV" wordmark cut from the same artwork on the icon's background |
+
+Re-run the script after changing the artwork; the app ships no other logo files.
+
 ## 5. Key surfaces (content defined by spec, visuals in later phases)
 
 - **Home** (§9.2): continue watching, favorites, live now, tonight, recently added (if metadata permits), movies, series, per-playlist shortcuts.

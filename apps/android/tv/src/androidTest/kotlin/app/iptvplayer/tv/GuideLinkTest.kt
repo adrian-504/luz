@@ -88,7 +88,7 @@ class GuideLinkTest {
         rule.onNodeWithTag(FormTags.SUBMIT).performSemanticsAction(SemanticsActions.RequestFocus)
         rule.awaitKeyboardReleased()
         awaitFocus(FormTags.SUBMIT)
-        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.pressOkUntil { runBlocking { graph.hasGuideLink(playlist) } }
 
         // Back in Playlists; the guide downloads from the link and the source says so.
         awaitFocus(SourcesTags.guideLink(playlist))

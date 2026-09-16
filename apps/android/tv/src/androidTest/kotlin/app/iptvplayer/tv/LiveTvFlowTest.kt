@@ -102,7 +102,7 @@ class LiveTvFlowTest {
         rule.onNodeWithTag(FormTags.PASSWORD_FIELD).performTextInput(password)
         rule.onNodeWithTag(FormTags.SUBMIT).requestFocusCompat()
         rule.awaitKeyboardReleased()
-        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.pressOkUntil { rule.onAllNodes(hasTestTag(FormTags.WORKING), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
         rule.waitUntil(20_000) {
             val error = rule.onAllNodes(hasTestTag(FormTags.ERROR), useUnmergedTree = true).fetchSemanticsNodes()
             if (error.isNotEmpty()) {

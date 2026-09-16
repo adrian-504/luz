@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">IPTV Player</string>
+    <string name="app_name">Luz</string>
 
     <string name="welcome_title">Welcome</string>
     <string name="welcome_body">This player plays streams from sources you add yourself. It does not include any channels or content.</string>
@@ -168,4 +168,37 @@
     <string name="guide_link_field">Guide link (XMLTV, .xml or .xml.gz)</string>
     <string name="guide_link_save">Save and download the guide</string>
     <string name="guide_link_clear">Use the provider\'s guide again</string>
+    <string name="library_no_source">No source yet. Add your provider to see movies and series.</string>
+    <string name="library_all_movies">All movies</string>
+    <string name="library_all_series">All series</string>
+    <string name="library_importing">Still importing. Titles appear here when they are ready.</string>
+    <string name="library_failed">The provider did not send this list. Try Refresh in Playlists.</string>
+    <string name="library_empty">Nothing here.</string>
+    <string name="detail_play">Play</string>
+    <string name="detail_resume">Resume from %1$s</string>
+    <string name="detail_play_from_start">Play from the beginning</string>
+    <string name="detail_add_favorite">Add to favorites</string>
+    <string name="detail_remove_favorite">Remove from favorites</string>
+    <string name="detail_not_found">This title is no longer in the source.</string>
+    <string name="detail_duration_hours">%1$dh %2$02dm</string>
+    <string name="detail_duration_minutes">%1$d min</string>
+    <string name="series_loading_episodes">Loading episodes…</string>
+    <string name="series_episodes_failed">The provider did not send the episodes. Try again later.</string>
+    <string name="series_no_episodes">No episodes.</string>
+    <string name="series_season">Season %1$d</string>
+    <string name="series_continue">Continue S%1$d E%2$d</string>
+    <string name="series_start">Play S%1$d E%2$d</string>
+    <string name="series_episode_title">%1$d. %2$s</string>
+    <string name="series_episode_untitled">Episode %1$d</string>
+    <string name="player_next_episode">Next: S%1$d E%2$d</string>
+    <string name="home_continue">Continue watching</string>
+    <string name="home_favorite_channels">Favorite channels</string>
+    <string name="home_recent_movies">Recently added movies</string>
+    <string name="home_series">Series</string>
+    <string name="search_label">Search channels, movies and series</string>
+    <string name="search_hint">Press OK on the field to type. Results appear as you type.</string>
+    <string name="search_nothing">Nothing matches “%1$s”.</string>
+    <string name="search_channels">Channels</string>
+    <string name="search_movies">Movies</string>
+    <string name="search_series">Series</string>
 </resources>

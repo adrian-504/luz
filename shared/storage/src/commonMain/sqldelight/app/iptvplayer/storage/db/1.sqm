@@ -1,0 +1,118 @@
+-- Migration 1 -> 2 (Phase 8): library tables and watch state. Must match the CREATE statements in Library.sq.
+CREATE TABLE snapshot_allocation (
+    playlist_id TEXT PRIMARY KEY NOT NULL,
+    last_snapshot INTEGER NOT NULL
+);
+
+CREATE TABLE library_group (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    unit TEXT NOT NULL,
+    id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, snapshot, id)
+);
+
+CREATE TABLE library_member (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    group_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, snapshot, group_id, item_id)
+);
+
+CREATE TABLE movie (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    year INTEGER,
+    duration_seconds INTEGER,
+    plot TEXT,
+    genres TEXT,
+    rating TEXT,
+    poster_template TEXT,
+    backdrop_template TEXT,
+    added_at INTEGER,
+    PRIMARY KEY (playlist_id, snapshot, id)
+);
+
+CREATE INDEX movie_order ON movie(playlist_id, snapshot, sort_order);
+
+CREATE TABLE series (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    year INTEGER,
+    plot TEXT,
+    genres TEXT,
+    rating TEXT,
+    poster_template TEXT,
+    backdrop_template TEXT,
+    provider_series_id TEXT,
+    last_modified_at INTEGER,
+    PRIMARY KEY (playlist_id, snapshot, id)
+);
+
+CREATE INDEX series_order ON series(playlist_id, snapshot, sort_order);
+
+CREATE TABLE season (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    series_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    season_number INTEGER NOT NULL,
+    title TEXT,
+    poster_template TEXT,
+    episode_count INTEGER,
+    PRIMARY KEY (playlist_id, snapshot, id)
+);
+
+CREATE TABLE episode (
+    playlist_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    series_id TEXT NOT NULL,
+    season_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    season_number INTEGER NOT NULL,
+    episode_number INTEGER NOT NULL,
+    sort_order INTEGER NOT NULL,
+    title TEXT,
+    plot TEXT,
+    duration_seconds INTEGER,
+    air_date TEXT,
+    still_template TEXT,
+    PRIMARY KEY (playlist_id, snapshot, id)
+);
+
+CREATE INDEX episode_series ON episode(playlist_id, snapshot, series_id, season_number, episode_number);
+
+-- Xtream seasons/episodes are loaded when a series is opened; this remembers for which series snapshot.
+CREATE TABLE series_detail_state (
+    playlist_id TEXT NOT NULL,
+    series_id TEXT NOT NULL,
+    snapshot INTEGER NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, series_id)
+);
+
+-- User state: survives imports. parent_id is the series of an episode.
+CREATE TABLE watch_state (
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    playlist_id TEXT NOT NULL,
+    parent_id TEXT,
+    position_ms INTEGER NOT NULL,
+    duration_ms INTEGER,
+    completed INTEGER NOT NULL DEFAULT 0,
+    last_played_at INTEGER NOT NULL,
+    play_count INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (content_type, content_id)
+);
+
+CREATE INDEX watch_recent ON watch_state(last_played_at);

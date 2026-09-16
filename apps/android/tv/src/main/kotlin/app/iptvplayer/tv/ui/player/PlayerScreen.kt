@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -41,12 +42,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.model.TrackSet
 import app.iptvplayer.domain.playback.PlaybackErrorCode
+import app.iptvplayer.domain.playback.PlaybackMode
 import app.iptvplayer.domain.playback.PlaybackState
 import app.iptvplayer.platform.playback.Media3PlaybackController
 import app.iptvplayer.platform.playback.PlaybackDiagnostics
@@ -58,6 +61,9 @@ import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import androidx.compose.ui.input.key.KeyEventType as ComposeKeyEventType
 
 object PlayerTags {
@@ -73,6 +79,9 @@ object PlayerTags {
     const val TITLE = "player-title"
     const val FAVORITE = "player-favorite"
     const val LAST_CHANNEL = "player-last-channel"
+    const val NEXT = "player-next"
+    const val PROGRESS = "player-progress"
+    const val SEEK_HUD = "player-seek-hud"
     const val AUDIO = "player-audio"
     const val SUBTITLES = "player-subtitles"
     const val TRACK_PANEL = "player-track-panel"
@@ -100,6 +109,14 @@ fun PlayerScreen(
     onZap: ((Int) -> Unit)? = null,
     /** Returns to the channel watched before this one; null when there is none. */
     onLastChannel: (() -> Unit)? = null,
+    /**
+     * Movies and episodes: called about every 10 s while playing or paused, when playback ends ([ended] true) and when the
+     * player closes, so the watch position can be saved (FR-WATCH-001).
+     */
+    onProgress: ((position: Duration, duration: Duration?, ended: Boolean) -> Unit)? = null,
+    /** Label and action of a "Next episode" button, shown in the overlay and when an episode ends. */
+    nextLabel: String? = null,
+    onNext: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val controller = remember { Media3PlaybackController(context.applicationContext) }
@@ -110,6 +127,15 @@ fun PlayerScreen(
         onDispose {
             mediaSession.close()
             controller.release()
+        }
+    }
+    // Saves the position when the screen closes. Declared after the release effect above, so it is disposed first (effects
+    // dispose in reverse order) while the player can still report its position.
+    val currentOnProgress by rememberUpdatedState(onProgress)
+    DisposableEffect(controller) {
+        onDispose {
+            val position = controller.currentPosition()
+            if (position != null && position.isPositive()) currentOnProgress?.invoke(position, controller.duration(), false)
         }
     }
     // The player must only be touched on the main thread: DisposableEffect runs there, coroutine effects may not (tests).
@@ -143,8 +169,16 @@ fun PlayerScreen(
     val rootFocus = remember { FocusRequester() }
     val playPauseFocus = remember { FocusRequester() }
     val retryFocus = remember { FocusRequester() }
+    val nextFocus = remember { FocusRequester() }
     val isError = snapshot.state == PlaybackState.ERROR || unavailable
     var bannerShownAt by remember { mutableLongStateOf(0L) }
+    var seekShownAt by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(seekShownAt) {
+        if (seekShownAt != 0L) {
+            delay(SEEK_HUD_TIMEOUT_MS)
+            seekShownAt = 0L
+        }
+    }
     LaunchedEffect(title) {
         if (onZap != null) {
             bannerShownAt = System.nanoTime()
@@ -172,9 +206,12 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(overlayVisible, isError) {
+    // Focus moves at the end of playback only when there is a next episode to offer.
+    LaunchedEffect(overlayVisible, isError, snapshot.state == PlaybackState.ENDED && onNext != null) {
         when {
             isError -> retryFocus.requestFocus()
+            overlayVisible && snapshot.state == PlaybackState.ENDED && onNext != null ->
+                runCatching { nextFocus.requestFocus() }.onFailure { playPauseFocus.requestFocus() }
             overlayVisible -> playPauseFocus.requestFocus()
             else -> rootFocus.requestFocus()
         }
@@ -185,6 +222,33 @@ fun PlayerScreen(
             overlayVisible = false
         }
     }
+    // Movie/episode position for the overlay progress bar and periodic saving.
+    val isVod = request?.mode == PlaybackMode.VOD
+    var positionMs by remember { mutableLongStateOf(0L) }
+    var durationMs by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(isVod, request) {
+        if (!isVod) return@LaunchedEffect
+        withContext(AndroidUiDispatcher.Main) {
+            var ticks = 0
+            while (true) {
+                positionMs = controller.currentPosition()?.inWholeMilliseconds ?: 0L
+                durationMs = controller.duration()?.inWholeMilliseconds ?: 0L
+                val state = controller.snapshot.value.state
+                if (++ticks % PROGRESS_SAVE_TICKS == 0 && (state == PlaybackState.PLAYING || state == PlaybackState.PAUSED)) {
+                    onProgress?.invoke(positionMs.milliseconds, durationMs.takeIf { it > 0 }?.milliseconds, false)
+                }
+                delay(1_000)
+            }
+        }
+    }
+    LaunchedEffect(snapshot.state) {
+        if (isVod && snapshot.state == PlaybackState.ENDED) {
+            val duration = controller.duration()
+            onProgress?.invoke(duration ?: positionMs.milliseconds, duration, true)
+            overlayVisible = true
+        }
+    }
+
     LaunchedEffect(diagnosticsVisible) {
         withContext(AndroidUiDispatcher.Main) {
             while (diagnosticsVisible) {
@@ -214,6 +278,22 @@ fun PlayerScreen(
                     }
                     KeyEvent.KEYCODE_MEDIA_PLAY -> true.also { controller.play() }
                     KeyEvent.KEYCODE_MEDIA_PAUSE -> true.also { controller.pause() }
+                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> (
+                        isVod && !overlayVisible && !diagnosticsVisible &&
+                            trackMenu == null
+                        ).also {
+                        if (it) {
+                            val step = if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) SEEK_STEP else -SEEK_STEP
+                            seekBy(controller, step)
+                            seekShownAt = System.nanoTime()
+                        }
+                    }
+                    KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, KeyEvent.KEYCODE_MEDIA_REWIND -> isVod.also {
+                        if (it) {
+                            seekBy(controller, if (keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) FAST_SEEK_STEP else -FAST_SEEK_STEP)
+                            seekShownAt = System.nanoTime()
+                        }
+                    }
                     KeyEvent.KEYCODE_LAST_CHANNEL -> (onLastChannel != null).also { if (it) onLastChannel?.invoke() }
                     KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> (onZap != null).also { if (it) onZap?.invoke(+1) }
                     KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> (onZap != null).also { if (it) onZap?.invoke(-1) }
@@ -254,6 +334,17 @@ fun PlayerScreen(
             }
         }
 
+        if (seekShownAt != 0L && !overlayVisible && durationMs > 0) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(Tokens.bgBase.copy(alpha = 0.6f))
+                    .padding(horizontal = Tokens.safeHorizontal, vertical = Tokens.safeVertical)
+                    .testTag(PlayerTags.SEEK_HUD),
+            ) { VodProgress(positionMs, durationMs) }
+        }
+
         if (!overlayVisible && !isError && snapshot.state != PlaybackState.PLAYING) {
             StateText(
                 snapshot,
@@ -284,8 +375,18 @@ fun PlayerScreen(
                 )
                 subtitle?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = Tokens.textSecondary) }
                 StateText(snapshot, Modifier)
+                if (isVod && durationMs > 0) VodProgress(positionMs, durationMs)
                 Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space4)) {
                     val paused = snapshot.state == PlaybackState.PAUSED
+                    if (onNext != null && nextLabel != null) {
+                        ActionButton(
+                            text = nextLabel,
+                            onClick = onNext,
+                            modifier = Modifier.testTag(PlayerTags.NEXT).then(
+                                if (snapshot.state == PlaybackState.ENDED) Modifier.focusRequester(nextFocus) else Modifier,
+                            ),
+                        )
+                    }
                     ActionButton(
                         text = stringResource(if (paused) R.string.player_play else R.string.player_pause),
                         onClick = { if (paused) controller.play() else controller.pause() },
@@ -510,6 +611,44 @@ private fun errorText(code: PlaybackErrorCode): Pair<Int, Int> = when (code) {
     PlaybackErrorCode.UNKNOWN -> R.string.playback_error_unknown to R.string.playback_error_unknown_hint
 }
 
+/** Position / duration bar for movies and episodes. */
+@Composable
+private fun VodProgress(positionMs: Long, durationMs: Long) {
+    val fraction = (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+    Column(
+        verticalArrangement = Arrangement.spacedBy(Tokens.space2),
+        modifier = Modifier.testTag(PlayerTags.PROGRESS).semantics(mergeDescendants = true) {},
+    ) {
+        Box(Modifier.fillMaxWidth().height(6.dp).background(Tokens.bgSurface3, RoundedCornerShape(3.dp))) {
+            Box(Modifier.fillMaxWidth(fraction).height(6.dp).background(Tokens.accent, RoundedCornerShape(3.dp)))
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(clock(positionMs), style = MaterialTheme.typography.bodySmall, color = Tokens.textSecondary)
+            Text(clock(durationMs), style = MaterialTheme.typography.bodySmall, color = Tokens.textSecondary)
+        }
+    }
+}
+
+/** 1:05:09 or 5:09. */
+internal fun clock(ms: Long): String {
+    val total = ms / 1000
+    val hours = total / 3600
+    val minutes = (total % 3600) / 60
+    val seconds = total % 60
+    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds) else "%d:%02d".format(minutes, seconds)
+}
+
+private fun seekBy(controller: Media3PlaybackController, step: Duration) {
+    val position = controller.currentPosition() ?: return
+    val duration = controller.duration()
+    val target = (position + step).coerceAtLeast(Duration.ZERO).let { if (duration != null) it.coerceAtMost(duration) else it }
+    controller.seekTo(target)
+}
+
+private val SEEK_STEP = 10.seconds
+private val FAST_SEEK_STEP = 30.seconds
+private const val SEEK_HUD_TIMEOUT_MS = 2_000L
+private const val PROGRESS_SAVE_TICKS = 10
 private const val OVERLAY_TIMEOUT_MS = 5_000L
 private const val BANNER_TIMEOUT_MS = 3_000L
 private val SELECT_KEYS = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
