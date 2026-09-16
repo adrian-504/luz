@@ -233,4 +233,9 @@
         <item quantity="one">%1$d item hidden — bring it back</item>
         <item quantity="other">%1$d items hidden — bring them back</item>
     </plurals>
+    <string name="menu_open">Open</string>
+    <string name="menu_hide_movie">Hide this film</string>
+    <string name="menu_hide_series">Hide this series</string>
+    <string name="hidden_movie">Film</string>
+    <string name="hidden_series">Series</string>
 </resources>

@@ -211,6 +211,17 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
         }
     }
 
+    /** Titles for [ids] of [unit], including hidden ones — the hidden list has to name what it offers back. */
+    public fun titles(playlistId: PlaylistId, unit: ImportUnit, ids: List<String>): Map<String, String> {
+        if (ids.isEmpty()) return emptyMap()
+        val snapshot = active(playlistId, unit) ?: return emptyMap()
+        return if (unit == ImportUnit.MOVIES) {
+            queries.movieNames(playlistId.value, snapshot, ids).executeAsList().associate { it.id to it.title }
+        } else {
+            queries.seriesNames(playlistId.value, snapshot, ids).executeAsList().associate { it.id to it.title }
+        }
+    }
+
     public fun seasons(playlistId: PlaylistId, seriesId: String): List<SeasonRow> {
         val snapshot = active(playlistId, ImportUnit.SERIES) ?: return emptyList()
         return queries.seasonsOfSeries(playlistId.value, snapshot, seriesId).executeAsList()

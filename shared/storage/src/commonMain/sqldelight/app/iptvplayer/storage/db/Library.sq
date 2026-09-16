@@ -167,6 +167,7 @@ FROM movie mo
 LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
 LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
 WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot
+    AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
 ORDER BY mo.sort_order
 LIMIT :limit OFFSET :offset;
 
@@ -177,6 +178,7 @@ JOIN movie mo ON mo.playlist_id = m.playlist_id AND mo.snapshot = m.snapshot AND
 LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
 LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
 WHERE m.playlist_id = :playlistId AND m.snapshot = :snapshot AND m.group_id = :groupId
+    AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
 ORDER BY m.sort_order
 LIMIT :limit OFFSET :offset;
 
@@ -186,6 +188,7 @@ FROM movie mo
 LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
 LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
 WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.added_at IS NOT NULL
+    AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
 ORDER BY mo.added_at DESC
 LIMIT :limit;
 
@@ -204,6 +207,7 @@ SELECT s.*, (f.content_id IS NOT NULL) AS is_favorite
 FROM series s
 LEFT JOIN favorite f ON f.content_type = 'SERIES' AND f.content_id = s.id
 WHERE s.playlist_id = :playlistId AND s.snapshot = :snapshot
+    AND s.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'SERIES')
 ORDER BY s.sort_order
 LIMIT :limit OFFSET :offset;
 
@@ -213,6 +217,7 @@ FROM library_member m
 JOIN series s ON s.playlist_id = m.playlist_id AND s.snapshot = m.snapshot AND s.id = m.item_id
 LEFT JOIN favorite f ON f.content_type = 'SERIES' AND f.content_id = s.id
 WHERE m.playlist_id = :playlistId AND m.snapshot = :snapshot AND m.group_id = :groupId
+    AND s.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'SERIES')
 ORDER BY m.sort_order
 LIMIT :limit OFFSET :offset;
 
@@ -300,16 +305,24 @@ LIMIT :limit;
 lastWatchedEpisodeOfSeries:
 SELECT * FROM watch_state WHERE content_type = 'EPISODE' AND parent_id = ? ORDER BY last_played_at DESC LIMIT 1;
 
+movieNames:
+SELECT id, title FROM movie WHERE playlist_id = :playlistId AND snapshot = :snapshot AND id IN :ids;
+
+seriesNames:
+SELECT id, title FROM series WHERE playlist_id = :playlistId AND snapshot = :snapshot AND id IN :ids;
+
 moviesByIds:
 SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
 FROM movie mo
 LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
 LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
-WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.id IN :ids;
+WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.id IN :ids
+    AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE');
 
 seriesByIds:
 SELECT s.*, (f.content_id IS NOT NULL) AS is_favorite
 FROM series s
 LEFT JOIN favorite f ON f.content_type = 'SERIES' AND f.content_id = s.id
-WHERE s.playlist_id = :playlistId AND s.snapshot = :snapshot AND s.id IN :ids;
+WHERE s.playlist_id = :playlistId AND s.snapshot = :snapshot AND s.id IN :ids
+    AND s.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'SERIES');
 

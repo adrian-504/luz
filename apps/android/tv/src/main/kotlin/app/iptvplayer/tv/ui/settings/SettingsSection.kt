@@ -32,6 +32,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.model.CustomisationTarget
+import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.tv.BuildConfig
 import app.iptvplayer.tv.R
@@ -233,11 +234,17 @@ private fun HiddenItems(focus: FocusMemory, playlist: PlaylistId) {
     LaunchedEffect(playlist, revision) {
         val channels = graph.hidden(playlist, CustomisationTarget.CHANNEL)
         val groups = graph.hidden(playlist, CustomisationTarget.CHANNEL_GROUP)
+        val movies = graph.hidden(playlist, CustomisationTarget.MOVIE)
+        val series = graph.hidden(playlist, CustomisationTarget.SERIES)
         // Names come from what is stored: a hidden row is filtered out of the lists, so it is looked up by id.
         val channelNames = graph.channelNames(playlist, channels)
         val groupNames = graph.groupNames(playlist, groups)
+        val movieNames = graph.libraryTitles(playlist, ImportUnit.MOVIES, movies)
+        val seriesNames = graph.libraryTitles(playlist, ImportUnit.SERIES, series)
         items = groups.map { Triple(CustomisationTarget.CHANNEL_GROUP, it, groupNames[it] ?: it) } +
-            channels.map { Triple(CustomisationTarget.CHANNEL, it, channelNames[it] ?: it) }
+            channels.map { Triple(CustomisationTarget.CHANNEL, it, channelNames[it] ?: it) } +
+            movies.map { Triple(CustomisationTarget.MOVIE, it, movieNames[it] ?: it) } +
+            series.map { Triple(CustomisationTarget.SERIES, it, seriesNames[it] ?: it) }
     }
     val shown = items ?: return
     Text(stringResource(R.string.settings_hidden), style = MaterialTheme.typography.titleLarge, color = Tokens.textPrimary)
@@ -259,7 +266,14 @@ private fun HiddenItems(focus: FocusMemory, playlist: PlaylistId) {
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    stringResource(if (target == CustomisationTarget.CHANNEL) R.string.hidden_channel else R.string.hidden_category),
+                    stringResource(
+                        when (target) {
+                            CustomisationTarget.CHANNEL -> R.string.hidden_channel
+                            CustomisationTarget.MOVIE -> R.string.hidden_movie
+                            CustomisationTarget.SERIES -> R.string.hidden_series
+                            else -> R.string.hidden_category
+                        },
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = Tokens.textTertiary,
                 )

@@ -15,6 +15,7 @@ import app.iptvplayer.domain.model.ChannelGroup
 import app.iptvplayer.domain.model.ContentKind
 import app.iptvplayer.domain.model.ContentRef
 import app.iptvplayer.domain.model.ContentType
+import app.iptvplayer.domain.model.CustomisationTarget
 import app.iptvplayer.domain.model.Episode
 import app.iptvplayer.domain.model.ExternalIds
 import app.iptvplayer.domain.model.IdentityHints
@@ -220,6 +221,26 @@ class LibraryStoreTest {
         content.deleteSource(playlist)
         assertNull(library.progress(ContentType.EPISODE, "ep_1"), "removing the source removes its watch history")
         assertTrue(library.movies(playlist).isEmpty())
+    }
+
+    @Test
+    fun hiddenFilmsAndSeriesLeaveEveryListAndKeepTheirTitlesForTheHiddenList() {
+        addSource()
+        importMovies(movie("mv_1", "Alpha", listOf("mg_action"), 2), movie("mv_2", "Beta", listOf("mg_action"), 1))
+        assertEquals(listOf("mv_1", "mv_2"), library.movies(playlist).map { it.id })
+
+        content.hide(playlist, CustomisationTarget.MOVIE, "mv_2")
+        assertEquals(listOf("mv_1"), library.movies(playlist).map { it.id }, "hidden in the grid")
+        assertEquals(listOf("mv_1"), library.movies(playlist, "mg_action").map { it.id }, "and in its category")
+        assertTrue(library.searchMovies(playlist, "Beta", 10).isEmpty(), "and in search")
+        assertEquals(
+            mapOf("mv_2" to "Beta"),
+            library.titles(playlist, ImportUnit.MOVIES, listOf("mv_2")),
+            "its title is still there, so the hidden list can offer it back by name",
+        )
+
+        content.unhide(playlist, CustomisationTarget.MOVIE, "mv_2")
+        assertEquals(listOf("mv_1", "mv_2"), library.movies(playlist).map { it.id })
     }
 
     @Test

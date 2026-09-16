@@ -211,6 +211,9 @@ class AppGraph(context: Context) {
 
     suspend fun groupNames(playlistId: PlaylistId, ids: List<String>): Map<String, String> = io { content.groupNames(playlistId, ids) }
 
+    suspend fun libraryTitles(playlistId: PlaylistId, unit: ImportUnit, ids: List<String>): Map<String, String> =
+        io { library.titles(playlistId, unit, ids) }
+
     suspend fun hiddenCount(playlistId: PlaylistId): Long = io { content.hiddenCount(playlistId) }
 
     suspend fun setLabel(playlistId: PlaylistId, target: CustomisationTarget, id: String, label: String) {

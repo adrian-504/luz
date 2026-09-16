@@ -37,6 +37,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.model.CustomisationTarget
 import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.domain.security.UrlTemplate
@@ -46,6 +47,8 @@ import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.live.EmptyState
 import app.iptvplayer.tv.ui.rememberedFocus
+import app.iptvplayer.tv.ui.theme.LuzMenu
+import app.iptvplayer.tv.ui.theme.LuzMenuItem
 import app.iptvplayer.tv.ui.theme.LuzRow
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
@@ -102,56 +105,84 @@ fun LibrarySection(focus: FocusMemory, unit: ImportUnit, onOpen: (PlaylistId, St
     }
     val importing = activity[current]?.let { if (unit == ImportUnit.MOVIES) it.moviesRunning else it.seriesRunning } == true
     val resolver = rememberArtworkResolver(current)
+    val coroutines = rememberCoroutineScope()
+    var menuFor by remember { mutableStateOf<PosterItem?>(null) }
 
-    Row(
-        modifier = Modifier.fillMaxSize().padding(
-            start = Tokens.space8,
-            end = Tokens.safeHorizontal,
-            top = Tokens.safeVertical,
-            bottom = Tokens.safeVertical,
-        ),
-    ) {
-        LazyColumn(
-            modifier = Modifier.width(260.dp).fillMaxHeight().focusRestorer(),
-            verticalArrangement = Arrangement.spacedBy(Tokens.space2),
+    Box(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(
+                start = Tokens.space8,
+                end = Tokens.safeHorizontal,
+                top = Tokens.safeVertical,
+                bottom = Tokens.safeVertical,
+            ),
         ) {
-            item(key = "all") {
-                CategoryItem(
-                    stringResource(if (unit == ImportUnit.MOVIES) R.string.library_all_movies else R.string.library_all_series),
-                    null,
-                    category == null,
-                    Modifier.rememberedFocus(focus, LibraryTags.CATEGORY_ALL),
-                ) { category = null }
-            }
-            items(groups.size, key = { groups[it].id }) { index ->
-                val group = groups[index]
-                CategoryItem(
-                    group.title,
-                    group.itemCount,
-                    category == group.id,
-                    Modifier.rememberedFocus(focus, LibraryTags.category(group.id)),
-                ) {
-                    category = group.id
+            LazyColumn(
+                modifier = Modifier.width(260.dp).fillMaxHeight().focusRestorer(),
+                verticalArrangement = Arrangement.spacedBy(Tokens.space2),
+            ) {
+                item(key = "all") {
+                    CategoryItem(
+                        stringResource(if (unit == ImportUnit.MOVIES) R.string.library_all_movies else R.string.library_all_series),
+                        null,
+                        category == null,
+                        Modifier.rememberedFocus(focus, LibraryTags.CATEGORY_ALL),
+                    ) { category = null }
+                }
+                items(groups.size, key = { groups[it].id }) { index ->
+                    val group = groups[index]
+                    CategoryItem(
+                        group.title,
+                        group.itemCount,
+                        category == group.id,
+                        Modifier.rememberedFocus(focus, LibraryTags.category(group.id)),
+                    ) {
+                        category = group.id
+                    }
                 }
             }
+            PosterGrid(
+                focus = focus,
+                playlist = current,
+                unit = unit,
+                category = category,
+                revision = revision,
+                emptyText = stringResource(
+                    when {
+                        importing || status == null || status == ImportStatus.RUNNING -> R.string.library_importing
+                        status == ImportStatus.FAILED -> R.string.library_failed
+                        else -> R.string.library_empty
+                    },
+                ),
+                resolver = resolver,
+                onOpen = { onOpen(current, it) },
+                onMenu = { menuFor = it },
+                modifier = Modifier.padding(start = Tokens.space6).weight(1f),
+            )
         }
-        PosterGrid(
-            focus = focus,
-            playlist = current,
-            unit = unit,
-            category = category,
-            revision = revision,
-            emptyText = stringResource(
-                when {
-                    importing || status == null || status == ImportStatus.RUNNING -> R.string.library_importing
-                    status == ImportStatus.FAILED -> R.string.library_failed
-                    else -> R.string.library_empty
+
+        menuFor?.let { item ->
+            val target = if (unit == ImportUnit.MOVIES) CustomisationTarget.MOVIE else CustomisationTarget.SERIES
+            LuzMenu(
+                title = item.title,
+                items = listOf(
+                    LuzMenuItem("open", stringResource(R.string.menu_open)) { onOpen(current, item.id) },
+                    LuzMenuItem(
+                        "hide",
+                        stringResource(if (unit == ImportUnit.MOVIES) R.string.menu_hide_movie else R.string.menu_hide_series),
+                    ) { coroutines.launch { graph.hide(current, target, item.id) } },
+                ),
+                onDismiss = {
+                    menuFor = null
+                    coroutines.launch {
+                        repeat(20) {
+                            if (focus.requestFocus(LibraryTags.item(item.id))) return@launch
+                            delay(50)
+                        }
+                    }
                 },
-            ),
-            resolver = resolver,
-            onOpen = { onOpen(current, it) },
-            modifier = Modifier.padding(start = Tokens.space6).weight(1f),
-        )
+            )
+        }
     }
 }
 
@@ -188,6 +219,7 @@ private fun PosterGrid(
     emptyText: String,
     resolver: ((UrlTemplate) -> String?)?,
     onOpen: (String) -> Unit,
+    onMenu: (PosterItem) -> Unit,
     modifier: Modifier,
 ) {
     val graph = LocalAppGraph.current
@@ -246,6 +278,7 @@ private fun PosterGrid(
                     Modifier.rememberedFocus(focus, LibraryTags.item(item.id)).onFocusChanged {
                         if (it.isFocused && index >= rows.size - LOAD_AHEAD) loadMore()
                     },
+                    onMenu = { onMenu(item) },
                 ) { onOpen(item.id) }
             }
         }
@@ -253,10 +286,17 @@ private fun PosterGrid(
 }
 
 @Composable
-private fun PosterCard(item: PosterItem, resolver: ((UrlTemplate) -> String?)?, modifier: Modifier, onClick: () -> Unit) {
+private fun PosterCard(
+    item: PosterItem,
+    resolver: ((UrlTemplate) -> String?)?,
+    modifier: Modifier,
+    onMenu: () -> Unit,
+    onClick: () -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(Tokens.space2)) {
         Surface(
             onClick = onClick,
+            onLongClick = onMenu,
             modifier = modifier.fillMaxWidth().aspectRatio(2f / 3f),
             shape = ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(Tokens.radiusSmall)),
             colors = ClickableSurfaceDefaults.colors(containerColor = Tokens.bgSurface1, focusedContainerColor = Tokens.bgSurface3),
