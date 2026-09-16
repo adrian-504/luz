@@ -25,6 +25,7 @@ import app.iptvplayer.tv.ui.onboarding.SourceType
 import app.iptvplayer.tv.ui.player.PlayerTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
+import app.iptvplayer.tv.ui.theme.LuzMenuTags
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -121,9 +122,16 @@ class LiveTvFlowTest {
         // "Test News 2" has no XMLTV guide: its now/next comes from the provider's per-channel guide once it is on screen.
         awaitExists(LiveTags.channel(channelId("Test News 2")), "Test News 2 short guide", timeout = 20_000)
 
-        // Favorite with a long press, then play.
+        // A long press opens the channel's menu (ADR-0032); favourite from there, and focus returns to the row.
         longPressOk()
+        awaitExists(LuzMenuTags.MENU)
+        awaitFocus(LuzMenuTags.item("play"))
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        awaitFocus(LuzMenuTags.item("favorite"))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
         rule.waitUntil(5_000) { runBlocking { graph.favoriteChannels(playlist()).map { it.name } } == listOf("Test News HD") }
+        awaitFocus(LiveTags.channel(channelId("Test News HD")))
+
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         rule.waitUntil(20_000) {
             runCatching { rule.onNodeWithTag(PlayerTags.STATE).assertExistsWithText(stateText(PlaybackState.PLAYING)) }.isSuccess

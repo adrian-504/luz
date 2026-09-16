@@ -200,4 +200,11 @@
     <string name="search_channels">Channels</string>
     <string name="search_movies">Movies</string>
     <string name="search_series">Series</string>
+    <string name="menu_watch">Watch</string>
+    <string name="menu_add_favorite">Add to favourites</string>
+    <string name="menu_remove_favorite">Remove from favourites</string>
+    <string name="menu_information">Channel information</string>
+    <string name="info_channel_number">Channel number %1$d</string>
+    <string name="info_next">Next: %1$s</string>
+    <string name="info_close">Close</string>
 </resources>

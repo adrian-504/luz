@@ -409,7 +409,7 @@ platform-neutral file, and components are described by intent so SwiftUI can imp
 | Step | Status |
 |---|---|
 | 1. Design foundation | **Done — ADR-0031:** tokens moved to `tooling/design/tokens.json` with a generator and a gate check; the accent is now the Luz amber (it was blue); focus is a lift plus an amber ring, drawn rather than recomposed; Luz's own list row replaces the Material one in Live TV and the library. Channel-list scrolling is inside the frame budget (2.7 % janky, P95 15 ms); 18 TV app device tests pass on the Bbox TV. What is still out of budget — holding the button through the two-pane category preview — is carried into step 2, which replaces that screen |
-| 2. Home and navigation | Not started |
+| 2. Home and navigation | **In progress — ADR-0032:** Live TV now has the directive's three levels (categories are chosen with OK and hand focus to the channels; a long press opens the channel's menu: watch, favourite, information). That also closed the frame gate this screen failed: 61 % late frames down to 10–13 %. Still to do in this step: Home's dynamic rows, Settings with real sections, and the guide entry in the channel menu |
 | 3. Personalisation | Not started |
 | 4. Provider diagnostics | Not started |
 | 5. Guide | Not started |

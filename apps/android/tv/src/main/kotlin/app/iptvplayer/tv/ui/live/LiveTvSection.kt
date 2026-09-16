@@ -50,6 +50,8 @@ import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.rememberedFocus
+import app.iptvplayer.tv.ui.theme.LuzMenu
+import app.iptvplayer.tv.ui.theme.LuzMenuItem
 import app.iptvplayer.tv.ui.theme.LuzRow
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
@@ -117,6 +119,11 @@ fun LiveTvSection(
     val coroutines = rememberCoroutineScope()
     var scopeKey by rememberSaveable { mutableStateOf(if (favoritesOnly) ChannelScope.Favorites.key() else ChannelScope.All.key()) }
     val scope = ChannelScope.of(scopeKey)
+    // Set when a category is chosen: the channels take focus as soon as they are on screen (ADR-0032).
+    var handOverFocus by remember { mutableStateOf(false) }
+    // A channel's menu and its information panel belong to the screen, so they dim all of it, rail included.
+    var menuFor by remember { mutableStateOf<Pair<ChannelRow, NowNextRow?>?>(null) }
+    var infoFor by remember { mutableStateOf<Pair<ChannelRow, NowNextRow?>?>(null) }
 
     LaunchedEffect(revision) {
         val source = graph.currentSource()
@@ -139,77 +146,119 @@ fun LiveTvSection(
     }
     val importing = activity[current]?.liveRunning == true
 
-    Row(
-        modifier = Modifier.fillMaxSize().padding(
-            start = Tokens.space8,
-            end = Tokens.safeHorizontal,
-            top = Tokens.safeVertical,
-            bottom = Tokens.safeVertical,
-        ),
-    ) {
-        if (!favoritesOnly) {
-            LazyColumn(
-                modifier = Modifier.width(280.dp).fillMaxHeight().focusRestorer(),
-                verticalArrangement = Arrangement.spacedBy(Tokens.space2),
-            ) {
-                if (sources.size > 1) {
-                    item(key = "source") {
-                        val index = sources.indexOfFirst { it.playlistId == current }
-                        SourceSwitcher(
-                            name = sources.getOrNull(index)?.name.orEmpty(),
-                            modifier = Modifier.rememberedFocus(focus, LiveTags.SWITCH_SOURCE),
+    Box(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(
+                start = Tokens.space8,
+                end = Tokens.safeHorizontal,
+                top = Tokens.safeVertical,
+                bottom = Tokens.safeVertical,
+            ),
+        ) {
+            if (!favoritesOnly) {
+                LazyColumn(
+                    modifier = Modifier.width(280.dp).fillMaxHeight().focusRestorer(),
+                    verticalArrangement = Arrangement.spacedBy(Tokens.space2),
+                ) {
+                    if (sources.size > 1) {
+                        item(key = "source") {
+                            val index = sources.indexOfFirst { it.playlistId == current }
+                            SourceSwitcher(
+                                name = sources.getOrNull(index)?.name.orEmpty(),
+                                modifier = Modifier.rememberedFocus(focus, LiveTags.SWITCH_SOURCE),
+                            ) {
+                                // Few sources are expected on a TV, so OK moves to the next one; the list reloads for it.
+                                val next = sources[(index + 1).mod(sources.size)].playlistId
+                                scopeKey = if (favoritesOnly) ChannelScope.Favorites.key() else ChannelScope.All.key()
+                                coroutines.launch { graph.selectSource(next) }
+                            }
+                        }
+                    }
+                    item(key = "all") {
+                        GroupItem(
+                            stringResource(R.string.live_all_channels),
+                            null,
+                            scope == ChannelScope.All,
+                            Modifier.rememberedFocus(focus, LiveTags.GROUP_ALL),
                         ) {
-                            // Few sources are expected on a TV, so OK moves to the next one; the list reloads for it.
-                            val next = sources[(index + 1).mod(sources.size)].playlistId
-                            scopeKey = if (favoritesOnly) ChannelScope.Favorites.key() else ChannelScope.All.key()
-                            coroutines.launch { graph.selectSource(next) }
+                            scopeKey = ChannelScope.All.key()
+                            handOverFocus = true
+                        }
+                    }
+                    item(key = "favorites") {
+                        GroupItem(
+                            stringResource(R.string.live_favorites),
+                            null,
+                            scope == ChannelScope.Favorites,
+                            Modifier.rememberedFocus(focus, LiveTags.GROUP_FAVORITES),
+                        ) {
+                            scopeKey = ChannelScope.Favorites.key()
+                            handOverFocus = true
+                        }
+                    }
+                    items(groups.size, key = { groups[it].id }) { index ->
+                        val group = groups[index]
+                        GroupItem(
+                            group.title,
+                            group.channelCount,
+                            scope == ChannelScope.Group(group.id),
+                            Modifier.rememberedFocus(focus, LiveTags.group(group.id)),
+                        ) {
+                            scopeKey = ChannelScope.Group(group.id).key()
+                            handOverFocus = true
                         }
                     }
                 }
-                item(key = "all") {
-                    GroupItem(
-                        stringResource(R.string.live_all_channels),
-                        null,
-                        scope == ChannelScope.All,
-                        Modifier.rememberedFocus(focus, LiveTags.GROUP_ALL),
-                    ) {
-                        scopeKey =
-                            ChannelScope.All.key()
-                    }
-                }
-                item(key = "favorites") {
-                    GroupItem(
-                        stringResource(R.string.live_favorites),
-                        null,
-                        scope == ChannelScope.Favorites,
-                        Modifier.rememberedFocus(focus, LiveTags.GROUP_FAVORITES),
-                    ) {
-                        scopeKey = ChannelScope.Favorites.key()
-                    }
-                }
-                items(groups.size, key = { groups[it].id }) { index ->
-                    val group = groups[index]
-                    GroupItem(
-                        group.title,
-                        group.channelCount,
-                        scope == ChannelScope.Group(group.id),
-                        Modifier.rememberedFocus(focus, LiveTags.group(group.id)),
-                    ) {
-                        scopeKey = ChannelScope.Group(group.id).key()
-                    }
-                }
             }
+            ChannelList(
+                focus,
+                current,
+                scope,
+                revision,
+                importing,
+                favoritesOnly,
+                onPlay,
+                handOverFocus,
+                { handOverFocus = false },
+                { channel, guide -> menuFor = channel to guide },
+                Modifier.padding(start = if (favoritesOnly) 0.dp else Tokens.space6).weight(1f),
+            )
         }
-        ChannelList(
-            focus,
-            current,
-            scope,
-            revision,
-            importing,
-            favoritesOnly,
-            onPlay,
-            Modifier.padding(start = if (favoritesOnly) 0.dp else Tokens.space6).weight(1f),
-        )
+
+        menuFor?.let { (channel, guide) ->
+            val back = {
+                menuFor = null
+                coroutines.launch { returnFocusTo(focus, LiveTags.channel(channel.id)) }
+                Unit
+            }
+            LuzMenu(
+                title = channel.name,
+                items = listOf(
+                    LuzMenuItem("play", stringResource(R.string.menu_watch)) { onPlay(current, scope, channel.id) },
+                    LuzMenuItem(
+                        "favorite",
+                        stringResource(if (channel.isFavorite) R.string.menu_remove_favorite else R.string.menu_add_favorite),
+                    ) { coroutines.launch { graph.setFavorite(channel.id, !channel.isFavorite) } },
+                    LuzMenuItem("info", stringResource(R.string.menu_information)) { infoFor = channel to guide },
+                ),
+                onDismiss = back,
+            )
+        }
+        infoFor?.let { (channel, guide) ->
+            LuzMenu(
+                title = channel.name,
+                items = listOfNotNull(
+                    channel.number?.let { LuzMenuItem("number", stringResource(R.string.info_channel_number, it)) {} },
+                    guide?.current?.let { LuzMenuItem("now", stringResource(R.string.live_now, it.title)) {} },
+                    guide?.next?.let { LuzMenuItem("next", stringResource(R.string.info_next, it.title)) {} },
+                    LuzMenuItem("close", stringResource(R.string.info_close)) {},
+                ),
+                onDismiss = {
+                    infoFor = null
+                    coroutines.launch { returnFocusTo(focus, LiveTags.channel(channel.id)) }
+                },
+            )
+        }
     }
 }
 
@@ -226,17 +275,9 @@ private fun SourceSwitcher(name: String, modifier: Modifier, onSwitch: () -> Uni
 
 @Composable
 private fun GroupItem(title: String, count: Long?, selected: Boolean, modifier: Modifier, onSelect: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    // Browsing groups previews their channels after a pause, without pressing OK. The pause is long enough that passing
-    // through categories loads nothing: each preview replaces the whole channel list, which costs frames on a low-end TV
-    // (PERFORMANCE.md §6.2).
-    LaunchedEffect(focused) {
-        if (focused && !selected) {
-            delay(PREVIEW_DELAY)
-            onSelect()
-        }
-    }
-    LuzRow(onClick = onSelect, modifier = modifier.onFocusChanged { focused = it.isFocused }, selected = selected) {
+    // Moving through categories changes nothing: OK chooses one (ADR-0032). Loading a category's channels on every step
+    // meant redrawing the whole screen while the viewer was still looking for the category they wanted.
+    LuzRow(onClick = onSelect, modifier = modifier, selected = selected) {
         Text(
             title,
             style = MaterialTheme.typography.labelLarge,
@@ -273,6 +314,9 @@ private fun ChannelList(
     importing: Boolean,
     favoritesOnly: Boolean,
     onPlay: (PlaylistId, ChannelScope, ChannelId) -> Unit,
+    takeFocus: Boolean,
+    onFocusTaken: () -> Unit,
+    onMenu: (ChannelRow, NowNextRow?) -> Unit,
     modifier: Modifier,
 ) {
     val graph = LocalAppGraph.current
@@ -314,6 +358,19 @@ private fun ChannelList(
     }
 
     val rows = channels
+    LaunchedEffect(rows, takeFocus) {
+        val first = rows?.firstOrNull() ?: return@LaunchedEffect
+        if (!takeFocus) return@LaunchedEffect
+        // The rows attach a moment after the list is set, so ask a few times before giving up.
+        repeat(FOCUS_ATTEMPTS) {
+            if (focus.requestFocus(LiveTags.channel(first.id))) {
+                onFocusTaken()
+                return@LaunchedEffect
+            }
+            delay(FOCUS_RETRY_MS)
+        }
+        onFocusTaken()
+    }
     Box(modifier = modifier.fillMaxHeight()) {
         when {
             rows == null -> Unit
@@ -342,12 +399,11 @@ private fun ChannelList(
                         now = now,
                         modifier = Modifier.rememberedFocus(focus, LiveTags.channel(channel.id)),
                         onPlay = { onPlay(playlist, scope, channel.id) },
-                        onToggleFavorite = { coroutines.launch { graph.setFavorite(channel.id, !channel.isFavorite) } },
+                        onMenu = { onMenu(channel, onScreenGuide[channel.id.value] ?: storedGuide[channel.id.value]) },
                     )
                 }
             }
         }
-        if (favoritesOnly && rows != null && rows.isNotEmpty()) Unit
     }
 }
 
@@ -358,10 +414,10 @@ private fun ChannelItem(
     now: kotlin.time.Instant,
     modifier: Modifier,
     onPlay: () -> Unit,
-    onToggleFavorite: () -> Unit,
+    onMenu: () -> Unit,
 ) {
     val current = guide?.current
-    LuzRow(onClick = onPlay, modifier = modifier, onLongClick = onToggleFavorite) {
+    LuzRow(onClick = onPlay, modifier = modifier, onLongClick = onMenu) {
         Text(
             channel.number?.toString() ?: "",
             style = MaterialTheme.typography.labelLarge,
@@ -416,5 +472,14 @@ fun EmptyState(message: String, action: String, focus: FocusMemory, actionKey: S
     }
 }
 
-/** How long a category must hold focus before its channels are loaded. */
-private val PREVIEW_DELAY = 900.milliseconds
+/** How long the channels get to appear before the handover gives up (ADR-0032). */
+private const val FOCUS_ATTEMPTS = 20
+private const val FOCUS_RETRY_MS = 50L
+
+/** Puts focus back on the row a menu was opened from; the row re-attaches a moment after the overlay closes. */
+private suspend fun returnFocusTo(focus: FocusMemory, key: String) {
+    repeat(FOCUS_ATTEMPTS) {
+        if (focus.requestFocus(key)) return
+        delay(FOCUS_RETRY_MS)
+    }
+}

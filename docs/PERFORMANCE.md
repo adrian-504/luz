@@ -177,15 +177,17 @@ which the project has not adopted.
 |---|---|---|---|
 | Channel list, remote repeat rate | 1.1 % janky, P95 11 ms, P99 28 ms | 2.7 % janky, P95 15 ms, P99 26 ms | **Met** |
 | Channel list, button held down | not measured | 26 % janky, P95 30 ms, P99 36 ms | not met under burst input |
-| Live TV categories, button held down | not measured | 61 % janky, P95 129 ms | not met |
+| Live TV categories, button held down | not measured | 61 % janky, P95 129 ms | **now 10–13 % janky, P95 23–28 ms** after ADR-0032 |
 
 The custom row is marginally more expensive than Material's at a normal repeat rate and stays inside budget; it got
 there only after focus stopped being a recomposition and became a draw (see ADR-0031). Holding the button down is a
 different matter: the device cannot keep up with a burst of focus moves, and on the categories every settled move also
 reloads the channel list. Per-frame profiling puts that cost in recording the draw commands for a fresh screenful of
 text (24–39 ms) plus the GPU upload (9–17 ms) — the price of replacing what is on screen, not of the row component.
-The two-pane category preview is what the navigation work replaces next ([PRODUCT_DIRECTIVE.md](PRODUCT_DIRECTIVE.md)
-level 2), so the remaining gap is carried into that work rather than optimised in a screen that is about to go.
+The two-pane category preview was the cause, and the navigation work removed it (ADR-0032): categories are now chosen
+with OK instead of previewing themselves on focus, which took holding the button through the categories from 61 % late
+frames and P95 129 ms down to 10–13 % and P95 23–28 ms. What is left is the first traversal after launch, while the
+channel list and the guide queries are still settling.
 
 Two earlier fixes came out of the first pass (ADR-0030): the now/next map for a whole category was being assembled and copied on the UI
 thread, and browsing categories rebuilt the channel list at every step because a preview loaded after 250 ms of focus
