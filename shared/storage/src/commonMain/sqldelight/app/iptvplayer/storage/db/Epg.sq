@@ -23,8 +23,10 @@ CREATE TABLE epg_active_snapshot (
     snapshot INTEGER NOT NULL
 );
 
+-- OR IGNORE: real provider guides repeat the same programme (same channel and start) more than once; the first one wins
+-- (found on the owner's provider 2026-09-16, where a duplicate crashed the import).
 insertProgram:
-INSERT INTO epg_program(source_id, snapshot, id, channel_key, start_utc, end_utc, title, subtitle, description)
+INSERT OR IGNORE INTO epg_program(source_id, snapshot, id, channel_key, start_utc, end_utc, title, subtitle, description)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 lastRowId:

@@ -324,7 +324,7 @@ Scope and order (stated at the start of the phase, 2026-09-15):
 | Playback and watch state | **Done:** resolve movies/episodes, resume, progress saved every 10 s / at the end / on exit, next episode, VOD progress bar and seeking (device tests) |
 | Artwork | **Done — Coil 3.6.2 (ADR-0028)** with template cache keys and a text fallback |
 | Screens | **Done:** Movies, Series, movie and series detail, Home (Continue watching, favorite channels, recently added, series), Search (channels, movies, series). Device tests on the emulator |
-| Owner's Bbox TV with their provider | **NOT YET VERIFIED** |
+| Owner's Bbox TV with their provider | **VERIFIED by the owner 2026-09-16:** refresh imported 12,478 channels (24 s), 2,273 guide programmes, 20,023 movies (31 s) and 10,171 series (13 s); Movies, Series, Guide, Home and Search all work on the TV. Found there: the provider's guide repeats programmes, which aborted the import and crashed the app — `insertProgram` is now `INSERT OR IGNORE` and a guide import can no longer bring the app down (JVM test `EpgDuplicateProgrammeTest`) |
 
 Not in Phase 8: third-party metadata enrichment (FR-VOD-002 keeps the library usable without it), catch-up playback,
 downloads, unified multi-source library, parental controls.

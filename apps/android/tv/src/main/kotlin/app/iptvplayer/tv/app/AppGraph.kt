@@ -288,6 +288,9 @@ class AppGraph(context: Context) {
         try {
             val started = android.os.SystemClock.elapsedRealtime()
             logImport("guide", io { service.refreshEpg(playlistId) }, started)
+        } catch (e: Exception) {
+            // Background imports never take the app down; the unit is marked failed in storage.
+            Log.i(LOG_TAG, "guide: exception ${e::class.simpleName}")
         } finally {
             track(playlistId) { it.copy(guideRunning = false) }
             changed()

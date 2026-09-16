@@ -501,6 +501,11 @@ public class SourceService(
                     else -> Unit
                 }
             }
+        } catch (e: Exception) {
+            // A guide import must never take the app down: keep the previous guide and report the failure.
+            epg.discard(epgSource, snapshot)
+            content.markUnit(playlistId, ImportUnit.EPG, ImportStatus.FAILED, "EXCEPTION")
+            return UnitOutcome(ImportUnit.EPG, ImportStatus.FAILED, 0, DomainError.Storage("EXCEPTION_${e::class.simpleName}"))
         } finally {
             response.body.close()
         }
