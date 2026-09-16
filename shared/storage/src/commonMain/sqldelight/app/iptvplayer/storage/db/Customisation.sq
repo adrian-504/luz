@@ -45,4 +45,74 @@ SELECT content_id, label FROM user_label WHERE playlist_id = :playlistId AND con
 deleteCustomisation {
     DELETE FROM user_hidden WHERE playlist_id = :playlistId;
     DELETE FROM user_label WHERE playlist_id = :playlistId;
+    DELETE FROM user_group_member WHERE playlist_id = :playlistId;
+    DELETE FROM user_group WHERE playlist_id = :playlistId;
 }
+
+-- The viewer's own groups: "My sports", "Family", whatever they make (FR-PLM-001, FR-FAV-002). Their own table, like
+-- everything else here, so an import never touches them; members are stable content ids, so a refresh keeps them even
+-- though every imported row is replaced.
+CREATE TABLE user_group (
+    playlist_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, id)
+);
+
+CREATE TABLE user_group_member (
+    playlist_id TEXT NOT NULL,
+    group_id TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, group_id, content_type, content_id)
+);
+
+createGroup:
+INSERT OR REPLACE INTO user_group(playlist_id, id, title, sort_order, created_at) VALUES (?, ?, ?, ?, ?);
+
+renameGroup:
+UPDATE user_group SET title = :title WHERE playlist_id = :playlistId AND id = :id;
+
+deleteGroup {
+    DELETE FROM user_group_member WHERE playlist_id = :playlistId AND group_id = :id;
+    DELETE FROM user_group WHERE playlist_id = :playlistId AND id = :id;
+}
+
+userGroups:
+SELECT g.id, g.title, COUNT(m.content_id) AS member_count
+FROM user_group g
+LEFT JOIN user_group_member m ON m.playlist_id = g.playlist_id AND m.group_id = g.id
+WHERE g.playlist_id = :playlistId
+GROUP BY g.id, g.title, g.sort_order
+ORDER BY g.sort_order, g.created_at;
+
+nextGroupOrder:
+SELECT COALESCE(MAX(sort_order) + 1, 0) FROM user_group WHERE playlist_id = :playlistId;
+
+addMember:
+INSERT OR REPLACE INTO user_group_member(playlist_id, group_id, content_type, content_id, sort_order)
+VALUES (?, ?, ?, ?, ?);
+
+removeMember:
+DELETE FROM user_group_member
+WHERE playlist_id = :playlistId AND group_id = :groupId AND content_type = :contentType AND content_id = :contentId;
+
+nextMemberOrder:
+SELECT COALESCE(MAX(sort_order) + 1, 0) FROM user_group_member WHERE playlist_id = :playlistId AND group_id = :groupId;
+
+groupsHolding:
+SELECT group_id FROM user_group_member
+WHERE playlist_id = :playlistId AND content_type = :contentType AND content_id = :contentId;
+
+-- Channels of one of the viewer's groups, in the order they were added, minus anything they have since hidden.
+channelsInUserGroup:
+SELECT c.id, c.name, c.number, c.logo_template, c.tvg_id, (f.content_id IS NOT NULL) AS is_favorite
+FROM user_group_member m
+JOIN channel c ON c.playlist_id = m.playlist_id AND c.id = m.content_id AND c.snapshot = :snapshot
+LEFT JOIN favorite f ON f.content_type = 'CHANNEL' AND f.content_id = c.id
+WHERE m.playlist_id = :playlistId AND m.group_id = :groupId AND m.content_type = 'CHANNEL'
+    AND c.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'CHANNEL')
+ORDER BY m.sort_order;

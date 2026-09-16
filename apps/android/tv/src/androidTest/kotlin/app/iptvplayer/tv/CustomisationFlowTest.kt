@@ -151,6 +151,32 @@ class CustomisationFlowTest {
     }
 
     @Test
+    fun aChannelCanBePutIntoAGroupTheViewerMakes() {
+        awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
+        val channel = runBlocking { graph.channels(playlist, null) }.first()
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        awaitFocus(LiveTags.channel(channel.id))
+
+        longPressOk()
+        awaitExists(LuzMenuTags.MENU)
+        repeat(5) { if (focusedTag() != LuzMenuTags.item("add-to-group")) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitFocus(LuzMenuTags.item("add-to-group"))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+
+        // With no groups yet, the only offer is to make one.
+        awaitFocus(LuzMenuTags.item("new-group"))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        renameTo("My sports") { runBlocking { graph.userGroups(playlist) }.any { it.title == "My sports" } }
+
+        val group = runBlocking { graph.userGroups(playlist) }.single()
+        assertEquals(1L, group.channelCount)
+        assertEquals(listOf(channel.id), runBlocking { graph.channelsInUserGroup(playlist, group.id) }.map { it.id })
+
+        // It is a category of its own in Live TV, above the provider's.
+        awaitExists(LiveTags.group(group.id))
+    }
+
+    @Test
     fun renamingACategoryFromItsMenuShowsTheViewersName() {
         rule.waitUntil(20_000) { focusedTag()?.startsWith("live-") == true }
         val group = runBlocking { graph.groups(playlist) }.first()

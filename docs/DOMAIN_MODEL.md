@@ -354,6 +354,10 @@ transaction and deletes the previous version afterwards. Readers filter on the a
 source itself. Two tables hold the choices (`user_hidden`, `user_label`), keyed by playlist and the same stable content
 ids as favourites and watch state.
 
+The viewer's own groups (`user_group`, `user_group_member`) work the same way: a name and a list of stable content ids.
+A group is theirs, not the provider's — it can hold channels from any category, it is renamed and deleted by them alone,
+and a channel hidden later drops out of the group's list without leaving the group.
+
 They are deliberately not columns on the imported rows. An import replaces every channel, group, film and series it
 brings in; a choice stored beside that data would be lost with it. Storing them separately also keeps the provider's own
 names and lists intact and recoverable: hiding is a filter applied on the way out, and a rename is a label read in place

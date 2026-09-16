@@ -52,6 +52,8 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
             ChannelScope.All -> graph.channels(playlistId, null)
             ChannelScope.Favorites -> graph.favoriteChannels(playlistId)
             is ChannelScope.Group -> graph.channels(playlistId, scope.id)
+            // Zapping stays inside the list the viewer came from, their own groups included.
+            is ChannelScope.Mine -> graph.channelsInUserGroup(playlistId, scope.id)
         }
     }
     val list = channels ?: return

@@ -1,0 +1,18 @@
+-- Migration 4 -> 5: the viewer's own groups (Customisation.sq). New tables only; imported content is untouched.
+CREATE TABLE user_group (
+    playlist_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, id)
+);
+
+CREATE TABLE user_group_member (
+    playlist_id TEXT NOT NULL,
+    group_id TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, group_id, content_type, content_id)
+);

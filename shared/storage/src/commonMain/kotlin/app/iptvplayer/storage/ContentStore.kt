@@ -338,6 +338,52 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
     public fun labels(playlistId: PlaylistId, type: CustomisationTarget): Map<String, String> =
         customisationQueries.labelsOf(playlistId.value, type.name).executeAsList().associate { it.content_id to it.label }
 
+    /**
+     * The viewer's own groups (FR-PLM-001, FR-FAV-002): a name and the content they put in it. Members are stable
+     * content ids, so a refresh — which replaces every imported row — leaves the groups intact; deleting the source
+     * removes them, and nothing else does.
+     */
+    public fun createGroup(playlistId: PlaylistId, id: String, title: String): Boolean {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return false
+        val order = customisationQueries.nextGroupOrder(playlistId.value).executeAsOne()
+        customisationQueries.createGroup(playlistId.value, id, trimmed, order, clock.now().toEpochMilliseconds())
+        return true
+    }
+
+    public fun renameGroup(playlistId: PlaylistId, id: String, title: String) {
+        val trimmed = title.trim()
+        if (trimmed.isNotEmpty()) customisationQueries.renameGroup(trimmed, playlistId.value, id)
+    }
+
+    public fun deleteGroup(playlistId: PlaylistId, id: String) {
+        customisationQueries.deleteGroup(playlistId.value, id)
+    }
+
+    public fun userGroups(playlistId: PlaylistId): List<GroupRow> =
+        customisationQueries.userGroups(playlistId.value).executeAsList().map { GroupRow(it.id, it.title, it.member_count) }
+
+    public fun addToGroup(playlistId: PlaylistId, groupId: String, type: ContentType, id: String) {
+        val order = customisationQueries.nextMemberOrder(playlistId.value, groupId).executeAsOne()
+        customisationQueries.addMember(playlistId.value, groupId, type.name, id, order)
+    }
+
+    public fun removeFromGroup(playlistId: PlaylistId, groupId: String, type: ContentType, id: String) {
+        customisationQueries.removeMember(playlistId.value, groupId, type.name, id)
+    }
+
+    /** The viewer's groups that already hold this item, so a menu can offer to take it out again. */
+    public fun groupsHolding(playlistId: PlaylistId, type: ContentType, id: String): List<String> =
+        customisationQueries.groupsHolding(playlistId.value, type.name, id).executeAsList()
+
+    /** The channels of one of the viewer's groups, in the order they were added. */
+    public fun channelsInUserGroup(playlistId: PlaylistId, groupId: String): List<ChannelRow> {
+        val snapshot = activeLiveSnapshot(playlistId) ?: return emptyList()
+        return customisationQueries.channelsInUserGroup(snapshot, playlistId.value, groupId) { id, name, number, logo, tvg, favorite ->
+            row(id, name, number, logo, tvg, favorite)
+        }.executeAsList()
+    }
+
     /** Names for [ids], including things the viewer has hidden — the hidden list has to name what it offers back. */
     public fun channelNames(playlistId: PlaylistId, ids: List<String>): Map<String, String> {
         val snapshot = activeLiveSnapshot(playlistId) ?: return emptyMap()

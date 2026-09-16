@@ -131,6 +131,38 @@ class CustomisationTest {
     }
 
     @Test
+    fun theViewersOwnGroupsHoldChannelsAndSurviveARefresh() {
+        addSource()
+        import()
+        assertTrue(content.createGroup(playlist, "grp_mine", "  My sports  "), "trimmed")
+        assertTrue(!content.createGroup(playlist, "grp_blank", "   "), "a group needs a name")
+
+        content.addToGroup(playlist, "grp_mine", ContentType.CHANNEL, "one")
+        content.addToGroup(playlist, "grp_mine", ContentType.CHANNEL, "three")
+        assertEquals(listOf("one", "three"), content.channelsInUserGroup(playlist, "grp_mine").map { it.id.value }, "in the order added")
+        assertEquals(listOf("My sports" to 2L), content.userGroups(playlist).map { it.title to it.channelCount })
+        assertEquals(listOf("grp_mine"), content.groupsHolding(playlist, ContentType.CHANNEL, "one"))
+
+        // A hidden channel drops out of the group's list without leaving it.
+        content.hide(playlist, CustomisationTarget.CHANNEL, "one")
+        assertEquals(listOf("three"), content.channelsInUserGroup(playlist, "grp_mine").map { it.id.value })
+        content.unhide(playlist, CustomisationTarget.CHANNEL, "one")
+
+        import() // a refresh replaces every imported row
+        assertEquals(listOf("one", "three"), content.channelsInUserGroup(playlist, "grp_mine").map { it.id.value }, "kept")
+
+        content.renameGroup(playlist, "grp_mine", "My football")
+        assertEquals(listOf("My football"), content.userGroups(playlist).map { it.title })
+
+        content.removeFromGroup(playlist, "grp_mine", ContentType.CHANNEL, "one")
+        assertEquals(listOf("three"), content.channelsInUserGroup(playlist, "grp_mine").map { it.id.value })
+
+        content.deleteGroup(playlist, "grp_mine")
+        assertTrue(content.userGroups(playlist).isEmpty())
+        assertTrue(content.channelsInUserGroup(playlist, "grp_mine").isEmpty(), "its members go with it")
+    }
+
+    @Test
     fun choicesSurviveARefreshAndLeaveWithTheSource() {
         addSource()
         import()
@@ -141,10 +173,14 @@ class CustomisationTest {
         assertEquals(listOf("one", "three"), content.channels(playlist).map { it.id.value }, "still hidden after a refresh")
         assertEquals("Headlines", content.groups(playlist).first { it.id == "news" }.title, "still renamed after a refresh")
 
+        content.createGroup(playlist, "grp_mine", "My sports")
+        content.addToGroup(playlist, "grp_mine", ContentType.CHANNEL, "one")
+
         content.deleteSource(playlist)
         addSource()
         import()
         assertEquals(listOf("one", "two", "three"), content.channels(playlist).map { it.id.value }, "removing the source forgets them")
         assertEquals("News", content.groups(playlist).first { it.id == "news" }.title)
+        assertTrue(content.userGroups(playlist).isEmpty(), "and the viewer's own groups leave with it")
     }
 }

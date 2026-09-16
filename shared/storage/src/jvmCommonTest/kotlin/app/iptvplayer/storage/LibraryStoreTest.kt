@@ -274,7 +274,8 @@ class LibraryStoreTest {
         // Recreate what a Phase 7 install has on disk: no library tables, schema version 1.
         for (table in listOf(
             "snapshot_allocation", "library_group", "library_member", "movie", "series", "season", "episode",
-            "series_detail_state", "watch_state", "title_search", "user_hidden", "user_label",
+            "series_detail_state", "watch_state", "title_search", "user_hidden", "user_label", "user_group",
+            "user_group_member",
         )) {
             driver.execute(null, "DROP TABLE $table", 0)
         }
@@ -286,7 +287,7 @@ class LibraryStoreTest {
         content = ContentStore(driver, clock)
         library = LibraryStore(content, clock)
         assertEquals(
-            4L,
+            5L,
             driver.executeQuery(null, "PRAGMA user_version", {
                 it.next()
                 app.cash.sqldelight.db.QueryResult.Value(it.getLong(0))

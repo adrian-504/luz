@@ -207,6 +207,42 @@ class AppGraph(context: Context) {
 
     suspend fun hidden(playlistId: PlaylistId, target: CustomisationTarget): List<String> = io { content.hidden(playlistId, target) }
 
+    /** The viewer's own groups: making one, filling it, and what is in it (FR-PLM-001, FR-FAV-002). */
+    suspend fun createGroup(playlistId: PlaylistId, title: String): String? {
+        val id = "ugrp_" + SystemClock.now().toEpochMilliseconds().toString(RADIX)
+        val created = io { content.createGroup(playlistId, id, title) }
+        if (created) changed()
+        return id.takeIf { created }
+    }
+
+    suspend fun renameGroup(playlistId: PlaylistId, id: String, title: String) {
+        io { content.renameGroup(playlistId, id, title) }
+        changed()
+    }
+
+    suspend fun deleteGroup(playlistId: PlaylistId, id: String) {
+        io { content.deleteGroup(playlistId, id) }
+        changed()
+    }
+
+    suspend fun userGroups(playlistId: PlaylistId): List<GroupRow> = io { content.userGroups(playlistId) }
+
+    suspend fun addToGroup(playlistId: PlaylistId, groupId: String, type: ContentType, id: String) {
+        io { content.addToGroup(playlistId, groupId, type, id) }
+        changed()
+    }
+
+    suspend fun removeFromGroup(playlistId: PlaylistId, groupId: String, type: ContentType, id: String) {
+        io { content.removeFromGroup(playlistId, groupId, type, id) }
+        changed()
+    }
+
+    suspend fun groupsHolding(playlistId: PlaylistId, type: ContentType, id: String): List<String> =
+        io { content.groupsHolding(playlistId, type, id) }
+
+    suspend fun channelsInUserGroup(playlistId: PlaylistId, groupId: String): List<ChannelRow> =
+        io { content.channelsInUserGroup(playlistId, groupId) }
+
     suspend fun channelNames(playlistId: PlaylistId, ids: List<String>): Map<String, String> = io { content.channelNames(playlistId, ids) }
 
     suspend fun groupNames(playlistId: PlaylistId, ids: List<String>): Map<String, String> = io { content.groupNames(playlistId, ids) }
@@ -502,3 +538,6 @@ class AppGraph(context: Context) {
 
 /** How many channels one stored-guide query covers; the whole list is read in batches of this size. */
 private const val GUIDE_BATCH = 500
+
+/** Base for the id a new group gets from the clock: short, and unique enough for one viewer making groups by hand. */
+private const val RADIX = 36

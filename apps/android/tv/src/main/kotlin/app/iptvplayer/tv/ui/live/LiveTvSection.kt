@@ -40,6 +40,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.CustomisationTarget
 import app.iptvplayer.storage.ChannelRow
 import app.iptvplayer.storage.GroupRow
@@ -73,16 +74,21 @@ sealed interface ChannelScope {
 
     data class Group(val id: String) : ChannelScope
 
+    /** One of the viewer's own groups (FR-FAV-002), which holds channels they chose rather than ones a provider grouped. */
+    data class Mine(val id: String) : ChannelScope
+
     fun key(): String = when (this) {
         All -> "all"
         Favorites -> "favorites"
         is Group -> "g:$id"
+        is Mine -> "m:$id"
     }
 
     companion object {
         fun of(key: String): ChannelScope = when {
             key == "favorites" -> Favorites
             key.startsWith("g:") -> Group(key.removePrefix("g:"))
+            key.startsWith("m:") -> Mine(key.removePrefix("m:"))
             else -> All
         }
     }
@@ -117,6 +123,7 @@ fun LiveTvSection(
     var playlist by remember { mutableStateOf<PlaylistId?>(null) }
     var loaded by remember { mutableStateOf(false) }
     var groups by remember { mutableStateOf<List<GroupRow>>(emptyList()) }
+    var myGroups by remember { mutableStateOf<List<GroupRow>>(emptyList()) }
     var sources by remember { mutableStateOf<List<SourceRecord>>(emptyList()) }
     val coroutines = rememberCoroutineScope()
     var scopeKey by rememberSaveable { mutableStateOf(if (favoritesOnly) ChannelScope.Favorites.key() else ChannelScope.All.key()) }
@@ -128,12 +135,17 @@ fun LiveTvSection(
     var infoFor by remember { mutableStateOf<Pair<ChannelRow, NowNextRow?>?>(null) }
     var groupMenuFor by remember { mutableStateOf<GroupRow?>(null) }
     var renaming by remember { mutableStateOf<GroupRow?>(null) }
+    var myGroupMenuFor by remember { mutableStateOf<GroupRow?>(null) }
+    var renamingMine by remember { mutableStateOf<GroupRow?>(null) }
+    var addingToGroup by remember { mutableStateOf<ChannelRow?>(null) }
+    var newGroupFor by remember { mutableStateOf<ChannelRow?>(null) }
 
     LaunchedEffect(revision) {
         val source = graph.currentSource()
         sources = graph.sources()
         playlist = source?.playlistId
         groups = source?.let { graph.groups(it.playlistId) }.orEmpty()
+        myGroups = source?.let { graph.userGroups(it.playlistId) }.orEmpty()
         loaded = true
     }
     if (!loaded) return
@@ -200,6 +212,19 @@ fun LiveTvSection(
                             handOverFocus = true
                         }
                     }
+                    items(myGroups.size, key = { myGroups[it].id }) { index ->
+                        val group = myGroups[index]
+                        GroupItem(
+                            group.title,
+                            group.channelCount,
+                            scope == ChannelScope.Mine(group.id),
+                            Modifier.rememberedFocus(focus, LiveTags.group(group.id)),
+                            onMenu = { myGroupMenuFor = group },
+                        ) {
+                            scopeKey = ChannelScope.Mine(group.id).key()
+                            handOverFocus = true
+                        }
+                    }
                     items(groups.size, key = { groups[it].id }) { index ->
                         val group = groups[index]
                         GroupItem(
@@ -245,11 +270,84 @@ fun LiveTvSection(
                         stringResource(if (channel.isFavorite) R.string.menu_remove_favorite else R.string.menu_add_favorite),
                     ) { coroutines.launch { graph.setFavorite(channel.id, !channel.isFavorite) } },
                     LuzMenuItem("info", stringResource(R.string.menu_information)) { infoFor = channel to guide },
+                    LuzMenuItem("add-to-group", stringResource(R.string.menu_add_to_group)) { addingToGroup = channel },
                     LuzMenuItem("hide", stringResource(R.string.menu_hide_channel)) {
                         coroutines.launch { graph.hide(current, CustomisationTarget.CHANNEL, channel.id.value) }
                     },
                 ),
                 onDismiss = back,
+            )
+        }
+        addingToGroup?.let { channel ->
+            val holding = remember(channel.id, myGroups) { mutableStateOf(emptyList<String>()) }
+            LaunchedEffect(channel.id, revision) { holding.value = graph.groupsHolding(current, ContentType.CHANNEL, channel.id.value) }
+            LuzMenu(
+                title = channel.name,
+                items = myGroups.map { group ->
+                    val inIt = group.id in holding.value
+                    LuzMenuItem(
+                        group.id,
+                        stringResource(if (inIt) R.string.menu_remove_from else R.string.menu_add_to, group.title),
+                    ) {
+                        coroutines.launch {
+                            if (inIt) {
+                                graph.removeFromGroup(current, group.id, ContentType.CHANNEL, channel.id.value)
+                            } else {
+                                graph.addToGroup(current, group.id, ContentType.CHANNEL, channel.id.value)
+                            }
+                        }
+                    }
+                } + LuzMenuItem("new-group", stringResource(R.string.menu_new_group)) { newGroupFor = channel },
+                onDismiss = {
+                    addingToGroup = null
+                    coroutines.launch { returnFocusTo(focus, LiveTags.channel(channel.id)) }
+                },
+            )
+        }
+        newGroupFor?.let { channel ->
+            LuzPrompt(
+                title = stringResource(R.string.menu_new_group),
+                initial = "",
+                onConfirm = { name ->
+                    coroutines.launch {
+                        graph.createGroup(current, name)?.let { graph.addToGroup(current, it, ContentType.CHANNEL, channel.id.value) }
+                    }
+                },
+                onClear = null,
+                onDismiss = {
+                    newGroupFor = null
+                    coroutines.launch { returnFocusTo(focus, LiveTags.channel(channel.id)) }
+                },
+            )
+        }
+        myGroupMenuFor?.let { group ->
+            LuzMenu(
+                title = group.title,
+                items = listOf(
+                    LuzMenuItem("rename", stringResource(R.string.menu_rename_group)) { renamingMine = group },
+                    LuzMenuItem("delete", stringResource(R.string.menu_delete_group)) {
+                        coroutines.launch {
+                            if (scope == ChannelScope.Mine(group.id)) scopeKey = ChannelScope.All.key()
+                            graph.deleteGroup(current, group.id)
+                        }
+                    },
+                ),
+                onDismiss = {
+                    myGroupMenuFor = null
+                    coroutines.launch { returnFocusTo(focus, LiveTags.group(group.id)) }
+                },
+            )
+        }
+        renamingMine?.let { group ->
+            LuzPrompt(
+                title = stringResource(R.string.menu_rename_group),
+                initial = group.title,
+                onConfirm = { coroutines.launch { graph.renameGroup(current, group.id, it) } },
+                onClear = null,
+                onDismiss = {
+                    renamingMine = null
+                    coroutines.launch { returnFocusTo(focus, LiveTags.group(group.id)) }
+                },
             )
         }
         groupMenuFor?.let { group ->
@@ -376,6 +474,7 @@ private fun ChannelList(
             ChannelScope.All -> graph.channels(playlist, null)
             ChannelScope.Favorites -> graph.favoriteChannels(playlist)
             is ChannelScope.Group -> graph.channels(playlist, scope.id)
+            is ChannelScope.Mine -> graph.channelsInUserGroup(playlist, scope.id)
         }
         channels = rows
         while (true) {
