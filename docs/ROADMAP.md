@@ -441,7 +441,7 @@ Movies, Series) are done — ADR-0035 — and verified on the Bbox with the owne
 | 22–26 | Player redesign, scrubbing, info/subtitles/audio panel, next-episode countdown, quality badges | **Done — ADR-0036** (emulator device tests; the owner's TV shows the new film controls) |
 | 27–29 | Live channel bar, channel list over the picture, programme info | **Done — ADR-0036** (emulator with the test provider; not yet seen with the owner's channels) |
 | 30–32 | Clock, quiet buffering, error screen | **Done — ADR-0036** |
-| 33–34 | Guide timeline redesign and speed, a channel's guide from its menu | Stage 4 — not started |
+| 33–34 | Guide timeline redesign and speed, a channel's guide from its menu | **Done — ADR-0037** (emulator device tests); speed on the Bbox not yet re-measured |
 
 Follow-ups found on the way: a budget for film and show import times on the reference television (88 s and 3 min 41 s
 today, ADR-0035); Home takes about two seconds to fill every row on the Bbox and now shows rows as they arrive.

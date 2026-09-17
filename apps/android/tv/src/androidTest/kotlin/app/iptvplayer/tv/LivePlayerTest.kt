@@ -1,6 +1,5 @@
 package app.iptvplayer.tv
 
-import android.graphics.Bitmap
 import android.view.KeyEvent
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -22,7 +21,6 @@ import org.junit.Test
 import org.junit.rules.ExternalResource
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
-import java.io.File
 
 /**
  * Live television in the player (ADR-0036): the live bar, the channel list over the picture on Up, and the panel on Down.
@@ -34,7 +32,6 @@ import java.io.File
 class LivePlayerTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val graph get() = (instrumentation.targetContext.applicationContext as IptvApplication).graph
-    private val screenshots = InstrumentationRegistry.getArguments().getString("screenshots") == "true"
 
     private val source = object : ExternalResource() {
         override fun before() {
@@ -75,12 +72,8 @@ class LivePlayerTest {
     private fun awaitGone(tag: String) = rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isEmpty() }
 
     private fun shot(name: String) {
-        if (!screenshots) return
         rule.waitForIdle()
-        Thread.sleep(SHOT_SETTLE_MS)
-        val bitmap = instrumentation.uiAutomation.takeScreenshot() ?: return
-        val dir = File(instrumentation.targetContext.getExternalFilesDir(null), "shots").apply { mkdirs() }
-        File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        screenshot(name)
     }
 
     @Test
@@ -122,9 +115,5 @@ class LivePlayerTest {
         shot("live-info-panel")
         press(KeyEvent.KEYCODE_BACK)
         awaitGone(PlayerTags.TRACK_PANEL)
-    }
-
-    private companion object {
-        const val SHOT_SETTLE_MS = 800L
     }
 }

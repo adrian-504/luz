@@ -132,6 +132,8 @@ fun LiveTvSection(
     favoritesOnly: Boolean,
     onPlay: (PlaylistId, ChannelScope, ChannelId) -> Unit,
     onAddSource: () -> Unit,
+    /** Opens the guide on a channel's row (item 34). */
+    onOpenGuide: (ChannelId) -> Unit = {},
 ) {
     val graph = LocalAppGraph.current
     val revision by graph.revision.collectAsState()
@@ -297,6 +299,7 @@ fun LiveTvSection(
                         stringResource(if (channel.isFavorite) R.string.menu_remove_favorite else R.string.menu_add_favorite),
                     ) { coroutines.launch { graph.setFavorite(channel.id, !channel.isFavorite) } },
                     LuzMenuItem("info", stringResource(R.string.menu_information)) { infoFor = channel to guide },
+                    LuzMenuItem("guide", stringResource(R.string.menu_open_guide)) { onOpenGuide(channel.id) },
                     LuzMenuItem("add-to-group", stringResource(R.string.menu_add_to_group)) { addingToGroup = channel },
                     LuzMenuItem("hide", stringResource(R.string.menu_hide_channel)) {
                         coroutines.launch { graph.hide(current, CustomisationTarget.CHANNEL, channel.id.value) }

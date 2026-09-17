@@ -16,8 +16,10 @@ import app.iptvplayer.storage.ChannelRow
 import app.iptvplayer.tv.app.IptvApplication
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.guide.GuideTags
+import app.iptvplayer.tv.ui.live.LiveTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
+import app.iptvplayer.tv.ui.theme.LuzMenuTags
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -114,6 +116,8 @@ class GuideNavigationTest {
         val start = Clock.System.now()
         awaitDetails(programmeAt(rows[0], start).title)
         val initialWindow = windowStartText()
+        rule.waitForIdle()
+        screenshot("guide")
 
         // Down twice. Row 1 has no XMLTV guide: its programmes come from the provider's per-channel guide (get_short_epg).
         // Each move focuses the programme airing at the focused time.
@@ -128,6 +132,8 @@ class GuideNavigationTest {
         // Right moves through programmes; past the last visible one the window moves 90 minutes later.
         repeat(12) { press(KeyEvent.KEYCODE_DPAD_RIGHT) }
         rule.waitUntil(5_000) { windowStartText() != initialWindow }
+        rule.waitForIdle()
+        screenshot("guide-later")
         assertTrue("focus stays in the guide row: ${focusedTag()}", focusedTag()?.startsWith("guide-${rows[2].id.value}-") == true)
 
         // Up from the first row reaches "Now", which returns to the present.
@@ -141,5 +147,39 @@ class GuideNavigationTest {
         awaitFocus(GuideTags.NOW)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         rule.waitUntil(5_000) { windowStartText() == initialWindow }
+    }
+
+    /** Holding OK: the remote sends repeats, and the first of them is the long press (ADR-0031). */
+    private fun longPressOk() {
+        val down = android.os.SystemClock.uptimeMillis()
+        instrumentation.sendKeySync(KeyEvent(down, down, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, 0))
+        Thread.sleep(700)
+        instrumentation.sendKeySync(
+            KeyEvent(down, android.os.SystemClock.uptimeMillis(), KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, 1),
+        )
+        Thread.sleep(100)
+        instrumentation.sendKeySync(
+            KeyEvent(down, android.os.SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER, 0),
+        )
+        rule.waitForIdle()
+    }
+
+    @Test
+    fun aChannelsMenuOpensTheGuideOnThatChannel() {
+        rule.waitUntil(20_000) { focusedTag()?.startsWith("live-") == true }
+        val rows = channels()
+        val target = rows[4]
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        repeat(6) { if (focusedTag() != LiveTags.channel(target.id)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitFocus(LiveTags.channel(target.id))
+
+        longPressOk()
+        repeat(6) { if (focusedTag() != LuzMenuTags.item("guide")) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitFocus(LuzMenuTags.item("guide"))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+
+        // The guide opens with the remote on that channel's row, on what is on now.
+        rule.waitUntil(20_000) { focusedTag()?.startsWith("guide-${target.id.value}-") == true }
+        awaitDetails(target.name)
     }
 }

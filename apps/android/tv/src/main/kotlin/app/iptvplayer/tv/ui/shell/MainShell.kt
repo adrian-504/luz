@@ -94,6 +94,8 @@ fun MainShell(
 ) {
     var homeFirstKey by remember { mutableStateOf<String?>(null) }
     var libraryFirstKey by remember { mutableStateOf<String?>(null) }
+    // A channel whose guide row was asked for from its menu in Live TV; the guide opens on it.
+    var guideChannel by remember { mutableStateOf<ChannelId?>(null) }
     // A section's own step back (a grid back to its shelves), taken before Back moves the remote to the navigation.
     var contentBack by remember { mutableStateOf<(() -> Unit)?>(null) }
     var selected by rememberSaveable { mutableStateOf(initialSection) }
@@ -134,9 +136,17 @@ fun MainShell(
             // Keyed so each section starts with its own scroll and focus-restoration state.
             key(selected) {
                 when (selected) {
-                    Section.LIVE_TV -> LiveTvSection(focus, favoritesOnly = false, onPlay = onPlayChannel, onAddSource = onAddSource)
-                    Section.FAVORITES -> LiveTvSection(focus, favoritesOnly = true, onPlay = onPlayChannel, onAddSource = onAddSource)
-                    Section.GUIDE -> GuideSection(focus, onPlay = onPlayChannel, onAddSource = onAddSource)
+                    Section.LIVE_TV, Section.FAVORITES -> LiveTvSection(
+                        focus,
+                        favoritesOnly = selected == Section.FAVORITES,
+                        onPlay = onPlayChannel,
+                        onAddSource = onAddSource,
+                        onOpenGuide = { channel ->
+                            guideChannel = channel
+                            selected = Section.GUIDE
+                        },
+                    )
+                    Section.GUIDE -> GuideSection(focus, onPlay = onPlayChannel, onAddSource = onAddSource, initialChannel = guideChannel)
                     Section.HOME -> HomeSection(
                         focus,
                         onPlayChannel = onPlayChannel,
@@ -184,6 +194,7 @@ fun MainShell(
                 if (lastContentKey?.let { focus.requestFocus(it) } != true) contentFocusRequests++
             },
         ) { section ->
+            guideChannel = null
             selected = section
             contentFocusRequests++
         }

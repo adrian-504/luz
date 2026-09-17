@@ -151,6 +151,9 @@
 
     <string name="guide_loading">Downloading the guide…</string>
     <string name="guide_now">Now</string>
+    <string name="guide_on_now">On now</string>
+    <string name="guide_today">Today</string>
+    <string name="guide_tomorrow">Tomorrow</string>
     <string name="guide_programme_time">%1$s – %2$s</string>
 
     <string name="sources_title">Your sources</string>
@@ -282,6 +285,7 @@
     <string name="menu_add_favorite">Add to favourites</string>
     <string name="menu_remove_favorite">Remove from favourites</string>
     <string name="menu_information">Channel information</string>
+    <string name="menu_open_guide">See in the guide</string>
     <string name="info_channel_number">Channel number %1$d</string>
     <string name="info_next">Next: %1$s</string>
     <string name="info_close">Close</string>

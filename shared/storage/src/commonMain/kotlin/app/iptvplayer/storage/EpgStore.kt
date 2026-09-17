@@ -143,7 +143,7 @@ public class EpgStore(private val driver: SqlDriver) {
             .executeAsList()
             .groupBy(
                 { it.channel_id },
-                { GuideProgramme(it.title, Instant.fromEpochSeconds(it.start_utc), Instant.fromEpochSeconds(it.end_utc)) },
+                { GuideProgramme(it.title, Instant.fromEpochSeconds(it.start_utc), Instant.fromEpochSeconds(it.end_utc), it.description) },
             )
     }
 

@@ -57,3 +57,4 @@ line. Product-scope decisions still go to the owner.
 | [0034](0034-luz-design-system-rail-and-components.md) | One design system for every screen, with a floating navigation rail | Accepted |
 | [0035](0035-title-details-people-versions-and-shelves.md) | Title details, people, versions and the shelves built from them | Accepted |
 | [0036](0036-player-controls-panel-and-live-bar.md) | The player's controls, panel, live bar and remote keys | Accepted |
+| [0037](0037-guide-timeline-and-loading.md) | The guide timeline, and loading it a block at a time | Accepted |

@@ -170,7 +170,7 @@ class CustomisationFlowTest {
 
         longPressOk()
         awaitExists(LuzMenuTags.MENU)
-        repeat(4) { if (focusedTag() != LuzMenuTags.item("hide")) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        repeat(6) { if (focusedTag() != LuzMenuTags.item("hide")) press(KeyEvent.KEYCODE_DPAD_DOWN) }
         awaitFocus(LuzMenuTags.item("hide"))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
 

@@ -196,11 +196,13 @@ remote** — programme, times, progress, what is next — updated without rebuil
 plate, number, name, programme, thin progress and a small heart for favourites. OK plays; holding OK opens the channel's
 menu.
 
-## 12. Guide
-A screen title with the focused programme and its channel and times beneath, and a glass *Now* button. Half-hour marks
-over a hairline; each channel's logo and name; programmes as soft glass blocks as long as they run. What is on now is a
-shade brighter with a thin amber mark; the focused block is brightest with a white edge; a red line marks the time.
-Cells are drawn, not built from surfaces.
+## 12. Guide (ADR-0037)
+A screen title with the focused programme large, its channel, times and "On now" beneath, and two lines of its
+description; a glass *Now* button. The day ("Today", "Tomorrow", a date) and the half-hour marks over a hairline; each
+channel's number, logo plate and name, the focused row's name brighter; programmes as soft glass blocks as long as they
+run. What is on now is filled as far as it has got; the focused block is brightest with a white edge; a red line marks the
+time. Moving past the edge slides the timeline 90 minutes. Cells are drawn, not built from surfaces. A channel's menu in
+Live TV offers "See in the guide".
 
 ## 13. Movies and Series
 Drawn under the rail like Home: a featured title with a backdrop, then shelves Luz builds (ADR-0035) — Continue watching,
