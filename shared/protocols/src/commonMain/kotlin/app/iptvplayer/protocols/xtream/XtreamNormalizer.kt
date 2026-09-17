@@ -14,6 +14,7 @@ import app.iptvplayer.domain.id.ProgramId
 import app.iptvplayer.domain.id.SeasonId
 import app.iptvplayer.domain.id.SeriesId
 import app.iptvplayer.domain.id.StableIds
+import app.iptvplayer.domain.library.TitleCleaner
 import app.iptvplayer.domain.model.Artwork
 import app.iptvplayer.domain.model.ArtworkKind
 import app.iptvplayer.domain.model.ArtworkOrigin
@@ -37,6 +38,7 @@ import app.iptvplayer.domain.model.ProgramFlags
 import app.iptvplayer.domain.model.Season
 import app.iptvplayer.domain.model.Series
 import app.iptvplayer.domain.model.StreamProtocol
+import app.iptvplayer.domain.model.TitleDetail
 import app.iptvplayer.domain.model.XtreamStreamKind
 import app.iptvplayer.domain.net.UrlCheck
 import app.iptvplayer.domain.net.UrlContext
@@ -116,8 +118,9 @@ internal class XtreamNormalizer(
     fun vodStream(element: JsonElement): ContentItem.MovieItem? {
         val obj = lenient(element) ?: return null
         val streamId = obj.string("stream_id") ?: return missingId("stream_id")
-        val name = cleanName(obj.string("name")) ?: return noName()
+        val rawName = cleanName(obj.string("name")) ?: return noName()
         if (!seenIds.add("movie|$streamId")) return duplicate()
+        val clean = TitleCleaner.clean(rawName)
         val movieId = MovieId(StableIds.derive(DerivedIdKind.MOVIE, playlistId.value, listOf("xtream", streamId)))
         val extension = obj.string("container_extension")
         val mediaSource =
@@ -127,8 +130,8 @@ internal class XtreamNormalizer(
             id = movieId,
             playlistId = playlistId,
             groupIds = groups(obj),
-            title = name,
-            year = M3uClassifier.year(name),
+            title = clean.title,
+            year = clean.year ?: obj.string("year")?.take(4)?.toIntOrNull(),
             duration = null,
             plot = null,
             genres = emptyList(),
@@ -138,8 +141,11 @@ internal class XtreamNormalizer(
             backdrop = null,
             mediaSourceIds = listOf(mediaSource.id),
             providerStreamId = streamId,
-            externalIds = ExternalIds(tmdb = obj.string("tmdb")),
+            externalIds = ExternalIds(tmdb = obj.string("tmdb")?.takeUnless { it == "0" }),
             addedAt = obj.epochSeconds("added"),
+            quality = clean.quality,
+            tags = clean.tags,
+            language = clean.language,
         )
         return ContentItem.MovieItem(movie, mediaSource, poster)
     }
@@ -147,8 +153,9 @@ internal class XtreamNormalizer(
     fun series(element: JsonElement): ContentItem.SeriesItem? {
         val obj = lenient(element) ?: return null
         val providerId = obj.string("series_id") ?: return missingId("series_id")
-        val name = cleanName(obj.string("name")) ?: return noName()
+        val rawName = cleanName(obj.string("name")) ?: return noName()
         if (!seenIds.add("series|$providerId")) return duplicate()
+        val clean = TitleCleaner.clean(rawName)
         val backdropUrl = (obj.array("backdrop_path")?.firstOrNull() as? kotlinx.serialization.json.JsonPrimitive)?.content
         val poster = artwork(obj.string("cover"), ArtworkKind.POSTER)
         val backdrop = artwork(backdropUrl, ArtworkKind.BACKDROP)
@@ -156,16 +163,20 @@ internal class XtreamNormalizer(
             id = seriesId(providerId),
             playlistId = playlistId,
             groupIds = groups(obj),
-            title = name,
-            year = (obj.string("releaseDate") ?: obj.string("release_date"))?.take(4)?.toIntOrNull(),
+            title = clean.title,
+            year = (obj.string("releaseDate") ?: obj.string("release_date"))?.take(4)?.toIntOrNull() ?: clean.year,
             plot = obj.string("plot")?.take(DomainLimits.MAX_DESCRIPTION_LENGTH),
             genres = obj.string("genre")?.split(',', '/')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList(),
             rating = obj.string("rating")?.takeUnless { it == "0" },
             poster = poster?.id,
             backdrop = backdrop?.id,
             providerSeriesId = providerId,
-            externalIds = ExternalIds(tmdb = obj.string("tmdb")),
+            externalIds = ExternalIds(tmdb = obj.string("tmdb")?.takeUnless { it == "0" }),
             lastModifiedAt = obj.epochSeconds("last_modified"),
+            quality = clean.quality,
+            tags = clean.tags,
+            language = clean.language,
+            detail = detail(obj).takeUnless { it.isEmpty },
         )
         return ContentItem.SeriesItem(series, poster, backdrop)
     }
@@ -304,6 +315,60 @@ internal class XtreamNormalizer(
         }
     }
 
+    /**
+     * `get_vod_info` for one film: the `info` object is the film's page. Providers fill it unevenly and name fields
+     * differently, so each value is read from every name it is known to appear under.
+     */
+    fun vodInfo(element: JsonElement): TitleDetail? {
+        val document = lenient(element) ?: return null
+        val info = document.obj("info") ?: return null
+        return detail(info).takeUnless { it.isEmpty }
+    }
+
+    private fun detail(info: LenientObject): TitleDetail {
+        val release = info.string("releasedate") ?: info.string("release_date") ?: info.string("releaseDate")
+        return TitleDetail(
+            plot = (info.string("plot") ?: info.string("description"))?.let { HtmlEntities.decode(it).trim() }?.ifEmpty { null }
+                ?.take(DomainLimits.MAX_DESCRIPTION_LENGTH),
+            genres = names(info.string("genre")),
+            duration = duration(info)?.takeIf { it.isPositive() },
+            releaseDate = release?.trim()?.ifEmpty { null },
+            year = release?.let { YEAR_IN_DATE.find(it)?.value?.toIntOrNull() },
+            poster = (
+                artwork(
+                    info.string("movie_image"),
+                    ArtworkKind.POSTER,
+                ) ?: artwork(info.string("cover_big"), ArtworkKind.POSTER)
+                )?.url,
+            backdrop = backdropUrl(info)?.let { artwork(it, ArtworkKind.BACKDROP) }?.url,
+            cast = names(info.string("cast") ?: info.string("actors")).take(MAX_PEOPLE),
+            directors = names(info.string("director")).take(MAX_PEOPLE),
+            trailer = info.string("youtube_trailer")?.trim()?.ifEmpty { null },
+            country = info.string("country")?.trim()?.ifEmpty { null },
+            ageRating = (info.string("mpaa_rating") ?: info.string("age") ?: info.string("certification"))?.trim()?.ifEmpty { null },
+            rating = rating(info.string("rating")),
+            tmdbId = (info.string("tmdb_id") ?: info.string("tmdb"))?.trim()?.takeUnless { it.isEmpty() || it == "0" },
+        )
+    }
+
+    /** "Actor One, Actor Two" — the separators providers use between names and genres. */
+    private fun names(value: String?): List<String> = value
+        ?.let { HtmlEntities.decode(it) }
+        ?.split(',', '/', '|')
+        ?.map { TextNormalization.collapse(it) }
+        ?.filter { it.isNotEmpty() && it.length <= DomainLimits.MAX_NAME_LENGTH }
+        ?.distinct()
+        .orEmpty()
+
+    private fun backdropUrl(info: LenientObject): String? =
+        (info.array("backdrop_path")?.firstOrNull() as? kotlinx.serialization.json.JsonPrimitive)?.content
+            ?: info.string("backdrop_path")
+
+    /** A rating out of ten, written with a dot; "0" means the provider has none. */
+    private fun rating(value: String?): String? = value?.trim()?.replace(',', '.')?.toDoubleOrNull()
+        ?.takeIf { it > 0.0 && it <= 10.0 }
+        ?.let { if (it == kotlin.math.floor(it)) it.toInt().toString() else ((it * 10).toInt() / 10.0).toString() }
+
     private fun duration(info: LenientObject): Duration? {
         info.long("duration_secs")?.let { return it.seconds }
         val text = info.string("duration") ?: return null
@@ -389,6 +454,9 @@ internal class XtreamNormalizer(
     }
 
     companion object {
+        private const val MAX_PEOPLE = 20
+        private val YEAR_IN_DATE = Regex("""(19|20)\d{2}""")
+
         fun protocolFor(extension: String?): StreamProtocol = when (extension?.lowercase()) {
             "m3u8" -> StreamProtocol.HLS
             "ts" -> StreamProtocol.PROGRESSIVE_TS

@@ -28,16 +28,20 @@ import app.iptvplayer.storage.BundledSqliteDriver
 import app.iptvplayer.storage.ChannelRow
 import app.iptvplayer.storage.ContentStore
 import app.iptvplayer.storage.ContinueItem
+import app.iptvplayer.storage.DetailCoverage
 import app.iptvplayer.storage.EpgStore
 import app.iptvplayer.storage.EpisodeRow
 import app.iptvplayer.storage.GroupRow
 import app.iptvplayer.storage.GuideProgramme
 import app.iptvplayer.storage.LibraryGroupRow
 import app.iptvplayer.storage.MovieRow
+import app.iptvplayer.storage.MovieVersionRow
 import app.iptvplayer.storage.NowNextRow
+import app.iptvplayer.storage.PersonHit
 import app.iptvplayer.storage.SeasonRow
 import app.iptvplayer.storage.SeriesRow
 import app.iptvplayer.storage.SourceRecord
+import app.iptvplayer.storage.TitleDetailRow
 import app.iptvplayer.storage.UnitStateRecord
 import app.iptvplayer.storage.db.IptvDatabase
 import kotlinx.coroutines.CoroutineScope
@@ -53,9 +57,19 @@ import kotlinx.coroutines.withContext
 import java.net.InetAddress
 import java.net.URI
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
-data class SearchResults(val query: String, val channels: List<ChannelRow>, val movies: List<MovieRow>, val series: List<SeriesRow>)
+data class SearchResults(
+    val query: String,
+    val channels: List<ChannelRow>,
+    val movies: List<MovieRow>,
+    val series: List<SeriesRow>,
+    val people: List<PersonHit> = emptyList(),
+)
+
+/** "Because you watched …": the film it started from and what shares its director, cast or genres. */
+data class Recommendation(val seed: MovieRow, val movies: List<MovieRow>)
 
 /** A movie or episode on Home's "Continue watching" row. */
 data class ContinueCard(
@@ -105,6 +119,25 @@ class AppGraph(context: Context) {
 
     private val mutableRevision = MutableStateFlow(0)
     val revision: StateFlow<Int> = mutableRevision.asStateFlow()
+
+    /**
+     * Increments as film and show pages arrive in the background. Separate from [revision] on purpose: pages arrive for
+     * hours on a large library, and only the screens built from them (Home, Movies, Series) should reload — not the
+     * channel list, and never a player that is preparing its next channel.
+     */
+    private val mutableDetailRevision = MutableStateFlow(0)
+    val detailRevision: StateFlow<Int> = mutableDetailRevision.asStateFlow()
+
+    /** Set while a player is open; the background fetch waits so it never competes with a stream. */
+    @Volatile
+    var playing: Boolean = false
+
+    private var enrichment: kotlinx.coroutines.Job? = null
+
+    private val mutableDetailFetchRunning = MutableStateFlow(false)
+
+    /** True while film pages are being fetched in the background, so screens built from them can say more are coming. */
+    val detailFetchRunning: StateFlow<Boolean> = mutableDetailFetchRunning.asStateFlow()
 
     private val mutableActivity = MutableStateFlow<Map<PlaylistId, SourceActivity>>(emptyMap())
     val activity: StateFlow<Map<PlaylistId, SourceActivity>> = mutableActivity.asStateFlow()
@@ -354,6 +387,47 @@ class AppGraph(context: Context) {
         }
     }
 
+    /**
+     * Fetches film pages in the background for the whole library, newest first and slowly (ADR-0035): at most one request
+     * every [ENRICHMENT_PAUSE], waiting while something plays, and stopping at the first refusal. Only one runs at a time;
+     * calling it again while one runs does nothing.
+     */
+    fun startDetailFetch(playlistId: PlaylistId) {
+        if (enrichment?.isActive == true) return
+        enrichment = scope.launch(Dispatchers.IO) {
+            mutableDetailFetchRunning.value = true
+            try {
+                fetchDetails(playlistId)
+            } finally {
+                mutableDetailFetchRunning.value = false
+            }
+        }
+    }
+
+    private suspend fun fetchDetails(playlistId: PlaylistId) {
+        while (true) {
+            while (detailFetchShouldWait()) kotlinx.coroutines.delay(ENRICHMENT_PAUSE * 10)
+            val stored = runCatching {
+                service.enrichMovieDetails(playlistId, ENRICHMENT_CHUNK, ENRICHMENT_PAUSE, keepGoing = { !detailFetchShouldWait() }) {
+                    mutableDetailRevision.update { it + 1 }
+                }
+            }.getOrElse { e ->
+                Log.i(LOG_TAG, "details: exception ${e::class.simpleName}")
+                0
+            }
+            Log.i(LOG_TAG, "details: stored=$stored")
+            // Stopped because something started playing: carry on once it ends. Otherwise it finished or was refused.
+            if (!detailFetchShouldWait()) return
+        }
+    }
+
+    /**
+     * The background fetch steps aside while something plays and while any import runs: a provider serving a large
+     * download (a whole library, a guide) can drop it when a stream of page requests arrives at the same time.
+     */
+    private fun detailFetchShouldWait(): Boolean =
+        playing || mutableActivity.value.values.any { it.liveRunning || it.guideRunning || it.moviesRunning || it.seriesRunning }
+
     private suspend fun refreshLibraryNow(playlistId: PlaylistId) {
         for (unit in listOf(ImportUnit.MOVIES, ImportUnit.SERIES)) {
             val running: (SourceActivity, Boolean) -> SourceActivity =
@@ -370,6 +444,7 @@ class AppGraph(context: Context) {
                 changed()
             }
         }
+        startDetailFetch(playlistId)
     }
 
     fun refreshGuide(playlistId: PlaylistId) {
@@ -432,6 +507,93 @@ class AppGraph(context: Context) {
         changed()
     }
 
+    // --- Details, shelves and people (ADR-0035) ---
+
+    /** Fetches a film's page when it has none; the page is read with [detail]. False when the provider did not answer. */
+    suspend fun loadMovieDetail(playlistId: PlaylistId, movieId: String): Boolean = io {
+        val error = service.loadMovieDetail(playlistId, movieId)
+        if (error != null) Log.i(LOG_TAG, "movie detail: error=${error.code}")
+        error == null
+    }
+
+    suspend fun detail(playlistId: PlaylistId, type: ContentType, id: String): TitleDetailRow? = io { library.detail(playlistId, type, id) }
+
+    suspend fun detailCoverage(playlistId: PlaylistId): List<DetailCoverage> = io { library.detailCoverage(playlistId) }
+
+    suspend fun movieVersions(playlistId: PlaylistId, id: String): List<MovieVersionRow> = io { library.movieVersions(playlistId, id) }
+
+    suspend fun topRatedMovies(playlistId: PlaylistId, limit: Int): List<MovieRow> = io { library.topRatedMovies(playlistId, limit) }
+
+    suspend fun popularMovies(playlistId: PlaylistId, limit: Int): List<MovieRow> = io { library.popularMovies(playlistId, limit) }
+
+    suspend fun moviesOfGenre(playlistId: PlaylistId, genre: String, limit: Int, offset: Int = 0): List<MovieRow> =
+        io { library.moviesOfGenre(playlistId, genre, limit, offset) }
+
+    suspend fun movieGenres(playlistId: PlaylistId, limit: Int): List<Pair<String, Long>> = io { library.movieGenres(playlistId, limit) }
+
+    suspend fun moviesOfDecade(playlistId: PlaylistId, decade: Int, limit: Int, offset: Int = 0): List<MovieRow> =
+        io { library.moviesOfDecade(playlistId, decade, limit, offset) }
+
+    suspend fun movieDecades(playlistId: PlaylistId): List<Pair<Int, Long>> = io { library.movieDecades(playlistId) }
+
+    suspend fun favoriteMovies(playlistId: PlaylistId, limit: Int): List<MovieRow> = io { library.favoriteMovies(playlistId, limit) }
+
+    suspend fun newEpisodeSeries(playlistId: PlaylistId, limit: Int): List<SeriesRow> = io { library.newEpisodeSeries(playlistId, limit) }
+
+    suspend fun topRatedSeries(playlistId: PlaylistId, limit: Int): List<SeriesRow> = io { library.topRatedSeries(playlistId, limit) }
+
+    suspend fun popularSeries(playlistId: PlaylistId, limit: Int): List<SeriesRow> = io { library.popularSeries(playlistId, limit) }
+
+    suspend fun seriesOfGenre(playlistId: PlaylistId, genre: String, limit: Int, offset: Int = 0): List<SeriesRow> =
+        io { library.seriesOfGenre(playlistId, genre, limit, offset) }
+
+    suspend fun seriesGenres(playlistId: PlaylistId, limit: Int): List<Pair<String, Long>> = io { library.seriesGenres(playlistId, limit) }
+
+    suspend fun favoriteSeries(playlistId: PlaylistId, limit: Int): List<SeriesRow> = io { library.favoriteSeries(playlistId, limit) }
+
+    suspend fun titlesOfPerson(playlistId: PlaylistId, name: String): Pair<List<MovieRow>, List<SeriesRow>> =
+        io { library.titlesOfPerson(playlistId, name) }
+
+    /**
+     * "Because you watched …" (ADR-0035): starting from the films watched most recently, the first one with a page gives
+     * the recommendations — its director counts most, then its leading cast, then its genres — leaving out anything
+     * already watched. Null until at least [MIN_RECOMMENDATIONS] films share something with one of them.
+     */
+    suspend fun becauseYouWatched(playlistId: PlaylistId, limit: Int): Recommendation? = io {
+        val watched = library.recentlyWatchedMovieIds(playlistId, WATCH_HISTORY).toSet()
+        for (seedId in watched) {
+            val seed = library.movie(playlistId, seedId) ?: continue
+            val page = library.detail(playlistId, ContentType.MOVIE, seedId) ?: continue
+            val scores = HashMap<String, Int>()
+            val rows = HashMap<String, MovieRow>()
+            fun score(movies: List<MovieRow>, points: Int) = movies.forEach { movie ->
+                rows[movie.id] = movie
+                scores.merge(movie.id, points, Int::plus)
+            }
+            page.directors.forEach { score(library.titlesOfPerson(playlistId, it).first, DIRECTOR_POINTS) }
+            page.cast.take(LEADING_CAST).forEach { score(library.titlesOfPerson(playlistId, it).first, CAST_POINTS) }
+            page.genres.forEach { score(library.moviesOfGenre(playlistId, it, GENRE_CANDIDATES), GENRE_POINTS) }
+            val picks = scores.keys.filter { it !in watched }
+                .sortedWith(compareByDescending<String> { scores.getValue(it) }.thenByDescending { rows.getValue(it).addedAt })
+                .take(limit)
+                .map { rows.getValue(it) }
+            if (picks.size >= MIN_RECOMMENDATIONS) return@io Recommendation(seed, picks)
+        }
+        null
+    }
+
+    suspend fun recordChannelWatch(playlistId: PlaylistId, channelId: ChannelId) = io {
+        library.recordChannelWatch(playlistId, channelId.value)
+    }
+
+    /** Channels the viewer watches most, falling back to favourites when they have not watched any yet. */
+    suspend fun mostWatchedChannels(playlistId: PlaylistId, limit: Int): List<ChannelRow> = io {
+        val ids = library.mostWatchedChannelIds(playlistId, limit)
+        if (ids.isEmpty()) return@io content.favoriteChannels(playlistId).take(limit)
+        val all = content.channels(playlistId, null).associateBy { it.id.value }
+        ids.mapNotNull { all[it] }
+    }
+
     /** "Continue watching" cards with titles and artwork, most recent first (FR-HOME-001). */
     suspend fun continueCards(playlistId: PlaylistId, limit: Int): List<ContinueCard> = io {
         library.continueWatching(playlistId, limit).mapNotNull { item ->
@@ -462,6 +624,7 @@ class AppGraph(context: Context) {
             channels = content.searchChannels(playlistId, query, limit),
             movies = library.searchMovies(playlistId, query, limit),
             series = library.searchSeries(playlistId, query, limit),
+            people = library.searchPeople(playlistId, query, PEOPLE_LIMIT),
         )
     }
 
@@ -546,6 +709,18 @@ class AppGraph(context: Context) {
         /** Calls for more channels than this (whole lists) use the stored guide only. */
         const val SHORT_GUIDE_MAX_CHANNELS = 20
         const val KEY_CURRENT_SOURCE = "current_source"
+
+        /** One film page per this pause at most, so a whole library never looks like a flood to a provider. */
+        val ENRICHMENT_PAUSE = 400.milliseconds
+        const val ENRICHMENT_CHUNK = 100_000
+        const val PEOPLE_LIMIT = 12
+        const val WATCH_HISTORY = 10
+        const val LEADING_CAST = 4
+        const val GENRE_CANDIDATES = 60
+        const val DIRECTOR_POINTS = 5
+        const val CAST_POINTS = 3
+        const val GENRE_POINTS = 1
+        const val MIN_RECOMMENDATIONS = 4
     }
 }
 

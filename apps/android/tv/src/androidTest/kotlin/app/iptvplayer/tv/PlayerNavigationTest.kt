@@ -69,7 +69,7 @@ class PlayerNavigationTest {
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         // Settings: pick the developer section, then its streams.
         awaitFocus(SettingsTags.entry(SettingsTags.PROVIDERS))
-        repeat(3) { if (focusedTag() != SettingsTags.entry(SettingsTags.DEVELOPER)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        repeat(6) { if (focusedTag() != SettingsTags.entry(SettingsTags.DEVELOPER)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
         awaitFocus(SettingsTags.entry(SettingsTags.DEVELOPER))
         press(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_DPAD_RIGHT)
         awaitFocus(SettingsTags.developerStream("hls-live"))

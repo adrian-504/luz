@@ -275,7 +275,7 @@ class LibraryStoreTest {
         for (table in listOf(
             "snapshot_allocation", "library_group", "library_member", "movie", "series", "season", "episode",
             "series_detail_state", "watch_state", "title_search", "user_hidden", "user_label", "user_group",
-            "user_group_member", "app_setting",
+            "user_group_member", "app_setting", "title_detail", "title_genre", "person", "title_person", "person_name", "channel_watch",
         )) {
             driver.execute(null, "DROP TABLE $table", 0)
         }
@@ -287,7 +287,7 @@ class LibraryStoreTest {
         content = ContentStore(driver, clock)
         library = LibraryStore(content, clock)
         assertEquals(
-            6L,
+            9L,
             driver.executeQuery(null, "PRAGMA user_version", {
                 it.next()
                 app.cash.sqldelight.db.QueryResult.Value(it.getLong(0))

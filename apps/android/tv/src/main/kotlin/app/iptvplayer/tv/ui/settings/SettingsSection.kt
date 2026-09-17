@@ -1,17 +1,22 @@
 package app.iptvplayer.tv.ui.settings
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,7 +28,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -33,9 +40,11 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.CustomisationTarget
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.ingestion.AddSourceResult
+import app.iptvplayer.storage.DetailCoverage
 import app.iptvplayer.tv.BuildConfig
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.LocalAppGraph
@@ -57,6 +66,8 @@ object SettingsTags {
     const val ABOUT = "settings-about"
     const val HOME = "settings-home"
     const val HIDDEN = "settings-hidden"
+    const val DETAILS = "settings-details"
+    const val DETAILS_FETCH = "settings-details-fetch"
 
     fun homeRow(id: String) = "settings-home-$id"
     const val DEVELOPER = "settings-developer"
@@ -99,13 +110,15 @@ fun SettingsSection(
         playlist = graph.currentSource()?.playlistId
         hiddenCount = playlist?.let { graph.hiddenCount(it) } ?: 0
     }
-    val entries = remember(hasDeveloperStreams, hiddenCount) {
+    val entries = remember(hasDeveloperStreams, hiddenCount, playlist) {
         buildList {
             add(SettingsEntry(SettingsTags.PROVIDERS, R.string.settings_providers, R.string.settings_providers_summary))
             add(SettingsEntry(SettingsTags.HOME, R.string.settings_home, R.string.settings_home_summary))
             if (hiddenCount > 0) {
                 add(SettingsEntry(SettingsTags.HIDDEN, R.string.settings_hidden, R.plurals.settings_hidden_summary, plural = true))
             }
+            // Only with a provider: before one is added there is nothing it could have sent.
+            if (playlist != null) add(SettingsEntry(SettingsTags.DETAILS, R.string.settings_details, R.string.settings_details_summary))
             add(SettingsEntry(SettingsTags.ABOUT, R.string.settings_about, R.string.settings_about_summary))
             if (hasDeveloperStreams) {
                 add(SettingsEntry(SettingsTags.DEVELOPER, R.string.settings_developer, R.string.settings_developer_summary))
@@ -171,6 +184,7 @@ fun SettingsSection(
                     SettingsTags.HOME -> HomeRows(focus)
                     SettingsTags.HIDDEN -> playlist?.let { HiddenItems(focus, it) }
                     SettingsTags.ABOUT -> About()
+                    SettingsTags.DETAILS -> playlist?.let { DetailCoveragePane(focus, it) }
                     SettingsTags.DEVELOPER -> DeveloperStreamsPane(focus, onPlayDeveloperStream, onSourceAdded)
                     else -> {
                         ActionButton(
@@ -207,6 +221,76 @@ private fun About() {
     Text(stringResource(R.string.about_neutral), style = MaterialTheme.typography.bodyLarge, color = Tokens.textSecondary)
     Text(stringResource(R.string.about_local), style = MaterialTheme.typography.bodyLarge, color = Tokens.textSecondary)
 }
+
+/**
+ * What the provider actually sends about films and shows (ADR-0035): how many pages have been fetched so far and, of
+ * those, how many carry each kind of detail. The check the owner asked for before deciding what to show — and a
+ * plain answer when a row on a film page is empty because the provider left it out.
+ */
+@Composable
+private fun DetailCoveragePane(focus: FocusMemory, playlist: PlaylistId) {
+    val graph = LocalAppGraph.current
+    val detailRevision by graph.detailRevision.collectAsState()
+    var coverage by remember { mutableStateOf<List<DetailCoverage>?>(null) }
+    LaunchedEffect(playlist, detailRevision) { coverage = graph.detailCoverage(playlist) }
+    PaneHeading(stringResource(R.string.settings_details))
+    Text(stringResource(R.string.details_help), style = MaterialTheme.typography.bodyMedium, color = Tokens.textSecondary)
+    ActionButton(
+        stringResource(R.string.details_fetch_now),
+        { graph.startDetailFetch(playlist) },
+        Modifier.rememberedFocus(focus, SettingsTags.DETAILS_FETCH),
+    )
+    val rows = coverage ?: return
+    if (rows.isEmpty()) {
+        Text(stringResource(R.string.details_none_yet), style = MaterialTheme.typography.bodyLarge, color = Tokens.textTertiary)
+        return
+    }
+    rows.forEach { row ->
+        Text(
+            pluralStringResource(
+                if (row.type == ContentType.MOVIE) R.plurals.details_movies_fetched else R.plurals.details_series_fetched,
+                row.fetched.toInt(),
+                row.fetched.toInt(),
+            ),
+            style = MaterialTheme.typography.titleSmall,
+            color = Tokens.textPrimary,
+        )
+        listOf(
+            R.string.details_field_plot to row.plot,
+            R.string.detail_genre to row.genres,
+            R.string.detail_cast to row.cast,
+            R.string.detail_director to row.directors,
+            R.string.detail_running_time to row.duration,
+            R.string.detail_released to row.releaseDate,
+            R.string.detail_rating to row.rating,
+            R.string.detail_age_rating to row.ageRating,
+            R.string.detail_country to row.country,
+            R.string.details_field_backdrop to row.backdrop,
+            R.string.detail_trailer to row.trailer,
+        ).forEach { (label, count) ->
+            val percent = if (row.fetched > 0) (count * 100 / row.fetched).toInt() else 0
+            Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(label),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Tokens.textSecondary,
+                    modifier = Modifier.width(COVERAGE_LABEL),
+                )
+                Box(Modifier.width(COVERAGE_BAR).height(4.dp).clip(RoundedCornerShape(Tokens.radiusPill)).background(Tokens.raised)) {
+                    Box(
+                        Modifier.fillMaxWidth(
+                            percent / 100f,
+                        ).height(4.dp).clip(RoundedCornerShape(Tokens.radiusPill)).background(Tokens.textSecondary),
+                    )
+                }
+                Text("$percent %", style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary)
+            }
+        }
+    }
+}
+
+private val COVERAGE_LABEL = 120.dp
+private val COVERAGE_BAR = 160.dp
 
 /** Debug builds only: synthetic test streams for trying the player with the remote (empty in release builds). */
 @Composable

@@ -1,6 +1,7 @@
 package app.iptvplayer.storage
 
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.library.Quality
 import app.iptvplayer.domain.model.ChannelGroup
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.Episode
@@ -10,6 +11,7 @@ import app.iptvplayer.domain.model.MediaSource
 import app.iptvplayer.domain.model.Movie
 import app.iptvplayer.domain.model.Season
 import app.iptvplayer.domain.model.Series
+import app.iptvplayer.domain.model.TitleDetail
 import app.iptvplayer.domain.ports.Clock
 import app.iptvplayer.domain.security.UrlTemplate
 import kotlinx.serialization.json.Json
@@ -18,6 +20,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit
 import kotlin.time.Instant
@@ -45,6 +48,12 @@ public data class MovieRow(
     public val addedAt: Instant?,
     public val progress: WatchProgress?,
     public val isFavorite: Boolean,
+    /** Badges taken out of the provider's title. */
+    public val quality: Quality? = null,
+    public val tags: List<String> = emptyList(),
+    public val language: String? = null,
+    /** How many versions of this film the provider lists (1 when it is the only one). */
+    public val versionCount: Int = 1,
 )
 
 public data class SeriesRow(
@@ -58,6 +67,11 @@ public data class SeriesRow(
     public val backdrop: UrlTemplate?,
     public val providerSeriesId: String?,
     public val isFavorite: Boolean,
+    public val quality: Quality? = null,
+    public val tags: List<String> = emptyList(),
+    public val language: String? = null,
+    /** When the provider last changed the show — in practice, when its newest episode arrived. */
+    public val lastModifiedAt: Instant? = null,
 )
 
 public data class SeasonRow(public val id: String, public val number: Int, public val title: String?, public val poster: UrlTemplate?)
@@ -72,6 +86,54 @@ public data class EpisodeRow(
     public val duration: Duration?,
     public val still: UrlTemplate?,
     public val progress: WatchProgress?,
+)
+
+/** A film's or show's page as the provider sent it (TitleDetail), with when it was fetched. */
+public data class TitleDetailRow(
+    public val fetchedAt: Instant,
+    public val plot: String?,
+    public val genres: List<String>,
+    public val duration: Duration?,
+    public val releaseDate: String?,
+    public val year: Int?,
+    public val poster: UrlTemplate?,
+    public val backdrop: UrlTemplate?,
+    public val cast: List<String>,
+    public val directors: List<String>,
+    public val trailer: String?,
+    public val country: String?,
+    public val ageRating: String?,
+    public val rating: String?,
+    public val tmdbId: String?,
+)
+
+/** A person found by search, with how many of the viewer's films and shows they are in. */
+public data class PersonHit(public val name: String, public val titles: Int, public val directs: Boolean)
+
+/** One version of a film when the provider lists several. */
+public data class MovieVersionRow(
+    public val id: String,
+    public val title: String,
+    public val quality: Quality?,
+    public val tags: List<String>,
+    public val language: String?,
+)
+
+/** How much of each detail field the provider filled, for the check in Settings. */
+public data class DetailCoverage(
+    public val type: ContentType,
+    public val fetched: Long,
+    public val plot: Long,
+    public val genres: Long,
+    public val cast: Long,
+    public val directors: Long,
+    public val trailer: Long,
+    public val backdrop: Long,
+    public val duration: Long,
+    public val rating: Long,
+    public val ageRating: Long,
+    public val country: Long,
+    public val releaseDate: Long,
 )
 
 /** A movie or episode to continue, most recently played first. */
@@ -89,6 +151,8 @@ public data class ContinueItem(
  */
 public class LibraryStore(private val content: ContentStore, private val clock: Clock) {
     private val queries = content.libraryQueries
+    private val detailQueries = content.detailQueries
+    private val browseQueries = content.browseQueries
 
     private fun active(playlistId: PlaylistId, unit: ImportUnit): Long? = content.unitState(playlistId, unit)?.activeSnapshot
 
@@ -111,6 +175,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
                 movieRow(
                     it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template,
                     it.backdrop_template, it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite,
+                    it.quality, it.tags, it.language, it.version_count,
                 )
             }
         } else {
@@ -118,6 +183,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
                 movieRow(
                     it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template,
                     it.backdrop_template, it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite,
+                    it.quality, it.tags, it.language, it.version_count,
                 )
             }
         }
@@ -129,6 +195,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             movieRow(
                 it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template,
                 it.backdrop_template, it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite,
+                it.quality, it.tags, it.language, it.version_count,
             )
         }
     }
@@ -139,6 +206,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             movieRow(
                 it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template,
                 it.backdrop_template, it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite,
+                it.quality, it.tags, it.language, it.version_count,
             )
         }
     }
@@ -153,14 +221,14 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             queries.seriesList(playlistId.value, snapshot, pageSize, skip).executeAsList().map {
                 seriesRow(
                     it.id, it.title, it.year, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
-                    it.provider_series_id, it.is_favorite,
+                    it.provider_series_id, it.is_favorite, it.quality, it.tags, it.language, it.last_modified_at,
                 )
             }
         } else {
             queries.seriesInGroup(playlistId.value, snapshot, groupId, pageSize, skip).executeAsList().map {
                 seriesRow(
                     it.id, it.title, it.year, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
-                    it.provider_series_id, it.is_favorite,
+                    it.provider_series_id, it.is_favorite, it.quality, it.tags, it.language, it.last_modified_at,
                 )
             }
         }
@@ -171,7 +239,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
         return queries.seriesById(playlistId.value, snapshot, id).executeAsOneOrNull()?.let {
             seriesRow(
                 it.id, it.title, it.year, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
-                it.provider_series_id, it.is_favorite,
+                it.provider_series_id, it.is_favorite, it.quality, it.tags, it.language, it.last_modified_at,
             )
         }
     }
@@ -190,6 +258,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
                 movieRow(
                     it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template,
                     it.backdrop_template, it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite,
+                    it.quality, it.tags, it.language, it.version_count,
                 )
             }
         }
@@ -205,7 +274,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             found[id]?.let {
                 seriesRow(
                     it.id, it.title, it.year, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
-                    it.provider_series_id, it.is_favorite,
+                    it.provider_series_id, it.is_favorite, it.quality, it.tags, it.language, it.last_modified_at,
                 )
             }
         }
@@ -356,6 +425,313 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
         content.insertMediaSource(playlistId, snapshot, source)
     }
 
+    // ---- Details, people and genres (ADR-0035) ----
+
+    /**
+     * Stores what the provider sent about a film or show. A null [detail] records that it was asked and had nothing, so the
+     * background fetch does not ask again; genres and people are indexed for shelves and search.
+     */
+    public fun saveDetail(playlistId: PlaylistId, type: ContentType, id: String, detail: TitleDetail?) {
+        content.transaction { writeDetail(playlistId, type, id, detail ?: TitleDetail()) }
+    }
+
+    private fun writeDetail(playlistId: PlaylistId, type: ContentType, id: String, detail: TitleDetail) {
+        detailQueries.upsertDetail(
+            playlistId.value, type.name, id, clock.now().toEpochMilliseconds(), detail.plot, encodeList(detail.genres),
+            detail.duration?.inWholeSeconds, detail.releaseDate, detail.year?.toLong(), detail.poster?.template, detail.backdrop?.template,
+            encodeList(detail.cast), encodeList(detail.directors), detail.trailer, detail.country, detail.ageRating, detail.rating,
+            detail.tmdbId,
+        )
+        detailQueries.deleteGenresOf(playlistId.value, type.name, id)
+        detail.genres.forEach { detailQueries.insertGenre(playlistId.value, type.name, id, it) }
+        detailQueries.deletePeopleOf(playlistId.value, type.name, id)
+        detail.cast.forEach { detailQueries.insertTitlePerson(playlistId.value, type.name, id, personId(playlistId, it), ROLE_CAST) }
+        detail.directors.forEach {
+            detailQueries.insertTitlePerson(
+                playlistId.value,
+                type.name,
+                id,
+                personId(playlistId, it),
+                ROLE_DIRECTOR,
+            )
+        }
+        when (type) {
+            ContentType.MOVIE -> queries.applyPageToMovie(
+                ratingValue(detail.rating),
+                detail.backdrop?.template,
+                detail.plot,
+                encodeList(detail.genres),
+                detail.duration?.inWholeSeconds,
+                detail.year?.toLong(),
+                playlistId.value,
+                id,
+            )
+            ContentType.SERIES -> ratingValue(detail.rating)?.let { queries.setSeriesRating(it, playlistId.value, id) }
+            else -> Unit
+        }
+    }
+
+    /** The id of [name] in this source, adding the person — and their name to the search index — the first time. */
+    private fun personId(playlistId: PlaylistId, name: String): Long =
+        detailQueries.personId(playlistId.value, name).executeAsOneOrNull() ?: run {
+            detailQueries.insertPerson(playlistId.value, name)
+            val id = detailQueries.personId(playlistId.value, name).executeAsOne()
+            detailQueries.insertPersonName(name, id.toString())
+            id
+        }
+
+    public fun detail(playlistId: PlaylistId, type: ContentType, id: String): TitleDetailRow? =
+        detailQueries.detailOf(playlistId.value, type.name, id).executeAsOneOrNull()?.let {
+            TitleDetailRow(
+                Instant.fromEpochMilliseconds(it.fetched_at), it.plot, decodeList(it.genres), it.duration_seconds?.seconds, it.release_date,
+                it.year?.toInt(), it.poster_template?.let(::UrlTemplate), it.backdrop_template?.let(::UrlTemplate),
+                decodeList(it.cast_names),
+                decodeList(it.directors), it.trailer, it.country, it.age_rating, it.rating, it.tmdb_id,
+            )
+        }
+
+    /** Films still without a fetched page, newest first, with the provider stream id to ask for: (film id, stream id). */
+    public fun moviesMissingDetail(playlistId: PlaylistId, limit: Int): List<Pair<String, String>> {
+        val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return emptyList()
+        return detailQueries.moviesMissingDetail(playlistId.value, snapshot, limit.toLong()).executeAsList()
+            .map { row -> row.id to row.stream_id }
+    }
+
+    public fun movieStreamId(playlistId: PlaylistId, movieId: String): String? {
+        val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return null
+        return detailQueries.movieStreamId(playlistId.value, snapshot, movieId).executeAsOneOrNull()
+    }
+
+    public fun detailCoverage(playlistId: PlaylistId): List<DetailCoverage> =
+        detailQueries.detailCoverage(playlistId.value).executeAsList().mapNotNull { row ->
+            val type = ContentType.entries.firstOrNull { it.name == row.content_type } ?: return@mapNotNull null
+            DetailCoverage(
+                type, row.fetched, row.with_plot.count(), row.with_genres.count(), row.with_cast.count(), row.with_directors.count(),
+                row.with_trailer.count(), row.with_backdrop.count(), row.with_duration.count(), row.with_rating.count(),
+                row.with_age_rating.count(),
+                row.with_country.count(), row.with_release_date.count(),
+            )
+        }
+
+    /** People whose name matches [query], most titles first. */
+    public fun searchPeople(playlistId: PlaylistId, query: String, limit: Int): List<PersonHit> {
+        val match = TitleIndex.match(query) ?: return emptyList()
+        return detailQueries.searchPeople(match, PEOPLE_CANDIDATES, playlistId.value).executeAsList()
+            .map { PersonHit(it.name, it.titles.toInt(), (it.directs ?: 0L) > 0) }
+            .sortedWith(
+                compareByDescending<PersonHit> { it.name.startsWith(query.trim(), ignoreCase = true) }.thenByDescending { it.titles },
+            )
+            .take(limit)
+    }
+
+    /** The films and shows [name] is in or directed, as the viewer's library has them. */
+    public fun titlesOfPerson(playlistId: PlaylistId, name: String): Pair<List<MovieRow>, List<SeriesRow>> {
+        val rows = detailQueries.titlesOfPerson(playlistId.value, name).executeAsList()
+        val movieIds = rows.filter { it.content_type == ContentType.MOVIE.name }.map { it.content_id }.distinct()
+        val seriesIds = rows.filter { it.content_type == ContentType.SERIES.name }.map { it.content_id }.distinct()
+        return moviesByIds(playlistId, movieIds) to seriesByIds(playlistId, seriesIds)
+    }
+
+    private fun moviesByIds(playlistId: PlaylistId, ids: List<String>): List<MovieRow> {
+        val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return emptyList()
+        if (ids.isEmpty()) return emptyList()
+        return queries.moviesByIds(playlistId.value, snapshot, ids).executeAsList().map {
+            movieRow(
+                it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
+                it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite, it.quality, it.tags, it.language,
+                it.version_count,
+            )
+        }
+    }
+
+    private fun seriesByIds(playlistId: PlaylistId, ids: List<String>): List<SeriesRow> {
+        val snapshot = active(playlistId, ImportUnit.SERIES) ?: return emptyList()
+        if (ids.isEmpty()) return emptyList()
+        return queries.seriesByIds(playlistId.value, snapshot, ids).executeAsList().map {
+            seriesRow(
+                it.id, it.title, it.year, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template, it.provider_series_id,
+                it.is_favorite, it.quality, it.tags, it.language, it.last_modified_at,
+            )
+        }
+    }
+
+    // ---- Shelves (Browse.sq) ----
+
+    public fun topRatedMovies(playlistId: PlaylistId, limit: Int): List<MovieRow> {
+        val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return emptyList()
+        return browseQueries.topRatedMovies(playlistId.value, snapshot, limit.toLong()).executeAsList().map {
+            movieRow(
+                it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
+                it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite, it.quality, it.tags, it.language,
+                it.version_count,
+            )
+        }
+    }
+
+    public fun popularMovies(playlistId: PlaylistId, limit: Int): List<MovieRow> {
+        val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return emptyList()
+        val now = clock.now()
+        // Recent films first; a library with too few of them is scored whole.
+        val recent = browseQueries.popularMovies(
+            playlistId.value,
+            snapshot,
+            (now - POPULAR_WINDOW).toEpochMilliseconds(),
+            now.toEpochMilliseconds(),
+            limit.toLong(),
+        )
+            .executeAsList()
+        val rows = if (recent.size >=
+            limit
+        ) {
+            recent
+        } else {
+            browseQueries.popularMovies(playlistId.value, snapshot, 0, now.toEpochMilliseconds(), limit.toLong()).executeAsList()
+        }
+        return rows.map {
+            movieRow(
+                it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
+                it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite, it.quality, it.tags, it.language,
+                it.version_count,
+            )
+        }
+    }
+
+    public fun moviesOfGenre(playlistId: PlaylistId, genre: String, limit: Int, offset: Int = 0): List<MovieRow> {
+        val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return emptyList()
+        return browseQueries.moviesOfGenre(snapshot, playlistId.value, genre, limit.toLong(), offset.toLong()).executeAsList().map {
+            movieRow(
+                it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
+                it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite, it.quality, it.tags, it.language,
+                it.version_count,
+            )
+        }
+    }
+
+    /** Genres with how many films are in each, largest first. */
+    public fun movieGenres(playlistId: PlaylistId, limit: Int): List<Pair<String, Long>> {
+        val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return emptyList()
+        return browseQueries.movieGenres(snapshot, playlistId.value, limit.toLong()).executeAsList().map { it.genre to it.title_count }
+    }
+
+    public fun moviesOfDecade(playlistId: PlaylistId, decade: Int, limit: Int, offset: Int = 0): List<MovieRow> {
+        val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return emptyList()
+        val (from, to) = decade.toLong() to (decade + 9).toLong()
+        return browseQueries.moviesOfDecade(playlistId.value, snapshot, from, to, limit.toLong(), offset.toLong())
+            .executeAsList().map {
+                movieRow(
+                    it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
+                    it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite, it.quality, it.tags, it.language,
+                    it.version_count,
+                )
+            }
+    }
+
+    /** Decades with how many films, most recent first. */
+    public fun movieDecades(playlistId: PlaylistId): List<Pair<Int, Long>> {
+        val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return emptyList()
+        return browseQueries.movieDecades(playlistId.value, snapshot).executeAsList().mapNotNull { row ->
+            row.decade?.toInt()?.let { it to row.title_count }
+        }
+    }
+
+    public fun movieVersions(playlistId: PlaylistId, id: String): List<MovieVersionRow> {
+        val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return emptyList()
+        return browseQueries.movieVersions(playlistId.value, snapshot, id).executeAsList()
+            .map { MovieVersionRow(it.id, it.title, qualityOf(it.quality), decodeList(it.tags), it.language) }
+    }
+
+    public fun favoriteMovies(playlistId: PlaylistId, limit: Int): List<MovieRow> {
+        val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return emptyList()
+        return browseQueries.favoriteMovies(playlistId.value, snapshot, limit.toLong()).executeAsList().map {
+            movieRow(
+                it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
+                it.added_at, it.position_ms, it.watched_duration_ms, it.completed, true, it.quality, it.tags, it.language, it.version_count,
+            )
+        }
+    }
+
+    public fun recentlyWatchedMovieIds(playlistId: PlaylistId, limit: Int): List<String> =
+        browseQueries.recentlyWatchedMovieIds(playlistId.value, limit.toLong()).executeAsList()
+
+    public fun newEpisodeSeries(playlistId: PlaylistId, limit: Int): List<SeriesRow> {
+        val snapshot = active(playlistId, ImportUnit.SERIES) ?: return emptyList()
+        return browseQueries.newEpisodeSeries(playlistId.value, snapshot, limit.toLong()).executeAsList().map {
+            seriesRow(
+                it.id, it.title, it.year, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template, it.provider_series_id,
+                it.is_favorite, it.quality, it.tags, it.language, it.last_modified_at,
+            )
+        }
+    }
+
+    public fun topRatedSeries(playlistId: PlaylistId, limit: Int): List<SeriesRow> {
+        val snapshot = active(playlistId, ImportUnit.SERIES) ?: return emptyList()
+        return browseQueries.topRatedSeries(playlistId.value, snapshot, limit.toLong()).executeAsList().map {
+            seriesRow(
+                it.id, it.title, it.year, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template, it.provider_series_id,
+                it.is_favorite, it.quality, it.tags, it.language, it.last_modified_at,
+            )
+        }
+    }
+
+    public fun popularSeries(playlistId: PlaylistId, limit: Int): List<SeriesRow> {
+        val snapshot = active(playlistId, ImportUnit.SERIES) ?: return emptyList()
+        val now = clock.now()
+        val recent = browseQueries.popularSeries(
+            playlistId.value,
+            snapshot,
+            (now - POPULAR_WINDOW).toEpochMilliseconds(),
+            now.toEpochMilliseconds(),
+            limit.toLong(),
+        )
+            .executeAsList()
+        val rows = if (recent.size >=
+            limit
+        ) {
+            recent
+        } else {
+            browseQueries.popularSeries(playlistId.value, snapshot, 0, now.toEpochMilliseconds(), limit.toLong()).executeAsList()
+        }
+        return rows.map {
+            seriesRow(
+                it.id, it.title, it.year, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
+                it.provider_series_id,
+                it.is_favorite, it.quality, it.tags, it.language, it.last_modified_at,
+            )
+        }
+    }
+
+    public fun seriesOfGenre(playlistId: PlaylistId, genre: String, limit: Int, offset: Int = 0): List<SeriesRow> {
+        val snapshot = active(playlistId, ImportUnit.SERIES) ?: return emptyList()
+        return browseQueries.seriesOfGenre(snapshot, playlistId.value, genre, limit.toLong(), offset.toLong()).executeAsList().map {
+            seriesRow(
+                it.id, it.title, it.year, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template, it.provider_series_id,
+                it.is_favorite, it.quality, it.tags, it.language, it.last_modified_at,
+            )
+        }
+    }
+
+    public fun seriesGenres(playlistId: PlaylistId, limit: Int): List<Pair<String, Long>> {
+        val snapshot = active(playlistId, ImportUnit.SERIES) ?: return emptyList()
+        return browseQueries.seriesGenres(snapshot, playlistId.value, limit.toLong()).executeAsList().map { it.genre to it.title_count }
+    }
+
+    public fun favoriteSeries(playlistId: PlaylistId, limit: Int): List<SeriesRow> {
+        val snapshot = active(playlistId, ImportUnit.SERIES) ?: return emptyList()
+        return browseQueries.favoriteSeries(playlistId.value, snapshot, limit.toLong()).executeAsList().map {
+            seriesRow(
+                it.id, it.title, it.year, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template, it.provider_series_id,
+                true, it.quality, it.tags, it.language, it.last_modified_at,
+            )
+        }
+    }
+
+    public fun recordChannelWatch(playlistId: PlaylistId, channelId: String) {
+        detailQueries.recordChannelWatch(playlistId.value, channelId, clock.now().toEpochMilliseconds())
+    }
+
+    public fun mostWatchedChannelIds(playlistId: PlaylistId, limit: Int): List<String> =
+        detailQueries.mostWatchedChannels(playlistId.value, limit.toLong()).executeAsList()
+
     /** Writes one MOVIES or SERIES snapshot in batched transactions; nothing is visible until [publish]. */
     public inner class LibrarySnapshotWriter internal constructor(
         public val playlistId: PlaylistId,
@@ -393,7 +769,8 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
                 queries.insertMovie(
                     playlistId.value, snapshot, movie.id.value, movie.title, order, movie.year?.toLong(), movie.duration?.inWholeSeconds,
                     movie.plot, encodeList(movie.genres), movie.rating, poster?.template, backdrop?.template,
-                    movie.addedAt?.toEpochMilliseconds(),
+                    movie.addedAt?.toEpochMilliseconds(), movie.quality?.name, encodeList(movie.tags), movie.language,
+                    movie.externalIds.tmdb, movie.workKey, ratingValue(movie.rating),
                 )
                 content.insertMediaSource(playlistId, snapshot, source)
             }
@@ -414,8 +791,16 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
                 queries.insertSeries(
                     playlistId.value, snapshot, series.id.value, series.title, order, series.year?.toLong(), series.plot,
                     encodeList(series.genres), series.rating, poster?.template, backdrop?.template, series.providerSeriesId,
-                    series.lastModifiedAt?.toEpochMilliseconds(),
+                    series.lastModifiedAt?.toEpochMilliseconds(), series.quality?.name, encodeList(series.tags), series.language,
+                    series.externalIds.tmdb, ratingValue(series.rating),
                 )
+                // A show's list entry already carries its page (genres, cast, trailer), so it is kept without a second request.
+                val detail = (series.detail ?: TitleDetail()).copy(
+                    plot = series.detail?.plot ?: series.plot,
+                    genres = series.detail?.genres?.ifEmpty { null } ?: series.genres,
+                    rating = series.detail?.rating ?: series.rating,
+                )
+                if (!detail.isEmpty) writeDetail(playlistId, ContentType.SERIES, series.id.value, detail)
             }
             series.groupIds.forEach { member(series.id.value, it.value) }
         }
@@ -453,6 +838,10 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             flush()
             content.transaction {
                 val previous = active(playlistId, unit)
+                if (unit == ImportUnit.MOVIES) {
+                    queries.markPrimaryVersions(playlistId.value, snapshot)
+                    queries.applyPages(playlistId.value, snapshot)
+                }
                 content.publishUnit(playlistId, unit, snapshot, itemCount.toLong())
                 if (previous != null && previous != snapshot) deleteSnapshot(previous)
             }
@@ -472,7 +861,21 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
     }
 
     private companion object {
+        const val ROLE_CAST = "cast"
+        const val ROLE_DIRECTOR = "director"
+
+        /** How many person rows a search reads before grouping them by name. */
+        const val PEOPLE_CANDIDATES = 400L
+
+        /** "Popular" scores films added within this window; older ones would lose two points a year and never place. */
+        val POPULAR_WINDOW = (2 * 365).days
+
+        /** A provider's rating as a number from 0 to 10, or null when it is missing, zero or not a rating. */
+        fun ratingValue(rating: String?): Double? = rating?.trim()?.replace(',', '.')?.toDoubleOrNull()?.takeIf { it > 0 && it <= 10 }
         const val COMPLETED_FRACTION = 0.95
+
+        /** SQLite reports SUM as a real number; the coverage counts are whole. */
+        fun Double?.count(): Long = this?.toLong() ?: 0L
         val MIN_RESUME_POSITION = 10.seconds
 
         fun encodeList(values: List<String>): String? =
@@ -503,10 +906,15 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             watched: Long?,
             completed: Long?,
             favorite: Boolean?,
+            quality: String? = null,
+            tags: String? = null,
+            language: String? = null,
+            versions: Long? = null,
         ) = MovieRow(
             id, title, year?.toInt(), duration?.seconds, plot, decodeList(genres), rating, poster?.let(::UrlTemplate),
             backdrop?.let(::UrlTemplate),
             added?.let(Instant::fromEpochMilliseconds), progressOf(position, watched ?: duration?.times(1000), completed), favorite == true,
+            qualityOf(quality), decodeList(tags), language, versions?.toInt() ?: 1,
         )
 
         fun seriesRow(
@@ -520,10 +928,16 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             backdrop: String?,
             provider: String?,
             favorite: Boolean?,
+            quality: String? = null,
+            tags: String? = null,
+            language: String? = null,
+            modified: Long? = null,
         ) = SeriesRow(
             id, title, year?.toInt(), plot, decodeList(genres), rating, poster?.let(::UrlTemplate), backdrop?.let(::UrlTemplate), provider,
-            favorite == true,
+            favorite == true, qualityOf(quality), decodeList(tags), language, modified?.let(Instant::fromEpochMilliseconds),
         )
+
+        fun qualityOf(name: String?): Quality? = name?.let { value -> Quality.entries.firstOrNull { it.name == value } }
 
         fun episodeRow(
             id: String,

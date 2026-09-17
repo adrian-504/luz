@@ -41,10 +41,28 @@ CREATE TABLE movie (
     poster_template TEXT,
     backdrop_template TEXT,
     added_at INTEGER,
+    -- Taken out of the provider's title (TitleCleaner): Quality name, JSON list of badges, language code.
+    quality TEXT,
+    tags TEXT,
+    language TEXT,
+    tmdb_id TEXT,
+    -- The film this row is a version of; one version per work is primary, the one shown where versions are merged.
+    work_key TEXT,
+    is_primary INTEGER,
+    version_count INTEGER,
+    -- The rating as a number from 0 to 10: the film page's when it has been fetched, otherwise the list's. Kept here so
+    -- the rated shelves read one indexed column instead of parsing text across the whole library.
+    rating_value REAL,
     PRIMARY KEY (playlist_id, snapshot, id)
 );
 
 CREATE INDEX movie_order ON movie(playlist_id, snapshot, sort_order);
+
+CREATE INDEX movie_work ON movie(playlist_id, snapshot, work_key);
+
+CREATE INDEX movie_added ON movie(playlist_id, snapshot, added_at);
+
+CREATE INDEX movie_rating ON movie(playlist_id, snapshot, rating_value);
 
 CREATE TABLE series (
     playlist_id TEXT NOT NULL,
@@ -60,10 +78,19 @@ CREATE TABLE series (
     backdrop_template TEXT,
     provider_series_id TEXT,
     last_modified_at INTEGER,
+    quality TEXT,
+    tags TEXT,
+    language TEXT,
+    tmdb_id TEXT,
+    rating_value REAL,
     PRIMARY KEY (playlist_id, snapshot, id)
 );
 
 CREATE INDEX series_order ON series(playlist_id, snapshot, sort_order);
+
+CREATE INDEX series_modified ON series(playlist_id, snapshot, last_modified_at);
+
+CREATE INDEX series_rating ON series(playlist_id, snapshot, rating_value);
 
 CREATE TABLE season (
     playlist_id TEXT NOT NULL,
@@ -136,13 +163,63 @@ INSERT OR IGNORE INTO library_member(playlist_id, snapshot, group_id, item_id, s
 
 insertMovie:
 INSERT OR IGNORE INTO movie(playlist_id, snapshot, id, title, sort_order, year, duration_seconds, plot, genres, rating, poster_template,
-    backdrop_template, added_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    backdrop_template, added_at, quality, tags, language, tmdb_id, work_key, rating_value)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- A fetched page fills in what the list left out, in every snapshot the film is in: its backdrop, description, genres,
+-- running time and year, so shelves and heroes show them without a second lookup. Its rating replaces the list's.
+applyPageToMovie:
+UPDATE movie SET
+    rating_value = COALESCE(:rating, rating_value),
+    backdrop_template = COALESCE(backdrop_template, :backdrop),
+    plot = COALESCE(plot, :plot),
+    genres = COALESCE(genres, :genres),
+    duration_seconds = COALESCE(duration_seconds, :duration),
+    year = COALESCE(year, :year)
+WHERE playlist_id = :playlistId AND id = :id;
+
+setSeriesRating:
+UPDATE series SET rating_value = :rating WHERE playlist_id = :playlistId AND id = :id;
+
+-- After a film snapshot is written: what the pages fetched before it add (as applyPageToMovie).
+applyPages:
+UPDATE movie SET
+    rating_value = COALESCE((SELECT CAST(d.rating AS REAL) FROM title_detail d
+        WHERE d.playlist_id = movie.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = movie.id), rating_value),
+    backdrop_template = COALESCE(backdrop_template, (SELECT d.backdrop_template FROM title_detail d
+        WHERE d.playlist_id = movie.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = movie.id)),
+    plot = COALESCE(plot, (SELECT d.plot FROM title_detail d
+        WHERE d.playlist_id = movie.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = movie.id)),
+    genres = COALESCE(genres, (SELECT d.genres FROM title_detail d
+        WHERE d.playlist_id = movie.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = movie.id)),
+    duration_seconds = COALESCE(duration_seconds, (SELECT d.duration_seconds FROM title_detail d
+        WHERE d.playlist_id = movie.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = movie.id)),
+    year = COALESCE(year, (SELECT d.year FROM title_detail d
+        WHERE d.playlist_id = movie.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = movie.id))
+WHERE playlist_id = :playlistId AND snapshot = :snapshot AND EXISTS (
+    SELECT 1 FROM title_detail d WHERE d.playlist_id = movie.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = movie.id
+);
+
+-- After a film snapshot is written: for each work, the best version (quality first, then the provider's order) is primary,
+-- and every version knows how many there are. Done once here so browsing never has to group rows.
+markPrimaryVersions:
+UPDATE movie SET
+    is_primary = (movie.id = (
+        SELECT m2.id FROM movie m2
+        WHERE m2.playlist_id = movie.playlist_id AND m2.snapshot = movie.snapshot AND m2.work_key = movie.work_key
+        ORDER BY CASE m2.quality WHEN 'UHD' THEN 0 WHEN 'FHD' THEN 1 WHEN 'HD' THEN 2 WHEN 'SD' THEN 4 ELSE 3 END, m2.sort_order
+        LIMIT 1
+    )),
+    version_count = (
+        SELECT COUNT(*) FROM movie m3
+        WHERE m3.playlist_id = movie.playlist_id AND m3.snapshot = movie.snapshot AND m3.work_key = movie.work_key
+    )
+WHERE playlist_id = :playlistId AND snapshot = :snapshot;
 
 insertSeries:
 INSERT OR IGNORE INTO series(playlist_id, snapshot, id, title, sort_order, year, plot, genres, rating, poster_template, backdrop_template,
-    provider_series_id, last_modified_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    provider_series_id, last_modified_at, quality, tags, language, tmdb_id, rating_value)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 insertSeason:
 INSERT OR REPLACE INTO season(playlist_id, snapshot, series_id, id, season_number, title, poster_template, episode_count)
@@ -166,7 +243,7 @@ SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (
 FROM movie mo
 LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
 LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
-WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot
+WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND (mo.is_primary IS NULL OR mo.is_primary = 1)
     AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
 ORDER BY mo.sort_order
 LIMIT :limit OFFSET :offset;
@@ -188,6 +265,7 @@ FROM movie mo
 LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
 LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
 WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.added_at IS NOT NULL
+    AND (mo.is_primary IS NULL OR mo.is_primary = 1)
     AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
 ORDER BY mo.added_at DESC
 LIMIT :limit;
@@ -274,6 +352,11 @@ deleteLibrarySnapshot {
 
 deleteLibrary {
     DELETE FROM title_search WHERE playlist_id = :playlistId;
+    DELETE FROM person_name WHERE person_id IN (SELECT id FROM person WHERE playlist_id = :playlistId);
+    DELETE FROM title_person WHERE playlist_id = :playlistId;
+    DELETE FROM person WHERE playlist_id = :playlistId;
+    DELETE FROM title_genre WHERE playlist_id = :playlistId;
+    DELETE FROM title_detail WHERE playlist_id = :playlistId;
     DELETE FROM library_member WHERE playlist_id = :playlistId;
     DELETE FROM library_group WHERE playlist_id = :playlistId;
     DELETE FROM movie WHERE playlist_id = :playlistId;

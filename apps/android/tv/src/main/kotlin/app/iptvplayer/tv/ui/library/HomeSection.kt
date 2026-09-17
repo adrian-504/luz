@@ -21,11 +21,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.security.UrlTemplate
+import app.iptvplayer.storage.MovieRow
+import app.iptvplayer.storage.SeriesRow
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.AppGraph
 import app.iptvplayer.tv.app.LocalAppGraph
@@ -49,10 +52,16 @@ import kotlin.time.Clock
 /** Every row Home can show, in its default order — the list Settings offers the viewer to choose from. */
 val HOME_ROW_TITLES: List<Pair<String, Int>> = listOf(
     HomeTags.CONTINUE to R.string.home_continue,
-    HomeTags.CHANNELS to R.string.home_favorite_channels,
+    HomeTags.CHANNELS to R.string.home_your_channels,
     HomeTags.LIVE to R.string.home_live_now,
+    HomeTags.POPULAR_MOVIES to R.string.home_popular_movies,
+    HomeTags.SERIES to R.string.home_new_episodes,
     HomeTags.MOVIES to R.string.home_recent_movies,
-    HomeTags.SERIES to R.string.home_series,
+    HomeTags.BECAUSE to R.string.home_because_setting,
+    HomeTags.TOP_MOVIES to R.string.home_top_movies,
+    HomeTags.POPULAR_SERIES to R.string.home_popular_series,
+    HomeTags.TOP_SERIES to R.string.home_top_series,
+    HomeTags.MY_LIST to R.string.home_my_list,
 )
 
 object HomeTags {
@@ -63,6 +72,12 @@ object HomeTags {
     const val LIVE = "live"
     const val MOVIES = "movies"
     const val SERIES = "series"
+    const val POPULAR_MOVIES = "popular-movies"
+    const val TOP_MOVIES = "top-movies"
+    const val POPULAR_SERIES = "popular-series"
+    const val TOP_SERIES = "top-series"
+    const val BECAUSE = "because"
+    const val MY_LIST = "my-list"
     const val HERO_PLAY = "home-hero-play"
     const val HERO_FAVORITE = "home-hero-favorite"
     const val HERO_INFO = "home-hero-info"
@@ -89,7 +104,7 @@ private data class HomeCard(
     val details: (() -> Unit)? = null,
 )
 
-private data class HomeRow(val id: String, val title: Int, val cards: List<HomeCard>, val landscape: Boolean = false)
+private data class HomeRow(val id: String, val title: String, val cards: List<HomeCard>, val landscape: Boolean = false)
 
 /**
  * What a Home row is made of, before it is loaded. The rows are described rather than written out one after another so
@@ -99,6 +114,8 @@ private data class HomeRowSpec(
     val id: String,
     val title: Int,
     val landscape: Boolean = false,
+    /** A title that depends on what was loaded ("Because you watched Heat"); null keeps [title]. */
+    val titleOf: (() -> String?)? = null,
     val load: suspend (PlaylistId) -> List<HomeCard>,
 )
 
@@ -123,17 +140,51 @@ fun HomeSection(
     placeholder: @Composable () -> Unit,
 ) {
     val graph = LocalAppGraph.current
+    val resources = LocalResources.current
     val revision by graph.revision.collectAsState()
     val watched by graph.watchRevision.collectAsState()
+    // Film pages arriving in the background fill the shelves built from them, but Home is only rebuilt every so often
+    // for it: the rows do not shuffle under the viewer each time a page arrives.
+    val details by graph.detailRevision.collectAsState()
+    val detailsStep = details / DETAIL_REFRESH_STEP
     var playlist by remember { mutableStateOf<PlaylistId?>(null) }
     var rows by remember { mutableStateOf<List<HomeRow>?>(null) }
     val movieKind = stringResource(R.string.home_kind_movie)
     val seriesKind = stringResource(R.string.home_kind_series)
 
-    LaunchedEffect(revision, watched) {
+    LaunchedEffect(revision, watched, detailsStep) {
         val source = graph.currentSource()
         playlist = source?.playlistId
         val id = source?.playlistId
+        fun movieCard(p: PlaylistId, movie: MovieRow) = HomeCard(
+            key = movie.id,
+            title = movie.title,
+            caption = movie.year?.toString(),
+            poster = movie.poster,
+            fraction = movie.progress?.takeIf { !it.completed }?.fraction,
+            backdrop = movie.backdrop,
+            plot = movie.plot,
+            type = ContentType.MOVIE,
+            facts = listOfNotNull(movieKind, movie.genres.firstOrNull(), movie.year?.toString(), movie.rating),
+            favorite = movie.isFavorite,
+            open = { onPlayContent(p, ContentType.MOVIE, movie.id) },
+            details = { onOpenMovie(p, movie.id) },
+        )
+        fun seriesCard(p: PlaylistId, series: SeriesRow) = HomeCard(
+            key = series.id,
+            title = series.title,
+            caption = series.year?.toString(),
+            poster = series.poster,
+            fraction = null,
+            backdrop = series.backdrop,
+            plot = series.plot,
+            type = ContentType.SERIES,
+            facts = listOfNotNull(seriesKind, series.genres.firstOrNull(), series.year?.toString(), series.rating),
+            favorite = series.isFavorite,
+            open = { onOpenSeries(p, series.id) },
+            details = { onOpenSeries(p, series.id) },
+        )
+        var because: String? = null
         val specs = listOf(
             HomeRowSpec(HomeTags.CONTINUE, R.string.home_continue, landscape = true) { p ->
                 graph.continueCards(p, ROW_LIMIT).map { card ->
@@ -150,60 +201,73 @@ fun HomeSection(
                     )
                 }
             },
-            // Favourites first, with what is on them now; a viewer with no favourites yet still gets their channels.
-            HomeRowSpec(HomeTags.CHANNELS, R.string.home_favorite_channels, landscape = true) { p ->
-                channelCards(graph, p, favorites = true, onPlay = onPlayChannel)
+            // The channels the viewer actually watches — favourites first, then the ones they return to most — with what is
+            // on them now. A viewer who has watched nothing and kept no favourites gets "Live now" instead.
+            HomeRowSpec(HomeTags.CHANNELS, R.string.home_your_channels, landscape = true) { p ->
+                channelCards(graph, p, mine = true, onPlay = onPlayChannel)
             },
             HomeRowSpec(HomeTags.LIVE, R.string.home_live_now, landscape = true) { p ->
-                channelCards(graph, p, favorites = false, onPlay = onPlayChannel)
+                channelCards(graph, p, mine = false, onPlay = onPlayChannel)
+            },
+            HomeRowSpec(HomeTags.POPULAR_MOVIES, R.string.home_popular_movies) { p ->
+                graph.popularMovies(p, ROW_LIMIT).map { movieCard(p, it) }
+            },
+            HomeRowSpec(HomeTags.SERIES, R.string.home_new_episodes) { p ->
+                graph.newEpisodeSeries(p, ROW_LIMIT).map { seriesCard(p, it) }
             },
             HomeRowSpec(HomeTags.MOVIES, R.string.home_recent_movies) { p ->
-                graph.recentMovies(p, ROW_LIMIT).map { movie ->
-                    HomeCard(
-                        key = movie.id,
-                        title = movie.title,
-                        caption = movie.year?.toString(),
-                        poster = movie.poster,
-                        fraction = null,
-                        backdrop = movie.backdrop,
-                        plot = movie.plot,
-                        type = ContentType.MOVIE,
-                        facts = listOfNotNull(movieKind, movie.genres.firstOrNull(), movie.year?.toString(), movie.rating),
-                        favorite = movie.isFavorite,
-                        open = { onPlayContent(p, ContentType.MOVIE, movie.id) },
-                        details = { onOpenMovie(p, movie.id) },
-                    )
-                }
+                graph.recentMovies(p, ROW_LIMIT).map { movieCard(p, it) }
             },
-            HomeRowSpec(HomeTags.SERIES, R.string.home_series) { p ->
-                graph.series(p, null, ROW_LIMIT, 0).map { series ->
-                    HomeCard(
-                        key = series.id,
-                        title = series.title,
-                        caption = series.year?.toString(),
-                        poster = series.poster,
-                        fraction = null,
-                        backdrop = series.backdrop,
-                        plot = series.plot,
-                        type = ContentType.SERIES,
-                        facts = listOfNotNull(seriesKind, series.genres.firstOrNull(), series.year?.toString(), series.rating),
-                        favorite = series.isFavorite,
-                        open = { onOpenSeries(p, series.id) },
-                        details = { onOpenSeries(p, series.id) },
-                    )
-                }
+            HomeRowSpec(HomeTags.BECAUSE, R.string.home_because_setting, titleOf = { because }) { p ->
+                graph.becauseYouWatched(p, ROW_LIMIT)?.let { pick ->
+                    because = resources.getString(R.string.home_because, pick.seed.title)
+                    pick.movies.map { movieCard(p, it) }
+                }.orEmpty()
+            },
+            HomeRowSpec(HomeTags.TOP_MOVIES, R.string.home_top_movies) { p ->
+                graph.topRatedMovies(p, ROW_LIMIT).map { movieCard(p, it) }
+            },
+            HomeRowSpec(HomeTags.POPULAR_SERIES, R.string.home_popular_series) { p ->
+                graph.popularSeries(p, ROW_LIMIT).map { seriesCard(p, it) }
+            },
+            HomeRowSpec(HomeTags.TOP_SERIES, R.string.home_top_series) { p ->
+                graph.topRatedSeries(p, ROW_LIMIT).map { seriesCard(p, it) }
+            },
+            // My List: the films and shows the viewer kept, newest first.
+            HomeRowSpec(HomeTags.MY_LIST, R.string.home_my_list) { p ->
+                graph.favoriteMovies(p, ROW_LIMIT).map { movieCard(p, it) } + graph.favoriteSeries(p, ROW_LIMIT).map { seriesCard(p, it) }
             },
         )
         val chosen = graph.homeRows()
         rows = if (id == null) {
             emptyList()
         } else {
+            fun arranged(loaded: List<HomeRow>): List<HomeRow> {
+                val kept =
+                    withoutRepeats(
+                        loaded.filter { it.cards.isNotEmpty() },
+                        { it.id !in PERSONAL_ROWS },
+                    ) { it.cards.map { card -> card.key } }
+                // "Live now" is there for a viewer with none of their own channels yet; once they have some, that row says it better.
+                return if (kept.any { it.id == HomeTags.CHANNELS }) kept.filterNot { it.id == HomeTags.LIVE } else kept
+            }
             // The viewer's own choice of rows and their order, when they have made one; otherwise Home's own order.
             val wanted = chosen?.mapNotNull { key -> specs.firstOrNull { it.id == key } } ?: specs
-            val loaded = wanted.map { spec -> HomeRow(spec.id, spec.title, spec.load(id), spec.landscape) }
-                .filter { it.cards.isNotEmpty() }
-            // "Live now" is there for a viewer with no favourites yet; once they have some, the favourites row says it better.
-            if (loaded.any { it.id == HomeTags.CHANNELS }) loaded.filterNot { it.id == HomeTags.LIVE } else loaded
+            // The first time Home opens, each row appears as soon as it is read, rather than all of them after the slowest.
+            // Later reloads replace the rows in one step, so nothing on screen shrinks and grows again under the viewer.
+            val firstLoad = rows == null
+            val loaded = mutableListOf<HomeRow>()
+            for (spec in wanted) {
+                val cards = spec.load(id)
+                loaded += HomeRow(spec.id, spec.titleOf?.invoke() ?: resources.getString(spec.title), cards, spec.landscape)
+                if (firstLoad) {
+                    arranged(loaded).takeIf { it.isNotEmpty() }?.let {
+                        rows = it
+                        onFirstKey(HomeTags.HERO_PLAY)
+                    }
+                }
+            }
+            arranged(loaded)
         }
         onFirstKey(rows?.takeIf { it.isNotEmpty() }?.let { HomeTags.HERO_PLAY })
     }
@@ -270,7 +334,7 @@ fun HomeSection(
                 }
                 items(shown.size, key = { shown[it].id }) { index ->
                     val row = shown[index]
-                    LuzShelf(title = stringResource(row.title)) {
+                    LuzShelf(title = row.title) {
                         items(row.cards.size, key = { row.cards[it].key }) { cardIndex ->
                             val card = row.cards[cardIndex]
                             val channel = row.id == HomeTags.CHANNELS || row.id == HomeTags.LIVE
@@ -336,20 +400,22 @@ private fun featuredFrom(rows: List<HomeRow>): List<HomeCard> {
     return ordered.distinctBy { it.key }.take(FEATURED_LIMIT).ifEmpty { rows.first().cards.take(1) }
 }
 
-/** Channel cards with what is on now underneath: the viewer's favourites, or the first channels if they have none yet. */
+/**
+ * Channel cards with what is on now underneath: the viewer's own channels ([mine] — favourites, then the most watched),
+ * or the first channels of the list.
+ */
 private suspend fun channelCards(
     graph: AppGraph,
     playlist: PlaylistId,
-    favorites: Boolean,
+    mine: Boolean,
     onPlay: (PlaylistId, ChannelScope, ChannelId) -> Unit,
 ): List<HomeCard> {
-    val channels = if (favorites) {
-        graph.favoriteChannels(playlist).take(ROW_LIMIT)
+    val channels = if (mine) {
+        (graph.favoriteChannels(playlist) + graph.mostWatchedChannels(playlist, ROW_LIMIT)).distinctBy { it.id }.take(ROW_LIMIT)
     } else {
         graph.channels(playlist, null).take(ROW_LIMIT)
     }
     if (channels.isEmpty()) return emptyList()
-    val scope = if (favorites) ChannelScope.Favorites else ChannelScope.All
     val guide = graph.storedNowNext(playlist, channels, Clock.System.now())
     return channels.map { channel ->
         HomeCard(
@@ -358,11 +424,35 @@ private suspend fun channelCards(
             caption = guide[channel.id.value]?.current?.title,
             poster = channel.logo,
             fraction = null,
-            open = { onPlay(playlist, scope, channel.id) },
+            // Zapping from a favourite stays among favourites; from any other channel, the whole list.
+            open = { onPlay(playlist, if (channel.isFavorite) ChannelScope.Favorites else ChannelScope.All, channel.id) },
         )
     }
 }
 
+/**
+ * Leaves out a row that mostly repeats one above it. With a provider's ratings, "popular" and "highest rated" can come
+ * out as nearly the same titles, and two identical shelves one after the other look broken rather than generous.
+ */
+internal fun <T> withoutRepeats(rows: List<T>, checked: (T) -> Boolean, idsOf: (T) -> List<String>): List<T> {
+    val kept = mutableListOf<T>()
+    for (row in rows) {
+        val ids = idsOf(row)
+        // The viewer's own rows — what they are watching, what they kept — always stay, whatever else shows the same titles.
+        val repeats = checked(row) && ids.isNotEmpty() && kept.any { earlier ->
+            val shown = idsOf(earlier).toSet()
+            ids.count { it in shown } >= ids.size * REPEAT_SHARE
+        }
+        if (!repeats) kept += row
+    }
+    return kept
+}
+
+private const val REPEAT_SHARE = 0.6
+private val PERSONAL_ROWS = setOf(HomeTags.CONTINUE, HomeTags.CHANNELS, HomeTags.LIVE, HomeTags.MY_LIST)
 private const val ROW_LIMIT = 20
 private const val FEATURED_LIMIT = 6
 private const val CAROUSEL_INTERVAL_MS = 9_000L
+
+/** Home is rebuilt for background film pages once every this many progress steps (each step is 50 pages). */
+private const val DETAIL_REFRESH_STEP = 10

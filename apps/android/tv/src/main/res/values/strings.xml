@@ -186,6 +186,40 @@
     <string name="detail_not_found">This title is no longer in the source.</string>
     <string name="detail_duration_hours">%1$dh %2$02dm</string>
     <string name="detail_duration_minutes">%1$d min</string>
+    <string name="detail_trailer">Trailer</string>
+    <string name="detail_trailer_unavailable">Trailer — no app on this TV can play it</string>
+    <string name="detail_cast_and_crew">Cast &amp; Crew</string>
+    <string name="detail_director">Director</string>
+    <string name="detail_actor">Actor</string>
+    <string name="detail_about">About</string>
+    <string name="detail_information">Information</string>
+    <string name="detail_genre">Genre</string>
+    <string name="detail_released">Released</string>
+    <string name="detail_running_time">Running time</string>
+    <string name="detail_age_rating">Rated</string>
+    <string name="detail_rating">Rating</string>
+    <string name="detail_country">Country</string>
+    <string name="detail_cast">Cast</string>
+    <string name="detail_choose_version">Choose a version</string>
+    <plurals name="series_seasons">
+        <item quantity="one">%1$d season</item>
+        <item quantity="other">%1$d seasons</item>
+    </plurals>
+    <string name="search_people">People</string>
+    <plurals name="search_person_titles">
+        <item quantity="one">In %1$d title</item>
+        <item quantity="other">In %1$d titles</item>
+    </plurals>
+    <plurals name="search_person_directed">
+        <item quantity="one">Director · %1$d title</item>
+        <item quantity="other">Director · %1$d titles</item>
+    </plurals>
+    <plurals name="person_titles">
+        <item quantity="one">%1$d title in your library</item>
+        <item quantity="other">%1$d titles in your library</item>
+    </plurals>
+    <string name="person_still_reading">Luz is still reading your provider\'s film pages, so more may appear.</string>
+    <string name="person_nothing">Nothing with this person in your library.</string>
     <string name="series_loading_episodes">Loading episodes…</string>
     <string name="series_episodes_failed">The provider did not send the episodes. Try again later.</string>
     <string name="series_no_episodes">No episodes.</string>
@@ -206,9 +240,25 @@
     <string name="home_kind_movie">Film</string>
     <string name="home_kind_series">Series</string>
     <string name="home_continue">Continue watching</string>
-    <string name="home_favorite_channels">Favorite channels</string>
     <string name="home_recent_movies">Recently added movies</string>
-    <string name="home_series">Series</string>
+    <string name="home_your_channels">Your channels</string>
+    <string name="home_popular_movies">Popular films</string>
+    <string name="home_popular_series">Popular shows</string>
+    <string name="home_top_movies">Highest rated films</string>
+    <string name="home_top_series">Highest rated shows</string>
+    <string name="home_new_episodes">New episodes</string>
+    <string name="home_because">Because you watched %1$s</string>
+    <string name="home_because_setting">Because you watched…</string>
+    <string name="home_my_list">My List</string>
+    <string name="library_recently_added">Recently added</string>
+    <string name="library_by_genre">Browse by genre</string>
+    <string name="library_by_decade">Browse by decade</string>
+    <string name="library_decade">%1$ds</string>
+    <string name="library_all_categories">Browse all categories</string>
+    <plurals name="library_titles">
+        <item quantity="one">%1$d title</item>
+        <item quantity="other">%1$d titles</item>
+    </plurals>
     <string name="search_label">Channels, films, series and more</string>
     <string name="search_key_space">SPACE</string>
     <string name="search_hint">Type with the letters above. Results appear as you type.</string>
@@ -225,6 +275,21 @@
     <string name="info_close">Close</string>
     <string name="settings_providers">Providers</string>
     <string name="settings_providers_summary">Your playlists and logins</string>
+    <string name="settings_details">Film &amp; show details</string>
+    <string name="settings_details_summary">What your provider sends</string>
+    <string name="details_help">Luz asks your provider for each film\'s page slowly in the background, and pauses while you watch. This shows what the pages fetched so far contain.</string>
+    <string name="details_fetch_now">Fetch missing details now</string>
+    <string name="details_none_yet">No pages fetched yet.</string>
+    <string name="details_field_plot">Description</string>
+    <string name="details_field_backdrop">Backdrop picture</string>
+    <plurals name="details_movies_fetched">
+        <item quantity="one">%1$d film page fetched</item>
+        <item quantity="other">%1$d film pages fetched</item>
+    </plurals>
+    <plurals name="details_series_fetched">
+        <item quantity="one">%1$d show with details</item>
+        <item quantity="other">%1$d shows with details</item>
+    </plurals>
     <string name="settings_about">About Luz</string>
     <string name="settings_about_summary">Version and what Luz is</string>
     <string name="settings_developer">Developer</string>

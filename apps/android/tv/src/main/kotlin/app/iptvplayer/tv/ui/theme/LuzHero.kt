@@ -3,6 +3,7 @@ package app.iptvplayer.tv.ui.theme
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -51,6 +52,8 @@ fun <T> LuzHero(
     page: Int = 0,
     pages: Int = 1,
     room: Color = Tokens.bgBase,
+    badges: List<String> = emptyList(),
+    detailLines: Int = DETAIL_LINES,
     artworkOf: T,
     artwork: @Composable (T, Modifier) -> Unit,
 ) {
@@ -75,13 +78,18 @@ fun <T> LuzHero(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (meta.isNotEmpty()) MetadataLine(meta)
+            if (meta.isNotEmpty() || badges.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), verticalAlignment = Alignment.CenterVertically) {
+                    if (meta.isNotEmpty()) MetadataLine(meta)
+                    badges.forEach { LuzBadge(it) }
+                }
+            }
             detail?.let {
                 Text(
                     it,
                     style = MaterialTheme.typography.bodyLarge,
                     color = Tokens.textSecondary,
-                    maxLines = DETAIL_LINES,
+                    maxLines = detailLines,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -120,6 +128,23 @@ fun HeroScrims(room: Color = Tokens.bgBase) {
                 SIDE_CLEAR to Color.Transparent,
             ),
         ),
+    )
+}
+
+/**
+ * A fact about the picture or the sound — "4K", "HDR", "EN" — as the reference app writes them: small capitals in a thin
+ * rounded outline, the same grey as the words beside it, so it informs without shouting.
+ */
+@Composable
+fun LuzBadge(label: String, modifier: Modifier = Modifier) {
+    Text(
+        label,
+        style = MaterialTheme.typography.labelSmall,
+        color = Tokens.textSecondary,
+        maxLines = 1,
+        modifier = modifier
+            .border(1.dp, Tokens.textTertiary, RoundedCornerShape(BADGE_RADIUS))
+            .padding(horizontal = Tokens.space1 + 2.dp, vertical = 1.dp),
     )
 }
 
@@ -166,6 +191,7 @@ private fun BoxScope.PageIndicator(page: Int, pages: Int) {
 }
 
 private val TEXT_WIDTH = 520.dp
+private val BADGE_RADIUS = 3.dp
 private const val DETAIL_LINES = 2
 private const val TOP_ALPHA = 0.45f
 private const val TOP_CLEAR = 0.22f

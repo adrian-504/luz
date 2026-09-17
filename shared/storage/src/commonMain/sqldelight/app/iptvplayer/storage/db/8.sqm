@@ -1,0 +1,41 @@
+-- Migration 8 -> 9: people in tables of their own (ADR-0035). They were rows of one full-text index keyed by title, and
+-- replacing a title's people meant a DELETE filtered on columns the index cannot look up: a scan of every person in the
+-- library, once per title. Importing ten thousand shows made that ten thousand scans, the import took long enough for
+-- the provider to close the connection, and every film page fetched in the background paid the same. Now a title's
+-- people are replaced by primary key and a name enters the index once. What was already fetched is carried over.
+CREATE TABLE person (
+    id INTEGER PRIMARY KEY,
+    playlist_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    UNIQUE (playlist_id, name)
+);
+
+CREATE TABLE title_person (
+    playlist_id TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    person_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    PRIMARY KEY (playlist_id, content_type, content_id, person_id, role)
+);
+
+CREATE INDEX title_person_by_person ON title_person(person_id);
+
+CREATE VIRTUAL TABLE person_name USING fts5(
+    name,
+    person_id UNINDEXED,
+    tokenize='unicode61 remove_diacritics 2'
+);
+
+INSERT OR IGNORE INTO person(playlist_id, name)
+SELECT DISTINCT playlist_id, name FROM person_search WHERE name IS NOT NULL AND playlist_id IS NOT NULL;
+
+INSERT INTO person_name(name, person_id) SELECT name, id FROM person;
+
+INSERT OR IGNORE INTO title_person(playlist_id, content_type, content_id, person_id, role)
+SELECT ps.playlist_id, ps.kind, ps.content_id, p.id, ps.role
+FROM person_search ps
+JOIN person p ON p.playlist_id = ps.playlist_id AND p.name = ps.name
+WHERE ps.kind IS NOT NULL AND ps.content_id IS NOT NULL AND ps.role IS NOT NULL;
+
+DROP TABLE person_search;

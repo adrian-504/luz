@@ -117,7 +117,9 @@ class M3uImporterTest {
         assertEquals("?utc={utc}&lutc={lutc}", replay.template?.template)
         assertEquals(CatchUpMode.M3U_SHIFT, imported.channel("Example Docs").channel.catchUp?.mode, "header catch-up default applies")
 
-        assertEquals("Example Film (2024)", imported.movies.single().movie.title)
+        // The year written in the name is taken out of the title and kept as the year (TitleCleaner).
+        assertEquals("Example Film", imported.movies.single().movie.title)
+        assertEquals(2024, imported.movies.single().movie.year)
         assertEquals(StreamProtocol.MATROSKA, imported.movies.single().mediaSource.protocolHint)
         assertEquals(StreamProtocol.UNKNOWN, imported.channel("Example Radio").mediaSource.protocolHint)
 
@@ -259,7 +261,7 @@ class M3uImporterTest {
         assertEquals(2, imported.result.counts.seasons)
         assertEquals(listOf(2, 3, 1), imported.items.filterIsInstance<ContentItem.EpisodeItem>().map { it.episode.episodeNumber })
         assertEquals("Example Show", imported.items.filterIsInstance<ContentItem.SeriesItem>().single().series.title)
-        assertEquals(setOf("Example Picture (1999)", "No Episode Number"), imported.movies.map { it.movie.title }.toSet())
+        assertEquals(setOf("Example Picture", "No Episode Number"), imported.movies.map { it.movie.title }.toSet())
         assertEquals(1999, imported.movies.single { it.movie.title.startsWith("Example") }.movie.year)
         assertTrue(M3uDiagnosticCodes.SERIES_WITHOUT_EPISODE in imported.result.diagnosticCounts)
         assertEquals(listOf("Live Override"), imported.channels.map { it.channel.name }, "/live/ URL path wins over group keywords")

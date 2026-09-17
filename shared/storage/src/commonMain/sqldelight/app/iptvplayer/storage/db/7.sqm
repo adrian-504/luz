@@ -1,0 +1,34 @@
+-- Migration 7 -> 8: ratings as numbers, and film pages folded into their films (ADR-0035). The rated shelves sorted a whole library by parsing its text ratings
+-- and looking up each film's page, which took over a second and a half on the reference television; a numeric column
+-- with an index reads in milliseconds. Filled here from the list ratings (a comma decimal reads as its whole part until the
+-- next refresh, which parses it fully) and the pages already fetched; imports and
+-- fetched pages keep it current. Must match the CREATE statements in Library.sq.
+ALTER TABLE movie ADD COLUMN rating_value REAL;
+ALTER TABLE series ADD COLUMN rating_value REAL;
+
+UPDATE movie SET rating_value = CAST(rating AS REAL)
+WHERE CAST(rating AS REAL) > 0 AND CAST(rating AS REAL) <= 10;
+
+UPDATE series SET rating_value = CAST(rating AS REAL)
+WHERE CAST(rating AS REAL) > 0 AND CAST(rating AS REAL) <= 10;
+
+-- Pages fetched before this upgrade fill in what their films' list entries left out, as imports do from now on.
+UPDATE movie SET
+    rating_value = COALESCE((SELECT CAST(d.rating AS REAL) FROM title_detail d
+        WHERE d.playlist_id = movie.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = movie.id), rating_value),
+    backdrop_template = COALESCE(backdrop_template, (SELECT d.backdrop_template FROM title_detail d
+        WHERE d.playlist_id = movie.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = movie.id)),
+    plot = COALESCE(plot, (SELECT d.plot FROM title_detail d
+        WHERE d.playlist_id = movie.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = movie.id)),
+    genres = COALESCE(genres, (SELECT d.genres FROM title_detail d
+        WHERE d.playlist_id = movie.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = movie.id)),
+    duration_seconds = COALESCE(duration_seconds, (SELECT d.duration_seconds FROM title_detail d
+        WHERE d.playlist_id = movie.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = movie.id)),
+    year = COALESCE(year, (SELECT d.year FROM title_detail d
+        WHERE d.playlist_id = movie.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = movie.id))
+WHERE EXISTS (
+    SELECT 1 FROM title_detail d WHERE d.playlist_id = movie.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = movie.id
+);
+
+CREATE INDEX movie_rating ON movie(playlist_id, snapshot, rating_value);
+CREATE INDEX series_rating ON series(playlist_id, snapshot, rating_value);

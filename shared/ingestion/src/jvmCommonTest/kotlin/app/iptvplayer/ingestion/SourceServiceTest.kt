@@ -57,6 +57,9 @@ private class ProviderSimulation : HttpTransport {
     var xmltv: ByteArray = Fixtures.smallValidXmltv
     var panelPlaylist: ByteArray? = null
     var down = false
+
+    /** When set, the panel answers film pages with this HTTP status instead. */
+    var vodInfoStatus: Int? = null
     val requests = ArrayList<String>()
 
     override suspend fun execute(request: HttpRequest): HttpResponse {
@@ -77,6 +80,7 @@ private class ProviderSimulation : HttpTransport {
                 action == "get_series_categories" -> 200 to Fixtures.seriesCategoriesJson
                 action == "get_series" -> 200 to Fixtures.seriesJson
                 action == "get_series_info" -> 200 to Fixtures.seriesInfoJson
+                action == "get_vod_info" -> (vodInfoStatus ?: 200) to Fixtures.vodInfoJson
                 else -> 200 to "[]".encodeToByteArray()
             }
             url.startsWith("http://panel.example.com:8080/xmltv.php") && credentialsOk -> 200 to xmltv
@@ -321,6 +325,36 @@ class SourceServiceTest {
     }
 
     @Test
+    fun filmPagesAreFetchedOnceOpenedOrInTheBackgroundAndTheBackgroundStopsWhenTheProviderRefuses() = runTest {
+        val added = assertIs<AddSourceResult.Added>(
+            service.addXtream(null, "http://panel.example.com:8080/", ProviderSimulation.CANARY_USER, ProviderSimulation.CANARY_PASSWORD),
+        )
+        val playlist = added.playlistId
+        val library = service.library
+        service.refreshLibrary(playlist, ImportUnit.MOVIES)
+        val first = library.movies(playlist).first()
+
+        assertEquals(null, service.loadMovieDetail(playlist, first.id))
+        assertEquals(listOf("Example Actor", "Second Example"), library.detail(playlist, ContentType.MOVIE, first.id)?.cast)
+        val pageRequests = transport.requests.count { "get_vod_info" in it }
+        service.loadMovieDetail(playlist, first.id)
+        assertEquals(pageRequests, transport.requests.count { "get_vod_info" in it }, "a page is fetched once")
+
+        transport.vodInfoStatus = 429
+        assertEquals(0, service.enrichMovieDetails(playlist, 100, kotlin.time.Duration.ZERO, { true }))
+        // The fetch layer may retry the refused request itself; what matters is that no other film is asked for.
+        val refusedFor = transport.requests.filter { "get_vod_info" in it }.drop(pageRequests).map { it.substringAfter("vod_id=") }.toSet()
+        assertEquals(1, refusedFor.size, "one refusal stops the background fetch before the next film")
+
+        transport.vodInfoStatus = null
+        val stored = service.enrichMovieDetails(playlist, 100, kotlin.time.Duration.ZERO, { true })
+        assertEquals(2, stored, "the two films still without a page")
+        assertTrue(library.moviesMissingDetail(playlist, 10).isEmpty())
+        assertEquals(0, service.enrichMovieDetails(playlist, 100, kotlin.time.Duration.ZERO, { true }), "nothing left to ask for")
+        assertDatabaseHasNoSecrets()
+    }
+
+    @Test
     fun xtreamMoviesAndSeriesImportAndResolveForPlayback() = runTest {
         val added = assertIs<AddSourceResult.Added>(
             service.addXtream(null, "http://panel.example.com:8080/", ProviderSimulation.CANARY_USER, ProviderSimulation.CANARY_PASSWORD),
@@ -331,7 +365,7 @@ class SourceServiceTest {
         val movies = service.refreshLibrary(playlist, ImportUnit.MOVIES)
         assertEquals(ImportStatus.PUBLISHED, movies.status)
         assertEquals(3, movies.itemCount, "vod-streams.json has three movies")
-        assertEquals(listOf("Example Film", "Example Documentary (2024)", "Example Short"), library.movies(playlist).map { it.title })
+        assertEquals(listOf("Example Film", "Example Documentary", "Example Short"), library.movies(playlist).map { it.title })
 
         val series = service.refreshLibrary(playlist, ImportUnit.SERIES)
         assertEquals(2, series.itemCount, "series.json: two series, one without id rejected")

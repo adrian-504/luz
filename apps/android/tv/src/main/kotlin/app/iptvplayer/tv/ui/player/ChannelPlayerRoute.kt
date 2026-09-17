@@ -2,6 +2,7 @@ package app.iptvplayer.tv.ui.player
 
 import android.os.SystemClock
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,6 +34,11 @@ import kotlin.time.Clock
 @Composable
 fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel: ChannelId) {
     val graph = LocalAppGraph.current
+    // The background fetch of film pages waits while anything plays, so it never competes with the stream.
+    DisposableEffect(Unit) {
+        graph.playing = true
+        onDispose { graph.playing = false }
+    }
     val coroutines = rememberCoroutineScope()
     val revision by graph.revision.collectAsState()
     var channels by remember { mutableStateOf<List<ChannelRow>?>(null) }
@@ -68,6 +74,7 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
         unavailable = resolved == null
         request = resolved?.copy(intentAtMs = intentAtMs, prepared = ahead != null)
         history.played(channel.id.value)
+        graph.recordChannelWatch(playlistId, channel.id)
         lastChannel = history.last
         playingChannel = history.current
         subtitle = graph.nowNext(playlistId, listOf(channel.id), Clock.System.now())[channel.id.value]?.current?.title

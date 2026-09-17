@@ -16,6 +16,7 @@ import app.iptvplayer.domain.model.CustomisationTarget
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.tv.app.IptvApplication
 import app.iptvplayer.tv.developer.DeveloperStreams
+import app.iptvplayer.tv.ui.library.HOME_ROW_TITLES
 import app.iptvplayer.tv.ui.library.HomeTags
 import app.iptvplayer.tv.ui.live.LiveTags
 import app.iptvplayer.tv.ui.settings.SettingsTags
@@ -158,6 +159,8 @@ class CustomisationFlowTest {
     @Test
     fun theViewerChoosesWhichRowsHomeShows() {
         awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
+        // Preferences outlive a test's source, so a choice left by an earlier run is cleared first.
+        runBlocking { graph.setHomeRows(null) }
         assertEquals("nothing chosen to begin with", null, runBlocking { graph.homeRows() })
 
         openSettings()
@@ -167,7 +170,7 @@ class CustomisationFlowTest {
         press(KeyEvent.KEYCODE_DPAD_CENTER)
 
         // Turning a row off records the whole order, so Home keeps the rest exactly as it was.
-        repeat(6) {
+        repeat(HOME_ROW_TITLES.size) {
             if (focusedTag() !=
                 SettingsTags.homeRow(HomeTags.MOVIES)
             ) {
@@ -180,7 +183,7 @@ class CustomisationFlowTest {
         assertTrue("the others are kept", runBlocking { graph.homeRows() }!!.contains(HomeTags.SERIES))
 
         // And back on again. A row that is turned off moves below the ones that are on, so it is found again first.
-        repeat(6) { if (focusedTag() != SettingsTags.homeRow(HomeTags.MOVIES)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        repeat(HOME_ROW_TITLES.size) { if (focusedTag() != SettingsTags.homeRow(HomeTags.MOVIES)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
         awaitFocus(SettingsTags.homeRow(HomeTags.MOVIES))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         rule.waitUntil(10_000) { runBlocking { graph.homeRows() }?.contains(HomeTags.MOVIES) == true }

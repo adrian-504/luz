@@ -1,6 +1,7 @@
 package app.iptvplayer.tv.ui.library
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +26,11 @@ import kotlinx.coroutines.launch
 @Composable
 fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: String, fromStart: Boolean) {
     val graph = LocalAppGraph.current
+    // The background fetch of film pages waits while anything plays, so it never competes with the stream.
+    DisposableEffect(Unit) {
+        graph.playing = true
+        onDispose { graph.playing = false }
+    }
     var id by rememberSaveable { mutableStateOf(startId) }
     var startFromBeginning by rememberSaveable { mutableStateOf(fromStart) }
     var request by remember { mutableStateOf<PlaybackRequest?>(null) }

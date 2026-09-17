@@ -18,9 +18,11 @@ import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.tv.app.IptvApplication
 import app.iptvplayer.tv.developer.DeveloperStreams
+import app.iptvplayer.tv.ui.library.Browse
 import app.iptvplayer.tv.ui.library.DetailTags
 import app.iptvplayer.tv.ui.library.HomeTags
 import app.iptvplayer.tv.ui.library.LibraryTags
+import app.iptvplayer.tv.ui.library.PersonTags
 import app.iptvplayer.tv.ui.library.SearchTags
 import app.iptvplayer.tv.ui.player.PlayerTags
 import app.iptvplayer.tv.ui.shell.Section
@@ -108,7 +110,24 @@ class LibraryFlowTest {
 
     private fun awaitPlaying() = awaitText(PlayerTags.STATE, rule.activity.getString(R.string.player_state_playing))
 
-    private fun openSection(section: Section, entry: String = LibraryTags.CATEGORY_ALL) {
+    /** Presses [keyCode] until [tag] has focus, at most [times] times. */
+    private fun pressUntilFocused(keyCode: Int, tag: String, times: Int = 12) {
+        repeat(times) {
+            if (focusedTag() == tag) return
+            press(keyCode)
+        }
+        awaitFocus(tag)
+    }
+
+    /** From a section's shelves, "Browse all categories" → "All", on the grid of every title. */
+    private fun openFullGrid() {
+        rule.waitUntil(20_000) { focusedTag()?.startsWith("library-") == true }
+        pressUntilFocused(KeyEvent.KEYCODE_DPAD_DOWN, LibraryTags.tile(Browse.ALL))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(LibraryTags.CATEGORY_ALL)
+    }
+
+    private fun openSection(section: Section, entry: String? = LibraryTags.CATEGORY_ALL) {
         rule.waitUntil(20_000) { focusedTag()?.startsWith("live-") == true }
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.LIVE_TV))
@@ -119,7 +138,7 @@ class LibraryFlowTest {
         ) { timeout, condition -> runCatching { rule.waitUntil(timeout, condition) } }
         awaitFocus(ShellTags.rail(section))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitFocus(entry)
+        entry?.let { awaitFocus(it) }
     }
 
     @Test
@@ -158,9 +177,43 @@ class LibraryFlowTest {
     }
 
     @Test
+    fun aFilmPageShowsItsPeopleAndOpensEverythingOfTheirs() {
+        val movies = runBlocking { graph.movies(playlist, null, 10, 0) }
+        val one = movies.first { it.title == "Test Movie One" }
+        val two = movies.first { it.title == "Test Movie Two" }
+        // Movies opens on its shelves; the newest film is first on "Recently added".
+        openSection(Section.MOVIES, LibraryTags.shelfItem("recent", one.id))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(DetailTags.PLAY)
+
+        // The page is fetched on opening: director first, then the cast; the trailer button appears with it.
+        val director = DetailTags.person("Jordan Sample", directed = true)
+        rule.waitUntil(20_000) { rule.onAllNodes(hasTestTag(DetailTags.TRAILER)).fetchSemanticsNodes().isNotEmpty() }
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        awaitFocus(director)
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        awaitFocus(DetailTags.person("Alex Example", directed = false))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+
+        // Alex Example is in both test films.
+        rule.waitUntil(10_000) {
+            listOf(
+                PersonTags.movie(one.id),
+                PersonTags.movie(two.id),
+            ).all { rule.onAllNodes(hasTestTag(it)).fetchSemanticsNodes().isNotEmpty() }
+        }
+        rule.waitUntil(10_000) { focusedTag()?.startsWith("person-movie-") == true }
+        assertTrue(runBlocking { graph.search(playlist, "alex") }.people.any { it.name == "Alex Example" && it.titles == 2 })
+        press(KeyEvent.KEYCODE_BACK)
+        awaitFocus(DetailTags.person("Alex Example", directed = false))
+    }
+
+    @Test
     fun movieDetailPlaysAndOffersToResumeWhereYouLeft() {
         val movie = runBlocking { graph.movies(playlist, null, 10, 0) }.first { it.title == "Test Movie One" }
-        openSection(Section.MOVIES)
+        // The full grid is still there, under "Browse all categories".
+        openSection(Section.MOVIES, entry = null)
+        openFullGrid()
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
         awaitFocus(LibraryTags.item(movie.id))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
@@ -186,6 +239,9 @@ class LibraryFlowTest {
         // Home: the movie is first in "Continue watching", and OK resumes it.
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(LibraryTags.item(movie.id))
+        // Back leaves the grid for the shelves, on the tile that opened it, then goes to the navigation.
+        press(KeyEvent.KEYCODE_BACK)
+        awaitFocus(LibraryTags.tile(Browse.ALL))
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.MOVIES))
         walkTabsTo(
@@ -205,7 +261,8 @@ class LibraryFlowTest {
     @Test
     fun seriesEpisodesLoadAndTheNextEpisodeFollowsTheEndOfOne() {
         val series = runBlocking { graph.series(playlist, null, 10, 0) }.single()
-        openSection(Section.SERIES)
+        openSection(Section.SERIES, entry = null)
+        openFullGrid()
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
         awaitFocus(LibraryTags.item(series.id))
         press(KeyEvent.KEYCODE_DPAD_CENTER)

@@ -55,3 +55,4 @@ line. Product-scope decisions still go to the owner.
 | [0032](0032-tv-navigation-three-levels-and-context-menus.md) | Three navigation levels on the TV, and menus instead of hidden gestures | Accepted |
 | [0033](0033-apple-tv-design-language-on-the-tv.md) | The Apple TV app's design language on the television | Accepted |
 | [0034](0034-luz-design-system-rail-and-components.md) | One design system for every screen, with a floating navigation rail | Accepted |
+| [0035](0035-title-details-people-versions-and-shelves.md) | Title details, people, versions and the shelves built from them | Accepted |

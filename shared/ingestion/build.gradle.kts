@@ -21,6 +21,7 @@ val embedFixtures = tasks.register<EmbedFixtureBytes>("embedFixtures") {
             "seriesCategoriesJson" to fixtures.file("xtream/partial-failure/series-categories.json").asFile,
             "seriesJson" to fixtures.file("xtream/series.json").asFile,
             "seriesInfoJson" to fixtures.file("xtream/series-info.json").asFile,
+            "vodInfoJson" to fixtures.file("xtream/vod-info.json").asFile,
         ),
     )
     packageName.set("app.iptvplayer.ingestion.fixtures")

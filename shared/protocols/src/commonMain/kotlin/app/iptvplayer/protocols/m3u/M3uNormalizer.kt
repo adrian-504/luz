@@ -12,6 +12,7 @@ import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.id.SeasonId
 import app.iptvplayer.domain.id.SeriesId
 import app.iptvplayer.domain.id.StableIds
+import app.iptvplayer.domain.library.TitleCleaner
 import app.iptvplayer.domain.model.Artwork
 import app.iptvplayer.domain.model.ArtworkKind
 import app.iptvplayer.domain.model.ArtworkOrigin
@@ -277,12 +278,14 @@ internal class M3uNormalizer(
             )
         val mediaSource = mediaSource(ContentRef(ContentType.MOVIE, movieId.value), entry, template, protocol)
         val poster = artwork(entry.attributes["tvg-logo"], ArtworkKind.POSTER, entry.line)
+        // The id above stays derived from the raw name, so favourites and progress survive; only what is shown is cleaned.
+        val clean = TitleCleaner.clean(name)
         val movie = Movie(
             id = movieId,
             playlistId = playlistId,
             groupIds = groupTitles.map { group(ContentKind.MOVIE, it) },
-            title = name,
-            year = M3uClassifier.year(name),
+            title = clean.title,
+            year = clean.year ?: M3uClassifier.year(name),
             duration = null,
             plot = null,
             genres = emptyList(),
@@ -294,6 +297,9 @@ internal class M3uNormalizer(
             providerStreamId = null,
             externalIds = ExternalIds(),
             addedAt = null,
+            quality = clean.quality,
+            tags = clean.tags,
+            language = clean.language,
         )
         emit(ContentItem.MovieItem(movie, mediaSource, poster))
         counts = counts.copy(movies = counts.movies + 1)
@@ -312,11 +318,13 @@ internal class M3uNormalizer(
             SeriesId(StableIds.derive(DerivedIdKind.SERIES, playlistId.value, listOf("m3u", TextNormalization.normKey(seriesTitle))))
         if (seriesSeen.add(seriesId)) {
             val poster = artwork(entry.attributes["tvg-logo"], ArtworkKind.POSTER, entry.line)
+            val clean = TitleCleaner.clean(seriesTitle)
             emit(
                 ContentItem.SeriesItem(
                     Series(
                         id = seriesId, playlistId = playlistId, groupIds = groupTitles.map { group(ContentKind.SERIES, it) },
-                        title = seriesTitle, year = null, plot = null, genres = emptyList(), rating = null,
+                        title = clean.title, year = clean.year, quality = clean.quality, tags = clean.tags,
+                        language = clean.language, plot = null, genres = emptyList(), rating = null,
                         poster = poster?.id, backdrop = null,
                         providerSeriesId = null, externalIds = ExternalIds(), lastModifiedAt = null,
                     ),

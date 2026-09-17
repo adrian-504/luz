@@ -304,6 +304,26 @@
       }
     },
     {
+      "path": "xtream/vod-info.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "§6.2",
+      "purpose": "get_vod_info: description instead of an empty plot, actors instead of cast (with a duplicate), genres split by / and comma, a comma decimal rating, backdrop as an array, HTML entity in the description, a tagged title.",
+      "checks": {
+        "json_keys": [
+          "info",
+          "movie_data"
+        ]
+      },
+      "expected": {
+        "cast": 2,
+        "genres": 3,
+        "rating": "7.4",
+        "duration_seconds": 9360,
+        "year": 2021
+      }
+    },
+    {
       "path": "xtream/series.json",
       "format": "json",
       "expect": "valid",
@@ -646,8 +666,13 @@
       "expected": {
         "duration_seconds": 30,
         "video": "h264 426x240",
-        "audio_tracks": ["eng", "spa"],
-        "subtitle_tracks": ["eng"]
+        "audio_tracks": [
+          "eng",
+          "spa"
+        ],
+        "subtitle_tracks": [
+          "eng"
+        ]
       }
     },
     {

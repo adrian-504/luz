@@ -14,6 +14,7 @@ import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.domain.model.Program
 import app.iptvplayer.domain.model.ProviderAccount
+import app.iptvplayer.domain.model.TitleDetail
 import app.iptvplayer.domain.net.UrlContext
 import app.iptvplayer.domain.ports.Clock
 import app.iptvplayer.domain.ports.CollectingDiagnosticSink
@@ -229,6 +230,31 @@ public class XtreamClient(
         ) {
             is Body.Document -> normalizer.seriesInfo(body.element, normalizer.seriesId(providerSeriesId)) to null
             is Body.Error -> emptyList<ContentItem>() to body.error
+        }
+    }
+
+    /**
+     * One film's page (`get_vod_info`): description, genres, cast, trailer and the rest. Null detail with no error means the
+     * provider answered but had nothing to add.
+     */
+    public suspend fun vodInfo(
+        endpoint: XtreamEndpoint,
+        credentials: XtreamCredentials,
+        streamId: String,
+    ): Pair<TitleDetail?, DomainError?> {
+        val normalizer =
+            XtreamNormalizer(PlaylistId("vod-info"), XtreamReporter(ImportUnit.MOVIES, CollectingDiagnosticSink()), credentials, emptySet())
+        return when (
+            val body = fetchDocument(
+                endpoint,
+                credentials,
+                "get_vod_info",
+                listOf("vod_id" to streamId),
+                RequestClass.LAZY_INFO,
+            )
+        ) {
+            is Body.Document -> normalizer.vodInfo(body.element) to null
+            is Body.Error -> null to body.error
         }
     }
 

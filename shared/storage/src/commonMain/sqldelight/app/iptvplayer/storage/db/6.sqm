@@ -1,0 +1,69 @@
+-- Migration 6 -> 7: film and show details, the people in them, genres, and cleaned titles (ADR-0035). Imported rows gain
+-- the badges taken out of their titles and a key for the work they are a version of; existing rows get them at the next
+-- refresh and are shown as before until then. Must match the CREATE statements in Library.sq and Detail.sq.
+ALTER TABLE movie ADD COLUMN quality TEXT;
+ALTER TABLE movie ADD COLUMN tags TEXT;
+ALTER TABLE movie ADD COLUMN language TEXT;
+ALTER TABLE movie ADD COLUMN tmdb_id TEXT;
+ALTER TABLE movie ADD COLUMN work_key TEXT;
+ALTER TABLE movie ADD COLUMN is_primary INTEGER;
+ALTER TABLE movie ADD COLUMN version_count INTEGER;
+
+ALTER TABLE series ADD COLUMN quality TEXT;
+ALTER TABLE series ADD COLUMN tags TEXT;
+ALTER TABLE series ADD COLUMN language TEXT;
+ALTER TABLE series ADD COLUMN tmdb_id TEXT;
+
+CREATE INDEX movie_work ON movie(playlist_id, snapshot, work_key);
+CREATE INDEX movie_added ON movie(playlist_id, snapshot, added_at);
+CREATE INDEX series_modified ON series(playlist_id, snapshot, last_modified_at);
+
+CREATE TABLE title_detail (
+    playlist_id TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    plot TEXT,
+    genres TEXT,
+    duration_seconds INTEGER,
+    release_date TEXT,
+    year INTEGER,
+    poster_template TEXT,
+    backdrop_template TEXT,
+    cast_names TEXT,
+    directors TEXT,
+    trailer TEXT,
+    country TEXT,
+    age_rating TEXT,
+    rating TEXT,
+    tmdb_id TEXT,
+    PRIMARY KEY (playlist_id, content_type, content_id)
+);
+
+CREATE TABLE title_genre (
+    playlist_id TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    genre TEXT NOT NULL,
+    PRIMARY KEY (playlist_id, content_type, content_id, genre)
+);
+
+CREATE INDEX title_genre_lookup ON title_genre(playlist_id, content_type, genre);
+
+CREATE VIRTUAL TABLE person_search USING fts5(
+    name,
+    role UNINDEXED,
+    kind UNINDEXED,
+    playlist_id UNINDEXED,
+    content_id UNINDEXED,
+    tokenize='unicode61 remove_diacritics 2'
+);
+
+-- Which channels the viewer actually watches, for "Now on your favourites" (user state: never touched by imports).
+CREATE TABLE channel_watch (
+    playlist_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    play_count INTEGER NOT NULL,
+    last_played_at INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, channel_id)
+);

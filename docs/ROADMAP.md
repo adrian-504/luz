@@ -415,18 +415,36 @@ platform-neutral file, and components are described by intent so SwiftUI can imp
 | 5. Guide | **Visual redesign done (ADR-0034)**; the cinematic timeline, cross-section navigation from a channel's menu and the frame gate remain |
 | Design system (owner's Apple TV directive, 2026-09-17) | **Done — ADR-0034, DESIGN_SYSTEM.md:** one token set on tvOS proportions, one focus implementation, a floating navigation rail, hero/card/shelf/row/button/state components, and every screen rebuilt on them — Home (featured carousel, ambient colour), film and series pages, Live TV ("on now" panel, logo plates), Guide, Movies/Series, Search (letter strip), Settings and provider cards, onboarding, player overlay, menus and prompts. 22 device tests pass on the Bbox; frame timing re-measured (PERFORMANCE.md §6.3) |
 
-### Requested by the owner (2026-09-17), not yet scheduled into a step
+### The owner's feature list (2026-09-17, items 1–34)
 
-Recorded so they are not lost; each becomes a requirement with its data source decided before it is built.
+The owner chose 34 items in seven groups and asked for all of them, in five stages. Stage 1 (data) and Stage 2 (Home,
+Movies, Series) are done — ADR-0035 — and verified on the Bbox with the owner's provider unless noted.
 
-| Request | What it needs | Notes |
+| # | Item | Status |
 |---|---|---|
-| Cast and director on film and series pages | Import the Xtream `cast` and `director` fields (`get_vod_info` / `get_series_info`), schema change, detail page rows | The owner's provider sends good metadata (they saw it in another player) |
-| Search by actor (and director) | The above, plus a people index next to the title index (ADR-0029) | Search results gain a *People* shelf |
-| Recently added movies | Exists on Home (by the provider's `added` date) | — |
-| Recently added TV shows | Series ordered by the provider's date added; Home row today is not date-ordered | Needs the series `added` field stored |
-| Highest rated movies / TV shows | A rating source. First choice: the provider's own `rating` field (already stored, often from TMDB). External enrichment is a separate decision | IMDb offers no public API (its datasets are non-commercial); Letterboxd's API is by application only; TMDB has a free API with attribution — adding any online lookup needs an ADR (network, privacy, keys) |
-| Favorites as a library (films, series, programmes) | List favourite films and series from storage (they can already be saved) | Favorites is still the channel list |
+| 1 | Full film details (description, genres, running time, release, backdrops, age rating, country) | **Done** — fetched on opening a film and slowly in the background; folded into the film row |
+| 2 | Cast and director on film and show pages | **Done** — Cast & Crew shelf and an About/Information panel |
+| 3 | Search by actor or director; People shelf; a person's page | **Done** |
+| 4 | Trailers | **Done** — opens the YouTube app (verified: The Goonies) |
+| 5 | Clean titles; 4K/HDR/language badges | **Done** — `TitleCleaner`; titles clean at the next refresh |
+| 6 | One card per film, version choice on Play | **Done** — verified by JVM tests; the owner's library shows duplicates merged after refresh (not yet checked on screen) |
+| 7 | What the provider sends (coverage screen) | **Done** — Settings → Film & show details |
+| 8 | Recently added movies | **Done** (existed) |
+| 9 | New episodes | **Done** — ordered by the show's last update |
+| 10 | Highest rated films and shows (provider rating) | **Done** |
+| 11 | Popular without an outside source (rating and recency) | **Done** |
+| 12–13 | TMDB trending and ratings | Stage 5 — needs the owner's free TMDB key, typed into Settings |
+| 14 | "Your channels" (favourites, then most watched) | **Done** |
+| 15–19 | Shelf-based Movies and Series, genre shelves, decades, "Because you watched", categories at the bottom | **Done** |
+| 20 | My List | **Done** — Home row and a shelf in Movies/Series |
+| 21 | The viewer's own groups of films and shows | Not started |
+| 22–26 | Player redesign, scrubbing, info/subtitles/audio panel, next-episode countdown, quality badges | Stage 3 — not started |
+| 27–29 | Live channel bar, channel list over the picture, programme info | Stage 3 — not started |
+| 30–32 | Clock, quiet buffering, error screen | Stage 3 — not started |
+| 33–34 | Guide timeline redesign and speed, a channel's guide from its menu | Stage 4 — not started |
+
+Follow-ups found on the way: a budget for film and show import times on the reference television (88 s and 3 min 41 s
+today, ADR-0035); Home takes about two seconds to fill every row on the Bbox and now shows rows as they arrive.
 
 ## Proposed interim gate: Android TV personal alpha
 

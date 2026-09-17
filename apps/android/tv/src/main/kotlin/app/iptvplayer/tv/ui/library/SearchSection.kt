@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -81,6 +82,7 @@ fun SearchSection(
     onPlayChannel: (PlaylistId, ChannelScope, ChannelId) -> Unit,
     onOpenMovie: (PlaylistId, String) -> Unit,
     onOpenSeries: (PlaylistId, String) -> Unit,
+    onOpenPerson: (PlaylistId, String) -> Unit,
     onAddSource: () -> Unit,
 ) {
     val graph = LocalAppGraph.current
@@ -151,7 +153,9 @@ fun SearchSection(
             when {
                 query.isBlank() -> item(key = "status") { StatusLine(stringResource(R.string.search_hint)) }
                 found == null -> item(key = "loading") { LuzSkeletonShelf(CardShape.POSTER, count = 5) }
-                found.channels.isEmpty() && found.movies.isEmpty() && found.series.isEmpty() -> item(key = "status") {
+                found.channels.isEmpty() && found.movies.isEmpty() && found.series.isEmpty() && found.people.isEmpty() -> item(
+                    key = "status",
+                ) {
                     StatusLine(stringResource(R.string.search_nothing, query.trim()))
                 }
                 else -> {
@@ -183,6 +187,24 @@ fun SearchSection(
                                         modifier = Modifier.rememberedFocus(focus, SearchTags.result("movie", movie.id)),
                                         onClick = { onOpenMovie(current, movie.id) },
                                     ) { art -> ArtworkImage(movie.poster, resolver, movie.title, art) }
+                                }
+                            }
+                        }
+                    }
+                    if (found.people.isNotEmpty()) {
+                        item(key = "people") {
+                            LuzShelf(stringResource(R.string.search_people)) {
+                                items(found.people.size, key = { found.people[it].name }) { index ->
+                                    val person = found.people[index]
+                                    PersonCard(
+                                        person.name,
+                                        pluralStringResource(
+                                            if (person.directs) R.plurals.search_person_directed else R.plurals.search_person_titles,
+                                            person.titles,
+                                            person.titles,
+                                        ),
+                                        Modifier.rememberedFocus(focus, SearchTags.result("person", person.name)),
+                                    ) { onOpenPerson(current, person.name) }
                                 }
                             }
                         }

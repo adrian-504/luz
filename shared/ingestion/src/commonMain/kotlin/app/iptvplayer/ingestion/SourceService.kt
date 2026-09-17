@@ -386,6 +386,67 @@ public class SourceService(
         return null
     }
 
+    /**
+     * Fetches one film's page (`get_vod_info`) when it has none yet, so a film opens with its description, cast and trailer
+     * (ADR-0035). M3U films have no such request. Returns the provider's error when it could not answer.
+     */
+    public suspend fun loadMovieDetail(playlistId: PlaylistId, movieId: String, force: Boolean = false): DomainError? {
+        val source = content.source(playlistId) ?: return DomainError.Storage("SOURCE_MISSING")
+        if (source.type != PlaylistType.XTREAM) return null
+        if (!force && library.detail(playlistId, ContentType.MOVIE, movieId) != null) return null
+        val streamId = library.movieStreamId(playlistId, movieId) ?: return DomainError.Storage("MOVIE_MISSING")
+        val endpoint = source.sourceTemplate?.let { XtreamEndpoint.parse(it.template) } ?: return DomainError.Storage("ENDPOINT_MISSING")
+        val credentials = credentialsOf(source.credentialRef?.let { secrets.get(it) })
+            ?: return DomainError.Auth(AuthFailure.MISSING_CREDENTIALS)
+        val (detail, error) = xtream.vodInfo(endpoint, credentials, streamId)
+        if (error != null) return error
+        library.saveDetail(playlistId, ContentType.MOVIE, movieId, detail)
+        return null
+    }
+
+    /**
+     * Fills in the pages of films that have none, newest first, one request at a time with [pause] between them — a
+     * library of twenty thousand films is twenty thousand requests, and a provider that sees them arrive quickly may
+     * throttle or block the account. Stops when [keepGoing] says so, after [maxRequests], or at the first sign the
+     * provider is refusing (a login or rate-limit error, or several failures in a row), and resumes where it left off next
+     * time because only films without a page are asked for. Returns how many pages were stored.
+     */
+    public suspend fun enrichMovieDetails(
+        playlistId: PlaylistId,
+        maxRequests: Int,
+        pause: kotlin.time.Duration,
+        keepGoing: () -> Boolean,
+        onProgress: (stored: Int) -> Unit = {},
+    ): Int {
+        val source = content.source(playlistId) ?: return 0
+        if (source.type != PlaylistType.XTREAM) return 0
+        val endpoint = source.sourceTemplate?.let { XtreamEndpoint.parse(it.template) } ?: return 0
+        val credentials = credentialsOf(source.credentialRef?.let { secrets.get(it) }) ?: return 0
+        var stored = 0
+        var failuresInARow = 0
+        while (stored < maxRequests && keepGoing()) {
+            val batch = library.moviesMissingDetail(playlistId, ENRICHMENT_BATCH)
+            if (batch.isEmpty()) break
+            for ((movieId, streamId) in batch) {
+                if (stored >= maxRequests || !keepGoing()) return stored
+                val (detail, error) = xtream.vodInfo(endpoint, credentials, streamId)
+                when {
+                    error == null -> {
+                        library.saveDetail(playlistId, ContentType.MOVIE, movieId, detail)
+                        stored++
+                        failuresInARow = 0
+                        if (stored % ENRICHMENT_PROGRESS_EVERY == 0) onProgress(stored)
+                    }
+                    error is DomainError.Auth || (error is DomainError.Http && error.status in REFUSALS) -> return stored
+                    ++failuresInARow >= ENRICHMENT_MAX_FAILURES -> return stored
+                }
+                kotlinx.coroutines.delay(pause)
+            }
+        }
+        if (stored % ENRICHMENT_PROGRESS_EVERY != 0) onProgress(stored)
+        return stored
+    }
+
     private suspend fun importXtreamLive(source: SourceRecord, bundle: SecretBundle?, emit: (ContentItem) -> Unit): UnitOutcome {
         val endpoint = source.sourceTemplate?.let { XtreamEndpoint.parse(it.template) }
             ?: return UnitOutcome(ImportUnit.LIVE, ImportStatus.FAILED, 0, DomainError.Storage("ENDPOINT_MISSING"))
@@ -686,3 +747,15 @@ public class SourceService(
         }
     }
 }
+
+/** Films asked for per pass of the background fetch before the next "what is still missing" query. */
+private const val ENRICHMENT_BATCH = 50
+
+/** How often the background fetch reports progress, so shelves built from details can refresh. */
+private const val ENRICHMENT_PROGRESS_EVERY = 50
+
+/** Consecutive failures after which the background fetch stops until next time. */
+private const val ENRICHMENT_MAX_FAILURES = 5
+
+/** HTTP answers that mean the provider is refusing rather than failing: stop, do not retry. */
+private val REFUSALS = setOf(401, 403, 429)

@@ -69,7 +69,7 @@ object ShellTags {
 }
 
 /** Sections whose top is a picture that runs under the navigation; the rest start clear of it. */
-private val FULL_BLEED = setOf(Section.HOME)
+private val FULL_BLEED = setOf(Section.HOME, Section.MOVIES, Section.SERIES)
 
 /**
  * The shell: every section fills the screen, and the navigation rail floats over its left edge (ADR-0034).
@@ -90,8 +90,12 @@ fun MainShell(
     onOpenMovie: (PlaylistId, String) -> Unit = { _, _ -> },
     onOpenSeries: (PlaylistId, String) -> Unit = { _, _ -> },
     onPlayContent: (PlaylistId, ContentType, String) -> Unit = { _, _, _ -> },
+    onOpenPerson: (PlaylistId, String) -> Unit = { _, _ -> },
 ) {
     var homeFirstKey by remember { mutableStateOf<String?>(null) }
+    var libraryFirstKey by remember { mutableStateOf<String?>(null) }
+    // A section's own step back (a grid back to its shelves), taken before Back moves the remote to the navigation.
+    var contentBack by remember { mutableStateOf<(() -> Unit)?>(null) }
     var selected by rememberSaveable { mutableStateOf(initialSection) }
     var railFocused by remember { mutableStateOf(false) }
     var contentFocusRequests by remember { mutableIntStateOf(0) }
@@ -106,7 +110,10 @@ fun MainShell(
     }
 
     BackHandler(enabled = !(railFocused && selected == Section.HOME)) {
-        if (!railFocused) {
+        val sectionBack = contentBack
+        if (!railFocused && sectionBack != null) {
+            sectionBack()
+        } else if (!railFocused) {
             focus.requestFocus(ShellTags.rail(selected))
         } else {
             // In the rail, somewhere other than Home: Back goes Home and stays in the rail, so the viewer sees where
@@ -143,11 +150,28 @@ fun MainShell(
                         onPlayChannel = onPlayChannel,
                         onOpenMovie = onOpenMovie,
                         onOpenSeries = onOpenSeries,
+                        onOpenPerson = onOpenPerson,
                         onAddSource = onAddSource,
                     )
                     Section.SETTINGS -> SettingsSection(focus, onAddSource, onEditGuideLink, onPlayDeveloperStream, onSourceAdded)
-                    Section.MOVIES -> LibrarySection(focus, ImportUnit.MOVIES, onOpen = onOpenMovie, onAddSource = onAddSource)
-                    Section.SERIES -> LibrarySection(focus, ImportUnit.SERIES, onOpen = onOpenSeries, onAddSource = onAddSource)
+                    Section.MOVIES -> LibrarySection(
+                        focus,
+                        ImportUnit.MOVIES,
+                        onOpen = onOpenMovie,
+                        onPlay = { playlist, id -> onPlayContent(playlist, ContentType.MOVIE, id) },
+                        onAddSource = onAddSource,
+                        onFirstKey = { libraryFirstKey = it },
+                        onContentBack = { contentBack = it },
+                    )
+                    Section.SERIES -> LibrarySection(
+                        focus,
+                        ImportUnit.SERIES,
+                        onOpen = onOpenSeries,
+                        onPlay = onOpenSeries,
+                        onAddSource = onAddSource,
+                        onFirstKey = { libraryFirstKey = it },
+                        onContentBack = { contentBack = it },
+                    )
                 }
             }
         }
@@ -175,7 +199,7 @@ fun MainShell(
                     Section.LIVE_TV -> listOf(LiveTags.GROUP_ALL, LiveTags.emptyAddSource(favorites = false))
                     Section.FAVORITES -> listOf(LiveTags.emptyAddSource(favorites = true))
                     Section.GUIDE -> listOf(GuideTags.FIRST_CELL, GuideTags.ADD_SOURCE)
-                    Section.MOVIES, Section.SERIES -> listOf(LibraryTags.CATEGORY_ALL, LibraryTags.ADD_SOURCE)
+                    Section.MOVIES, Section.SERIES -> listOfNotNull(libraryFirstKey, LibraryTags.CATEGORY_ALL, LibraryTags.ADD_SOURCE)
                     Section.HOME -> listOfNotNull(homeFirstKey, ShellTags.ADD_SOURCE)
                     Section.SEARCH -> listOf(SearchTags.FIELD, SearchTags.ADD_SOURCE)
                 }

@@ -76,6 +76,8 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
     private val queries = database.contentQueries
     internal val libraryQueries = database.libraryQueries
     internal val searchQueries = database.searchQueries
+    internal val detailQueries = database.detailQueries
+    internal val browseQueries = database.browseQueries
     private val customisationQueries = database.customisationQueries
 
     /** Marks [snapshot] as the published content of [unit] (library units; live channels use their writer). */

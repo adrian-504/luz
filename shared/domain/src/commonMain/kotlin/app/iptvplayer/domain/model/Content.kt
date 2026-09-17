@@ -11,6 +11,8 @@ import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.id.ProgramId
 import app.iptvplayer.domain.id.SeasonId
 import app.iptvplayer.domain.id.SeriesId
+import app.iptvplayer.domain.library.Quality
+import app.iptvplayer.domain.library.TitleCleaner
 import app.iptvplayer.domain.security.UrlTemplate
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -140,7 +142,14 @@ public data class Movie(
     public val providerStreamId: String?,
     public val externalIds: ExternalIds,
     public val addedAt: Instant?,
+    /** Picture quality, badges and language taken out of the provider's title (TitleCleaner). */
+    public val quality: Quality? = null,
+    public val tags: List<String> = emptyList(),
+    public val language: String? = null,
 ) {
+    /** The film itself, so versions of it can be shown as one card (TitleCleaner.workKey). */
+    public val workKey: String get() = externalIds.tmdb?.let { "tmdb:$it" } ?: TitleCleaner.workKey(title, year)
+
     init {
         require(title.isNotBlank()) { "movie title must not be blank" }
         require(mediaSourceIds.isNotEmpty()) { "movie needs at least one media source" }
@@ -161,6 +170,11 @@ public data class Series(
     public val providerSeriesId: String?,
     public val externalIds: ExternalIds,
     public val lastModifiedAt: Instant?,
+    public val quality: Quality? = null,
+    public val tags: List<String> = emptyList(),
+    public val language: String? = null,
+    /** What the provider's series list already says about the show beyond its title (cast, director, trailer). */
+    public val detail: TitleDetail? = null,
 ) {
     init {
         require(title.isNotBlank()) { "series title must not be blank" }
@@ -192,6 +206,35 @@ public data class Episode(
     init {
         require(mediaSourceIds.isNotEmpty()) { "episode needs at least one media source" }
     }
+}
+
+/**
+ * What a provider says about a film or show beyond its list entry (Xtream `get_vod_info`, or the series list itself):
+ * the page a viewer opens. Kept apart from the imported rows so a refresh does not throw it away, and every field is
+ * optional because providers fill them unevenly.
+ */
+public data class TitleDetail(
+    public val plot: String? = null,
+    public val genres: List<String> = emptyList(),
+    public val duration: kotlin.time.Duration? = null,
+    public val releaseDate: String? = null,
+    public val year: Int? = null,
+    public val poster: UrlTemplate? = null,
+    public val backdrop: UrlTemplate? = null,
+    public val cast: List<String> = emptyList(),
+    public val directors: List<String> = emptyList(),
+    /** A YouTube video id or link, as the provider wrote it. */
+    public val trailer: String? = null,
+    public val country: String? = null,
+    public val ageRating: String? = null,
+    public val rating: String? = null,
+    public val tmdbId: String? = null,
+) {
+    /** True when the provider sent nothing worth keeping. */
+    public val isEmpty: Boolean
+        get() = plot == null && genres.isEmpty() && duration == null && releaseDate == null && year == null && poster == null &&
+            backdrop == null && cast.isEmpty() && directors.isEmpty() && trailer == null && country == null && ageRating == null &&
+            rating == null && tmdbId == null
 }
 
 public enum class ArtworkKind { LOGO, POSTER, BACKDROP, THUMBNAIL, PROGRAM_ICON, SEASON_POSTER }

@@ -1,0 +1,162 @@
+-- Film and show details, their genres and the people in them (ADR-0035). Kept apart from the imported rows and keyed by
+-- the same stable ids as favourites, so a refresh keeps what was fetched: a provider's `get_vod_info` is one request per
+-- film, and a library of tens of thousands should be fetched once, not after every refresh. Keep in sync with 6.sqm.
+
+CREATE TABLE title_detail (
+    playlist_id TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    plot TEXT,
+    genres TEXT,
+    duration_seconds INTEGER,
+    release_date TEXT,
+    year INTEGER,
+    poster_template TEXT,
+    backdrop_template TEXT,
+    cast_names TEXT,
+    directors TEXT,
+    trailer TEXT,
+    country TEXT,
+    age_rating TEXT,
+    rating TEXT,
+    tmdb_id TEXT,
+    PRIMARY KEY (playlist_id, content_type, content_id)
+);
+
+CREATE TABLE title_genre (
+    playlist_id TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    genre TEXT NOT NULL,
+    PRIMARY KEY (playlist_id, content_type, content_id, genre)
+);
+
+CREATE INDEX title_genre_lookup ON title_genre(playlist_id, content_type, genre);
+
+-- People: one row per name per source, the titles they are in, and their names in a search index. Writing a title's
+-- people replaces its title_person rows by primary key, and a name enters the search index once, when it is first seen —
+-- never a scan of the index, which grows to hundreds of thousands of names on a large library (see 8.sqm).
+CREATE TABLE person (
+    id INTEGER PRIMARY KEY,
+    playlist_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    UNIQUE (playlist_id, name)
+);
+
+CREATE TABLE title_person (
+    playlist_id TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    person_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    PRIMARY KEY (playlist_id, content_type, content_id, person_id, role)
+);
+
+CREATE INDEX title_person_by_person ON title_person(person_id);
+
+-- Names, searchable by any part, with the same tokenizer as titles (Search.sq).
+CREATE VIRTUAL TABLE person_name USING fts5(
+    name,
+    person_id UNINDEXED,
+    tokenize='unicode61 remove_diacritics 2'
+);
+
+-- Which channels the viewer actually watches (user state).
+CREATE TABLE channel_watch (
+    playlist_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    play_count INTEGER NOT NULL,
+    last_played_at INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, channel_id)
+);
+
+upsertDetail:
+INSERT OR REPLACE INTO title_detail(playlist_id, content_type, content_id, fetched_at, plot, genres, duration_seconds, release_date, year,
+    poster_template, backdrop_template, cast_names, directors, trailer, country, age_rating, rating, tmdb_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+detailOf:
+SELECT * FROM title_detail WHERE playlist_id = ? AND content_type = ? AND content_id = ?;
+
+deleteGenresOf:
+DELETE FROM title_genre WHERE playlist_id = ? AND content_type = ? AND content_id = ?;
+
+insertGenre:
+INSERT OR IGNORE INTO title_genre(playlist_id, content_type, content_id, genre) VALUES (?, ?, ?, ?);
+
+deletePeopleOf:
+DELETE FROM title_person WHERE playlist_id = :playlistId AND content_type = :contentType AND content_id = :contentId;
+
+personId:
+SELECT id FROM person WHERE playlist_id = :playlistId AND name = :name;
+
+insertPerson:
+INSERT INTO person(playlist_id, name) VALUES (:playlistId, :name);
+
+insertPersonName:
+INSERT INTO person_name(name, person_id) VALUES (:name, :personId);
+
+insertTitlePerson:
+INSERT OR IGNORE INTO title_person(playlist_id, content_type, content_id, person_id, role) VALUES (?, ?, ?, ?, ?);
+
+-- Films whose page has not been fetched yet, newest first — the ones a viewer is most likely to open next — with the
+-- provider's stream id the request needs.
+moviesMissingDetail:
+SELECT mo.id, ms.stream_id
+FROM movie mo
+JOIN media_source ms ON ms.playlist_id = mo.playlist_id AND ms.snapshot = mo.snapshot AND ms.owner_id = mo.id
+LEFT JOIN title_detail d ON d.playlist_id = mo.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = mo.id
+WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND d.content_id IS NULL AND ms.stream_id IS NOT NULL
+ORDER BY mo.added_at DESC
+LIMIT :limit;
+
+movieStreamId:
+SELECT ms.stream_id FROM media_source ms
+WHERE ms.playlist_id = :playlistId AND ms.snapshot = :snapshot AND ms.owner_id = :movieId AND ms.stream_id IS NOT NULL
+LIMIT 1;
+
+-- What the provider actually sent, for the check in Settings: one row per kind of title.
+detailCoverage:
+SELECT content_type,
+    COUNT(*) AS fetched,
+    SUM(plot IS NOT NULL) AS with_plot,
+    SUM(genres IS NOT NULL) AS with_genres,
+    SUM(cast_names IS NOT NULL) AS with_cast,
+    SUM(directors IS NOT NULL) AS with_directors,
+    SUM(trailer IS NOT NULL) AS with_trailer,
+    SUM(backdrop_template IS NOT NULL) AS with_backdrop,
+    SUM(duration_seconds IS NOT NULL) AS with_duration,
+    SUM(rating IS NOT NULL) AS with_rating,
+    SUM(age_rating IS NOT NULL) AS with_age_rating,
+    SUM(country IS NOT NULL) AS with_country,
+    SUM(release_date IS NOT NULL) AS with_release_date
+FROM title_detail
+WHERE playlist_id = :playlistId
+GROUP BY content_type;
+
+-- People whose name matches what was typed, in the order they were indexed; ContentStore groups them by name.
+-- People whose name matches what was typed, with how many of the viewer's titles they are in and whether they directed
+-- any. The index is asked for a bounded number of names first, so a one-letter prefix stays quick.
+searchPeople:
+SELECT p.name, COUNT(DISTINCT tp.content_type || ':' || tp.content_id) AS titles,
+    CAST(MAX(CASE WHEN tp.role = 'director' THEN 1 ELSE 0 END) AS INTEGER) AS directs
+-- The index keeps the id as text; it is compared as the number it is.
+FROM (SELECT CAST(person_id AS INTEGER) AS person_id FROM person_name WHERE person_name MATCH :match LIMIT :candidates) n
+JOIN person p ON p.id = n.person_id AND p.playlist_id = :playlistId
+JOIN title_person tp ON tp.person_id = p.id
+GROUP BY p.id
+ORDER BY titles DESC;
+
+titlesOfPerson:
+SELECT tp.content_type, tp.content_id
+FROM person p
+JOIN title_person tp ON tp.person_id = p.id
+WHERE p.playlist_id = :playlistId AND p.name = :name;
+
+recordChannelWatch:
+INSERT INTO channel_watch(playlist_id, channel_id, play_count, last_played_at) VALUES (:playlistId, :channelId, 1, :now)
+ON CONFLICT(playlist_id, channel_id) DO UPDATE SET play_count = channel_watch.play_count + 1, last_played_at = excluded.last_played_at;
+
+mostWatchedChannels:
+SELECT channel_id FROM channel_watch WHERE playlist_id = ? ORDER BY play_count DESC, last_played_at DESC LIMIT ?;

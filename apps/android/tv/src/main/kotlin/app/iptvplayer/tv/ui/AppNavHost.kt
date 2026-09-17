@@ -25,6 +25,7 @@ import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.library.ContentPlayerRoute
 import app.iptvplayer.tv.ui.library.MovieDetailScreen
+import app.iptvplayer.tv.ui.library.PersonScreen
 import app.iptvplayer.tv.ui.library.SeriesDetailScreen
 import app.iptvplayer.tv.ui.live.ChannelScope
 import app.iptvplayer.tv.ui.onboarding.GuideLinkFormScreen
@@ -52,6 +53,9 @@ object Routes {
     const val MOVIE = "movie/{playlist}/{id}"
     const val SERIES = "series/{playlist}/{id}"
     const val CONTENT = "content/{playlist}/{type}/{id}?fromStart={fromStart}"
+    const val PERSON = "person/{playlist}/{name}"
+
+    fun person(playlist: PlaylistId, name: String) = "person/${Uri.encode(playlist.value)}/${Uri.encode(name)}"
 
     fun movie(playlist: PlaylistId, id: String) = "movie/${Uri.encode(playlist.value)}/${Uri.encode(id)}"
 
@@ -94,6 +98,8 @@ fun AppNavHost() {
             Box(Modifier.fillMaxSize().background(Tokens.bgBase))
             LaunchedEffect(Unit) {
                 val target = if (graph.sources().isEmpty()) Routes.WELCOME else Routes.main(Section.LIVE_TV)
+                // Film pages keep arriving in the background from where the last session stopped (ADR-0035).
+                graph.currentSource()?.let { graph.startDetailFetch(it.playlistId) }
                 navController.navigate(target) { popUpTo(Routes.START) { inclusive = true } }
             }
         }
@@ -128,6 +134,7 @@ fun AppNavHost() {
                 onOpenMovie = { playlist, id -> navController.navigate(Routes.movie(playlist, id)) },
                 onOpenSeries = { playlist, id -> navController.navigate(Routes.series(playlist, id)) },
                 onPlayContent = { playlist, type, id -> navController.navigate(Routes.content(playlist, type, id, fromStart = false)) },
+                onOpenPerson = { playlist, name -> navController.navigate(Routes.person(playlist, name)) },
             )
         }
         composable(Routes.MOVIE) { entry ->
@@ -136,15 +143,32 @@ fun AppNavHost() {
             MovieDetailScreen(
                 playlist,
                 id,
-                onPlay = { fromStart -> navController.navigate(Routes.content(playlist, ContentType.MOVIE, id, fromStart)) },
+                onPlay = { version, fromStart -> navController.navigate(Routes.content(playlist, ContentType.MOVIE, version, fromStart)) },
+                onPerson = { navController.navigate(Routes.person(playlist, it)) },
             )
         }
         composable(Routes.SERIES) { entry ->
             val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
             val id = Uri.decode(entry.arguments?.getString("id").orEmpty())
-            SeriesDetailScreen(playlist, id, onPlayEpisode = { episode, fromStart ->
-                navController.navigate(Routes.content(playlist, ContentType.EPISODE, episode, fromStart))
-            })
+            SeriesDetailScreen(
+                playlist,
+                id,
+                onPlayEpisode = { episode, fromStart ->
+                    navController.navigate(
+                        Routes.content(playlist, ContentType.EPISODE, episode, fromStart),
+                    )
+                },
+                onPerson = { navController.navigate(Routes.person(playlist, it)) },
+            )
+        }
+        composable(Routes.PERSON) { entry ->
+            val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
+            PersonScreen(
+                playlist,
+                Uri.decode(entry.arguments?.getString("name").orEmpty()),
+                onOpenMovie = { navController.navigate(Routes.movie(playlist, it)) },
+                onOpenSeries = { navController.navigate(Routes.series(playlist, it)) },
+            )
         }
         composable(
             Routes.CONTENT,

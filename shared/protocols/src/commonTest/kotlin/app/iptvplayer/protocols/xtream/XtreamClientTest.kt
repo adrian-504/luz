@@ -50,6 +50,7 @@ class XtreamClientTest {
         "get_series_categories" to FakeTransport.ok(Fixtures.partialSeriesCategoriesJson),
         "get_series" to FakeTransport.ok(Fixtures.seriesJson),
         "get_series_info" to FakeTransport.ok(Fixtures.seriesInfoJson),
+        "get_vod_info" to FakeTransport.ok(Fixtures.vodInfoJson),
         "get_short_epg" to FakeTransport.ok(Fixtures.shortEpgJson),
     )
 
@@ -266,6 +267,25 @@ class XtreamClientTest {
         assertEquals(DomainError.Auth(AuthFailure.INVALID_CREDENTIALS), collected.result.error)
         val html = import(ImportUnit.LIVE, mapOf("get_live_streams" to FakeTransport.ok(Fixtures.htmlErrorBody)))
         assertEquals(DomainError.Validation(ValidationFailure.UNEXPECTED_CONTENT_TYPE_HTML), html.result.error)
+    }
+
+    @Test
+    fun vodInfoReadsEveryNameTheFieldsGoBy() = runTest {
+        val (client, _) = client()
+        val (detail, error) = client.vodInfo(endpoint, credentials, "301")
+        assertNull(error)
+        val film = assertNotNull(detail)
+        assertEquals("A synthetic film & its page, used only for parser tests.", film.plot)
+        assertEquals(listOf("Action", "Thriller", "Drama"), film.genres)
+        assertEquals(listOf("Example Actor", "Second Example"), film.cast)
+        assertEquals(listOf("Example Director"), film.directors)
+        assertEquals(9_360L, film.duration?.inWholeSeconds)
+        assertEquals(2021, film.year)
+        assertEquals("7.4", film.rating)
+        assertEquals("PG-13", film.ageRating)
+        assertEquals("exampleTrailerId", film.trailer)
+        assertEquals("123456", film.tmdbId)
+        assertEquals("https://img.example.com/backdrop/film.jpg", film.backdrop?.template)
     }
 
     @Test

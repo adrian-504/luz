@@ -149,6 +149,32 @@ mediaSourceIds, providerStreamId?, externalIds {tmdb?, imdb?} (only if provided 
 
 Seasons/episodes may be imported lazily (Xtream `get_series_info` per series on first open), see IPTV_PROTOCOLS.md.
 
+### Titles, badges and versions (ADR-0035)
+
+Movie and Series also carry `quality? (UHD|FHD|HD|SD), tags (HDR, Dolby Vision, 3D, Multi-language, Subtitled, IMAX),
+language?` — taken out of the provider's name by `TitleCleaner` (shared/domain), which leaves `title` as the name a
+viewer reads. The rules are conservative:
+
+- A prefix is removed when it is marked (`|EN|`, `[EN]`, `NF | `) or made only of known codes before `:` or ` - `
+  (`EN: `, `4K-EN - `). `AI: Artificial Intelligence` and `Spider-Man: No Way Home` keep their names.
+- Bracketed tags and years are removed (`(2022)`, `[4K]`); a year is otherwise taken only after a dash (`Movie - 2019`).
+- Trailing words are removed only while they are tags written as tags (capitals, or `1080p`): `The Sub`, `Dual` and
+  `Blade Runner 2049` keep theirs.
+- The best quality written wins; an unrecognisable name comes back unchanged. IDs are still derived from the raw name.
+
+`Movie.workKey` groups versions of one film: `tmdb:<id>` when the provider sends one, otherwise the title folded (case,
+accents, punctuation and leading articles ignored) with its year. One version per work — the best quality, then the
+provider's order — is *primary* and stands for the film on shelves and in the All grid.
+
+### TitleDetail (ADR-0035)
+
+`plot?, genres, duration?, releaseDate?, year?, poster?, backdrop?, cast, directors, trailer?, country?, ageRating?,
+rating?, tmdbId?` — a title's page (`get_vod_info` for films; the list entry for shows). Stored outside snapshots
+(`title_detail`, keyed by source, type and stable id) so it survives refreshes; an empty page is stored too, so it is
+not requested again. What it adds is folded into the film row (backdrop, plot, genres, duration, year, numeric rating).
+People are `person` (one per name per source) and `title_person` (who is in what, as cast or director), with names in a
+full-text index.
+
 ### MediaSource — a playable endpoint
 
 | Field | Type | Notes |

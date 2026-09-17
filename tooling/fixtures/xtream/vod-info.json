@@ -1,0 +1,27 @@
+{
+  "info": {
+    "name": "EN | Example Film (2021) 4K",
+    "o_name": "Example Film",
+    "movie_image": "https://img.example.com/poster/film-large.jpg",
+    "cover_big": "https://img.example.com/poster/film-cover.jpg",
+    "description": "A synthetic film &amp; its page, used only for parser tests.",
+    "plot": "",
+    "genre": "Action / Thriller, Drama",
+    "releasedate": "2021-10-22",
+    "duration_secs": 9360,
+    "duration": "02:36:00",
+    "actors": "Example Actor, Second Example, Example Actor",
+    "director": "Example Director",
+    "youtube_trailer": "exampleTrailerId",
+    "country": "Exampleland",
+    "mpaa_rating": "PG-13",
+    "rating": "7,4",
+    "tmdb_id": "123456",
+    "backdrop_path": ["https://img.example.com/backdrop/film.jpg"]
+  },
+  "movie_data": {
+    "stream_id": 301,
+    "name": "EN | Example Film (2021) 4K",
+    "container_extension": "mkv"
+  }
+}

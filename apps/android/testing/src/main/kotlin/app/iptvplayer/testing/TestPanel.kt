@@ -76,6 +76,7 @@ object TestPanel {
             }
             "get_series_categories" -> categoryJson(seriesCategories)
             "get_series" -> seriesListJson(base)
+            "get_vod_info" -> vodInfo(params(query)["vod_id"])
             "get_series_info" -> if (params(query)["series_id"] == SERIES_ID.toString()) seriesInfo() else EMPTY_SERIES_INFO
             else -> "[]"
         }
@@ -87,6 +88,22 @@ object TestPanel {
     private fun seriesListJson(base: String) = """[{"num":1,"name":"Test Series","series_id":$SERIES_ID,""" +
         """"cover":"${base}art/Test%20Series.png","plot":"A synthetic test series.",""" +
         """"genre":"Test","releaseDate":"2026-01-01","category_id":"21"}]"""
+
+    /**
+     * `get_vod_info`: a full page for the first film, a partial one for the second, and nothing for the rest — the three
+     * cases a real library mixes. People are invented names.
+     */
+    private fun vodInfo(id: String?): String = when (id) {
+        "5001" ->
+            """{"info":{"plot":"A synthetic film for trying the film page: its description, its people and its facts.",""" +
+                """"genre":"Drama, Test","duration_secs":5400,"releasedate":"2024-03-01",""" +
+                """"cast":"Alex Example, Sam Placeholder, Robin Fixture",""" +
+                """"director":"Jordan Sample","country":"Testland","mpaa_rating":"PG-13","rating":"7.8",""" +
+                """"youtube_trailer":"test-trailer"},""" +
+                """"movie_data":{"stream_id":5001,"name":"Test Movie One"}}"""
+        "5002" -> """{"info":{"plot":"A second synthetic film.","genre":"Test","cast":"Alex Example"},"movie_data":{"stream_id":5002}}"""
+        else -> """{"info":[],"movie_data":{}}"""
+    }
 
     private const val EMPTY_SERIES_INFO = """{"seasons":[],"info":{},"episodes":{}}"""
 

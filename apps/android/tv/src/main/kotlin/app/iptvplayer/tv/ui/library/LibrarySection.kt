@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -65,6 +66,12 @@ object LibraryTags {
     const val CATEGORY_ALL = "library-category-all"
     const val ADD_SOURCE = "library-add-source"
     const val EMPTY = "library-empty"
+    const val HERO_PLAY = "library-hero-play"
+    const val HERO_INFO = "library-hero-info"
+
+    fun shelfItem(shelf: String, id: String) = "library-shelf-$shelf-$id"
+
+    fun tile(key: String) = "library-tile-$key"
 
     fun category(id: String) = "library-category-$id"
 
@@ -80,7 +87,15 @@ data class PosterItem(val id: String, val title: String, val caption: String?, v
  * Browsing categories previews them after a short pause, like Live TV. OK opens the detail screen.
  */
 @Composable
-fun LibrarySection(focus: FocusMemory, unit: ImportUnit, onOpen: (PlaylistId, String) -> Unit, onAddSource: () -> Unit) {
+fun LibrarySection(
+    focus: FocusMemory,
+    unit: ImportUnit,
+    onOpen: (PlaylistId, String) -> Unit,
+    onPlay: (PlaylistId, String) -> Unit,
+    onAddSource: () -> Unit,
+    onFirstKey: (String?) -> Unit = {},
+    onContentBack: ((() -> Unit)?) -> Unit = {},
+) {
     val graph = LocalAppGraph.current
     val revision by graph.revision.collectAsState()
     val activity by graph.activity.collectAsState()
@@ -88,7 +103,8 @@ fun LibrarySection(focus: FocusMemory, unit: ImportUnit, onOpen: (PlaylistId, St
     var loaded by remember { mutableStateOf(false) }
     var groups by remember { mutableStateOf<List<LibraryGroupRow>>(emptyList()) }
     var status by remember { mutableStateOf<ImportStatus?>(null) }
-    var category by rememberSaveable { mutableStateOf<String?>(null) }
+    // Null: the shelves. Otherwise the full grid, filtered as Browse describes.
+    var browse by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(revision) {
         val source = graph.currentSource()
@@ -109,18 +125,68 @@ fun LibrarySection(focus: FocusMemory, unit: ImportUnit, onOpen: (PlaylistId, St
         )
         return
     }
+    // The tile a grid was opened from, so going back lands on it.
+    var returnTo by remember { mutableStateOf<String?>(null) }
+    if (browse == null) {
+        LibraryShelves(
+            focus,
+            current,
+            unit,
+            onOpen = { onOpen(current, it) },
+            onPlay = { onPlay(current, it) },
+            onBrowse = { browse = it },
+            onFirstKey = onFirstKey,
+            returnTo = returnTo,
+            onReturned = { returnTo = null },
+        )
+        return
+    }
+    val filter = browse ?: Browse.ALL
+    // Back from a grid returns to the shelves, on the tile that opened it.
+    val backToShelves = {
+        returnTo = filter
+        browse = null
+    }
+    val category = filter.removePrefix("category:").takeIf { filter.startsWith("category:") }
+    // Opening a grid puts the remote on its category, so Right reaches the titles as it always has.
+    LaunchedEffect(filter) {
+        val key = category?.let { LibraryTags.category(it) } ?: LibraryTags.CATEGORY_ALL
+        repeat(FOCUS_ATTEMPTS) {
+            if (focus.requestFocus(key)) return@LaunchedEffect
+            delay(50)
+        }
+    }
+    val heading = when {
+        filter.startsWith("genre:") -> filter.removePrefix("genre:")
+        filter.startsWith("decade:") -> stringResource(R.string.library_decade, filter.removePrefix("decade:").toInt())
+        category != null -> groups.firstOrNull { it.id == category }?.title
+        else -> null
+    }
     val importing = activity[current]?.let { if (unit == ImportUnit.MOVIES) it.moviesRunning else it.seriesRunning } == true
     val resolver = rememberArtworkResolver(current)
     val coroutines = rememberCoroutineScope()
     var menuFor by remember { mutableStateOf<PosterItem?>(null) }
 
+    // The shell asks first when Back is pressed in the content: a grid goes back to its shelves before the remote goes
+    // to the navigation. A BackHandler here would not do — the shell's re-registers whenever the navigation gains or
+    // loses focus, and the last one registered wins.
+    DisposableEffect(filter) {
+        onContentBack { backToShelves() }
+        onDispose { onContentBack(null) }
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(start = Tokens.space6, end = Tokens.safeHorizontal, top = Tokens.space8),
+            // The section is drawn under the navigation (its shelves' picture runs beneath it), so the grid starts clear of it.
+            modifier = Modifier.fillMaxSize().padding(
+                start = Tokens.railCollapsedWidth + Tokens.space6,
+                end = Tokens.safeHorizontal,
+                top = Tokens.space8,
+            ),
             verticalArrangement = Arrangement.spacedBy(Tokens.space4),
         ) {
             Text(
-                stringResource(if (unit == ImportUnit.MOVIES) R.string.section_movies else R.string.section_series),
+                listOfNotNull(stringResource(if (unit == ImportUnit.MOVIES) R.string.section_movies else R.string.section_series), heading)
+                    .joinToString("  ·  "),
                 style = MaterialTheme.typography.displaySmall,
                 color = Tokens.textPrimary,
                 modifier = Modifier.padding(start = Tokens.space4),
@@ -135,9 +201,9 @@ fun LibrarySection(focus: FocusMemory, unit: ImportUnit, onOpen: (PlaylistId, St
                         CategoryItem(
                             stringResource(if (unit == ImportUnit.MOVIES) R.string.library_all_movies else R.string.library_all_series),
                             null,
-                            category == null,
+                            filter == Browse.ALL,
                             Modifier.rememberedFocus(focus, LibraryTags.CATEGORY_ALL),
-                        ) { category = null }
+                        ) { browse = Browse.ALL }
                     }
                     items(groups.size, key = { groups[it].id }) { index ->
                         val group = groups[index]
@@ -147,7 +213,7 @@ fun LibrarySection(focus: FocusMemory, unit: ImportUnit, onOpen: (PlaylistId, St
                             category == group.id,
                             Modifier.rememberedFocus(focus, LibraryTags.category(group.id)),
                         ) {
-                            category = group.id
+                            browse = Browse.category(group.id)
                         }
                     }
                 }
@@ -155,7 +221,7 @@ fun LibrarySection(focus: FocusMemory, unit: ImportUnit, onOpen: (PlaylistId, St
                     focus = focus,
                     playlist = current,
                     unit = unit,
-                    category = category,
+                    filter = filter,
                     revision = revision,
                     emptyText = stringResource(
                         when {
@@ -225,7 +291,7 @@ private fun PosterGrid(
     focus: FocusMemory,
     playlist: PlaylistId,
     unit: ImportUnit,
-    category: String?,
+    filter: String,
     revision: Int,
     emptyText: String,
     resolver: ((UrlTemplate) -> String?)?,
@@ -235,19 +301,29 @@ private fun PosterGrid(
 ) {
     val graph = LocalAppGraph.current
     val coroutines = rememberCoroutineScope()
-    var items by remember(playlist, category) { mutableStateOf<List<PosterItem>?>(null) }
-    var exhausted by remember(playlist, category) { mutableStateOf(false) }
+    var items by remember(playlist, filter) { mutableStateOf<List<PosterItem>?>(null) }
+    var exhausted by remember(playlist, filter) { mutableStateOf(false) }
+    val category = filter.removePrefix("category:").takeIf { filter.startsWith("category:") }
+    val genre = filter.removePrefix("genre:").takeIf { filter.startsWith("genre:") }
+    val decade = filter.removePrefix("decade:").takeIf { filter.startsWith("decade:") }?.toInt()
     var loading by remember { mutableStateOf(false) }
 
     suspend fun page(offset: Int): List<PosterItem> = if (unit == ImportUnit.MOVIES) {
-        graph.movies(playlist, category, PAGE_SIZE, offset).map {
+        when {
+            genre != null -> graph.moviesOfGenre(playlist, genre, PAGE_SIZE, offset)
+            decade != null -> graph.moviesOfDecade(playlist, decade, PAGE_SIZE, offset)
+            else -> graph.movies(playlist, category, PAGE_SIZE, offset)
+        }.map {
             PosterItem(it.id, it.title, it.year?.toString(), it.poster, it.progress?.takeIf { p -> !p.completed }?.fraction)
         }
     } else {
-        graph.series(playlist, category, PAGE_SIZE, offset).map { PosterItem(it.id, it.title, it.year?.toString(), it.poster, null) }
+        when {
+            genre != null -> graph.seriesOfGenre(playlist, genre, PAGE_SIZE, offset)
+            else -> graph.series(playlist, category, PAGE_SIZE, offset)
+        }.map { PosterItem(it.id, it.title, it.year?.toString(), it.poster, null) }
     }
 
-    LaunchedEffect(playlist, category, revision) {
+    LaunchedEffect(playlist, filter, revision) {
         val first = page(0)
         items = first
         exhausted = first.size < PAGE_SIZE
@@ -325,4 +401,5 @@ private val CATEGORY_WIDTH = 220.dp
 private val PREVIEW_DELAY = 900.milliseconds
 
 private const val PAGE_SIZE = 120
+private const val FOCUS_ATTEMPTS = 20
 private const val LOAD_AHEAD = 24

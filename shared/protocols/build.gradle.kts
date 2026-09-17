@@ -28,6 +28,7 @@ val embedFixtures = tasks.register<EmbedFixtureBytes>("embedFixtures") {
             "vodStreamsJson" to fixtures.file("xtream/vod-streams.json").asFile,
             "seriesJson" to fixtures.file("xtream/series.json").asFile,
             "seriesInfoJson" to fixtures.file("xtream/series-info.json").asFile,
+            "vodInfoJson" to fixtures.file("xtream/vod-info.json").asFile,
             "seriesInfoEpisodesArrayJson" to fixtures.file("xtream/series-info-episodes-array.json").asFile,
             "shortEpgJson" to fixtures.file("xtream/short-epg.json").asFile,
             "partialVodCategoriesJson" to fixtures.file("xtream/partial-failure/vod-categories.json").asFile,

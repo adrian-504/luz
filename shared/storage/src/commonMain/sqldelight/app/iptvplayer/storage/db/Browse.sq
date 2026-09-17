@@ -1,0 +1,148 @@
+-- Shelves Luz builds itself instead of listing the provider's categories (ADR-0035): top rated, popular, by genre, by
+-- decade, new episodes, versions of a film, My List. Films are shown one per work (is_primary; a row imported before
+-- schema 7 has no work yet and counts as its own). Every query leaves out what the viewer has hidden.
+
+topRatedMovies:
+SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
+FROM movie mo
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND (mo.is_primary IS NULL OR mo.is_primary = 1)
+    AND mo.rating_value > 0
+    AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
+ORDER BY mo.rating_value DESC, mo.added_at DESC
+LIMIT :limit;
+
+-- "Popular" without an outside source: the rating, less two points for every year since the film was added, so a
+-- well-rated film from this month ranks above an equally rated one from five years ago. Only films added since :since
+-- are scored — the index finds them without reading the rest of the library.
+popularMovies:
+SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
+FROM movie mo
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.added_at >= :since
+    AND (mo.is_primary IS NULL OR mo.is_primary = 1) AND mo.rating_value > 0
+    AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
+ORDER BY mo.rating_value - ((:now - mo.added_at) / 31536000000.0) * 2 DESC
+LIMIT :limit;
+
+moviesOfGenre:
+SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
+FROM title_genre g
+JOIN movie mo ON mo.playlist_id = g.playlist_id AND mo.snapshot = :snapshot AND mo.id = g.content_id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+WHERE g.playlist_id = :playlistId AND g.content_type = 'MOVIE' AND g.genre = :genre AND (mo.is_primary IS NULL OR mo.is_primary = 1)
+    AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
+ORDER BY mo.added_at DESC
+LIMIT :limit OFFSET :offset;
+
+movieGenres:
+SELECT g.genre, COUNT(*) AS title_count
+FROM title_genre g
+JOIN movie mo ON mo.playlist_id = g.playlist_id AND mo.snapshot = :snapshot AND mo.id = g.content_id
+WHERE g.playlist_id = :playlistId AND g.content_type = 'MOVIE' AND (mo.is_primary IS NULL OR mo.is_primary = 1)
+GROUP BY g.genre
+ORDER BY title_count DESC
+LIMIT :limit;
+
+moviesOfDecade:
+SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
+FROM movie mo
+LEFT JOIN title_detail d ON d.playlist_id = mo.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = mo.id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND (mo.is_primary IS NULL OR mo.is_primary = 1)
+    AND COALESCE(d.year, mo.year) BETWEEN :fromYear AND :toYear
+    AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
+ORDER BY CAST(COALESCE(d.rating, mo.rating) AS REAL) DESC, mo.added_at DESC
+LIMIT :limit OFFSET :offset;
+
+movieDecades:
+SELECT (COALESCE(d.year, mo.year) / 10) * 10 AS decade, COUNT(*) AS title_count
+FROM movie mo
+LEFT JOIN title_detail d ON d.playlist_id = mo.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = mo.id
+WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND (mo.is_primary IS NULL OR mo.is_primary = 1)
+    AND COALESCE(d.year, mo.year) IS NOT NULL
+GROUP BY decade
+ORDER BY decade DESC;
+
+movieVersions:
+SELECT mo.id, mo.title, mo.quality, mo.tags, mo.language
+FROM movie mo
+WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot
+    AND mo.work_key = (SELECT m2.work_key FROM movie m2 WHERE m2.playlist_id = :playlistId AND m2.snapshot = :snapshot AND m2.id = :id)
+ORDER BY CASE mo.quality WHEN 'UHD' THEN 0 WHEN 'FHD' THEN 1 WHEN 'HD' THEN 2 WHEN 'SD' THEN 4 ELSE 3 END, mo.sort_order;
+
+favoriteMovies:
+SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, 1 AS is_favorite
+FROM favorite f
+JOIN movie mo ON mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.id = f.content_id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
+WHERE f.content_type = 'MOVIE'
+    AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
+ORDER BY f.created_at DESC
+LIMIT :limit;
+
+recentlyWatchedMovieIds:
+SELECT content_id FROM watch_state
+WHERE playlist_id = :playlistId AND content_type = 'MOVIE'
+ORDER BY last_played_at DESC
+LIMIT :limit;
+
+newEpisodeSeries:
+SELECT s.*, (f.content_id IS NOT NULL) AS is_favorite
+FROM series s
+LEFT JOIN favorite f ON f.content_type = 'SERIES' AND f.content_id = s.id
+WHERE s.playlist_id = :playlistId AND s.snapshot = :snapshot AND s.last_modified_at IS NOT NULL
+    AND s.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'SERIES')
+ORDER BY s.last_modified_at DESC
+LIMIT :limit;
+
+topRatedSeries:
+SELECT s.*, (f.content_id IS NOT NULL) AS is_favorite
+FROM series s
+LEFT JOIN favorite f ON f.content_type = 'SERIES' AND f.content_id = s.id
+WHERE s.playlist_id = :playlistId AND s.snapshot = :snapshot AND s.rating_value > 0
+    AND s.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'SERIES')
+ORDER BY s.rating_value DESC, s.last_modified_at DESC
+LIMIT :limit;
+
+-- Shows have no "date added"; the date of their newest episode stands in, which is what makes a show feel current.
+popularSeries:
+SELECT s.*, (f.content_id IS NOT NULL) AS is_favorite
+FROM series s
+LEFT JOIN favorite f ON f.content_type = 'SERIES' AND f.content_id = s.id
+WHERE s.playlist_id = :playlistId AND s.snapshot = :snapshot AND s.last_modified_at >= :since AND s.rating_value > 0
+    AND s.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'SERIES')
+ORDER BY s.rating_value - ((:now - s.last_modified_at) / 31536000000.0) * 2 DESC
+LIMIT :limit;
+
+seriesOfGenre:
+SELECT s.*, (f.content_id IS NOT NULL) AS is_favorite
+FROM title_genre g
+JOIN series s ON s.playlist_id = g.playlist_id AND s.snapshot = :snapshot AND s.id = g.content_id
+LEFT JOIN favorite f ON f.content_type = 'SERIES' AND f.content_id = s.id
+WHERE g.playlist_id = :playlistId AND g.content_type = 'SERIES' AND g.genre = :genre
+    AND s.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'SERIES')
+ORDER BY s.last_modified_at DESC
+LIMIT :limit OFFSET :offset;
+
+seriesGenres:
+SELECT g.genre, COUNT(*) AS title_count
+FROM title_genre g
+JOIN series s ON s.playlist_id = g.playlist_id AND s.snapshot = :snapshot AND s.id = g.content_id
+WHERE g.playlist_id = :playlistId AND g.content_type = 'SERIES'
+GROUP BY g.genre
+ORDER BY title_count DESC
+LIMIT :limit;
+
+favoriteSeries:
+SELECT s.*, 1 AS is_favorite
+FROM favorite f
+JOIN series s ON s.playlist_id = :playlistId AND s.snapshot = :snapshot AND s.id = f.content_id
+WHERE f.content_type = 'SERIES'
+    AND s.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'SERIES')
+ORDER BY f.created_at DESC
+LIMIT :limit;

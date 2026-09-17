@@ -29,7 +29,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
@@ -41,7 +43,9 @@ import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.storage.EpisodeRow
 import app.iptvplayer.storage.MovieRow
+import app.iptvplayer.storage.MovieVersionRow
 import app.iptvplayer.storage.SeriesRow
+import app.iptvplayer.storage.TitleDetailRow
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.FocusMemory
@@ -58,6 +62,8 @@ import app.iptvplayer.tv.ui.theme.LuzEmptyState
 import app.iptvplayer.tv.ui.theme.LuzHero
 import app.iptvplayer.tv.ui.theme.LuzIconButton
 import app.iptvplayer.tv.ui.theme.LuzIcons
+import app.iptvplayer.tv.ui.theme.LuzMenu
+import app.iptvplayer.tv.ui.theme.LuzMenuItem
 import app.iptvplayer.tv.ui.theme.LuzShelf
 import app.iptvplayer.tv.ui.theme.LuzStatusLine
 import app.iptvplayer.tv.ui.theme.Tokens
@@ -70,6 +76,10 @@ object DetailTags {
     const val PLAY_FROM_START = "detail-play-from-start"
     const val FAVORITE = "detail-favorite"
     const val EPISODES_STATUS = "detail-episodes-status"
+    const val TRAILER = "detail-trailer"
+    const val ABOUT = "detail-about"
+
+    fun person(name: String, directed: Boolean) = "detail-person-${if (directed) "d" else "c"}-$name"
 
     fun season(number: Int) = "detail-season-$number"
 
@@ -77,65 +87,132 @@ object DetailTags {
 }
 
 /**
- * A film (FR-VOD-001), as a page of its own (DESIGN_SYSTEM.md §10): its picture across the whole screen, the title and
- * the facts over its lower left, and what can be done — Play or Resume, start again, keep it — directly beneath.
+ * A film (FR-VOD-001), as a page of its own (DESIGN_SYSTEM.md §10): its picture across most of the screen, the title, the
+ * facts and badges over its lower left, and what can be done — Play or Resume, start again, the trailer, keep it —
+ * directly beneath. Below: the people in it, and everything else the provider sent about it (ADR-0035).
+ *
+ * The provider's page for the film is fetched the first time it is opened, unless the background fetch already has it.
+ * When the provider lists the film in several versions (4K, HD, another language), Play asks which.
  */
 @Composable
-fun MovieDetailScreen(playlistId: PlaylistId, movieId: String, onPlay: (fromStart: Boolean) -> Unit) {
+fun MovieDetailScreen(
+    playlistId: PlaylistId,
+    movieId: String,
+    onPlay: (id: String, fromStart: Boolean) -> Unit,
+    onPerson: (String) -> Unit,
+) {
     val graph = LocalAppGraph.current
+    val context = LocalContext.current
     val coroutines = rememberCoroutineScope()
     val revision by graph.revision.collectAsState()
     val watched by graph.watchRevision.collectAsState()
     val focus = rememberFocusMemory()
     var movie by remember { mutableStateOf<MovieRow?>(null) }
+    var detail by remember { mutableStateOf<TitleDetailRow?>(null) }
+    var versions by remember { mutableStateOf<List<MovieVersionRow>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
+    var choosing by remember { mutableStateOf<Boolean?>(null) }
+    var trailerMissing by remember { mutableStateOf(false) }
     LaunchedEffect(revision, watched) {
         movie = graph.movie(playlistId, movieId)
+        detail = graph.detail(playlistId, ContentType.MOVIE, movieId)
         loaded = true
+        if (movie != null) {
+            versions = graph.movieVersions(playlistId, movieId)
+            if (detail == null && graph.loadMovieDetail(playlistId, movieId)) {
+                detail = graph.detail(playlistId, ContentType.MOVIE, movieId)
+            }
+        }
     }
     val resolver = rememberArtworkResolver(playlistId)
     if (!loaded) return DetailRoom()
     val item = movie ?: return NotFound()
+    val info = detail
     val resume = item.progress?.takeIf { !it.completed && it.position.isPositive() }
+    val backdrop = info?.backdrop ?: item.backdrop ?: item.poster
+    val ambient = rememberAmbientColor(backdrop, resolver)
+    val genres = info?.genres?.takeIf { it.isNotEmpty() } ?: item.genres
+    val duration = info?.duration ?: item.duration
+    val rating = info?.rating ?: item.rating
+    val credits = creditsOf(info?.directors.orEmpty(), info?.cast.orEmpty())
+    val play = { fromStart: Boolean -> if (versions.size > 1) choosing = fromStart else onPlay(item.id, fromStart) }
 
-    // A film is one screen: the picture fills it, so there is no list behind it and nothing for an edge to show against.
-    Box(Modifier.fillMaxSize().background(Tokens.bgBase)) {
-        LuzHero(
-            title = item.title,
-            meta = listOfNotNull(
-                item.year?.toString(),
-                item.duration?.let { durationText(it) },
-                item.genres.take(2).joinToString(", ").ifEmpty { null },
-                item.rating,
-            ),
-            detail = item.plot,
-            modifier = Modifier.fillMaxSize(),
-            artworkOf = item.backdrop ?: item.poster,
-            actions = {
-                LuzButton(
-                    if (resume != null) {
-                        stringResource(R.string.detail_resume, clock(resume.position.inWholeMilliseconds))
-                    } else {
-                        stringResource(R.string.detail_play)
-                    },
-                    { onPlay(false) },
-                    Modifier.rememberedFocus(focus, DetailTags.PLAY),
-                    kind = ButtonKind.PRIMARY,
-                    icon = LuzIcons.Play,
-                )
-                if (resume != null) {
-                    LuzIconButton(
-                        LuzIcons.Restart,
-                        stringResource(R.string.detail_play_from_start),
-                        { onPlay(true) },
-                        Modifier.rememberedFocus(focus, DetailTags.PLAY_FROM_START),
+    DetailRoom(ambient, MOVIE_HERO_FRACTION) {
+        item(key = "hero") {
+            LuzHero(
+                title = item.title,
+                meta = listOfNotNull(
+                    (item.year ?: info?.year)?.toString(),
+                    duration?.let { durationText(it) },
+                    genres.take(2).joinToString(", ").ifEmpty { null },
+                    info?.ageRating,
+                    rating?.let { "\u2605 $it" },
+                ),
+                badges = badgesOf(item.quality, item.tags, item.language),
+                detail = info?.plot ?: item.plot,
+                detailLines = HERO_PLOT_LINES,
+                modifier = Modifier.fillParentMaxHeight(MOVIE_HERO_FRACTION),
+                room = ambient,
+                artworkOf = backdrop,
+                actions = {
+                    LuzButton(
+                        if (resume != null) {
+                            stringResource(R.string.detail_resume, clock(resume.position.inWholeMilliseconds))
+                        } else {
+                            stringResource(R.string.detail_play)
+                        },
+                        { play(false) },
+                        Modifier.rememberedFocus(focus, DetailTags.PLAY),
+                        kind = ButtonKind.PRIMARY,
+                        icon = LuzIcons.Play,
                     )
-                }
-                FavoriteButton(item.isFavorite, focus) {
-                    coroutines.launch { graph.setFavorite(ContentType.MOVIE, item.id, !item.isFavorite) }
-                }
+                    if (resume != null) {
+                        LuzIconButton(
+                            LuzIcons.Restart,
+                            stringResource(R.string.detail_play_from_start),
+                            { play(true) },
+                            Modifier.rememberedFocus(focus, DetailTags.PLAY_FROM_START),
+                        )
+                    }
+                    info?.trailer?.let { trailer ->
+                        LuzIconButton(
+                            LuzIcons.Trailer,
+                            stringResource(if (trailerMissing) R.string.detail_trailer_unavailable else R.string.detail_trailer),
+                            { trailerMissing = !openTrailer(context, trailer) },
+                            Modifier.rememberedFocus(focus, DetailTags.TRAILER),
+                        )
+                    }
+                    FavoriteButton(item.isFavorite, focus) {
+                        coroutines.launch { graph.setFavorite(ContentType.MOVIE, item.id, !item.isFavorite) }
+                    }
+                },
+            ) { art, modifier -> Backdrop(art, resolver, modifier) }
+        }
+        if (credits.isNotEmpty()) {
+            item(key = "credits") { CreditsShelf(credits, focus, onPerson) }
+        }
+        item(key = "about") {
+            AboutPanel(
+                plot = info?.plot ?: item.plot,
+                facts = factsOf(
+                    genres, info?.releaseDate, item.year ?: info?.year, duration, info?.ageRating, rating, info?.country,
+                    info?.directors.orEmpty(), info?.cast.orEmpty(),
+                ),
+                modifier = Modifier.rememberedFocus(focus, DetailTags.ABOUT),
+            )
+        }
+    }
+    choosing?.let { fromStart ->
+        LuzMenu(
+            title = stringResource(R.string.detail_choose_version),
+            items = versions.map { version ->
+                LuzMenuItem(
+                    key = version.id,
+                    label = badgesOf(version.quality, version.tags, version.language).joinToString(" · ").ifEmpty { version.title },
+                ) { onPlay(version.id, fromStart) }
             },
-        ) { art, modifier -> Backdrop(art, resolver, modifier) }
+            onDismiss = { choosing = null },
+        )
     }
     RestoreFocusEffect(focus, DetailTags.PLAY)
 }
@@ -146,13 +223,19 @@ fun MovieDetailScreen(playlistId: PlaylistId, movieId: String, onPlay: (fromStar
  * from the provider the first time a series is opened.
  */
 @Composable
-fun SeriesDetailScreen(playlistId: PlaylistId, seriesId: String, onPlayEpisode: (episodeId: String, fromStart: Boolean) -> Unit) {
+fun SeriesDetailScreen(
+    playlistId: PlaylistId,
+    seriesId: String,
+    onPlayEpisode: (episodeId: String, fromStart: Boolean) -> Unit,
+    onPerson: (String) -> Unit,
+) {
     val graph = LocalAppGraph.current
     val coroutines = rememberCoroutineScope()
     val revision by graph.revision.collectAsState()
     val watched by graph.watchRevision.collectAsState()
     val focus = rememberFocusMemory()
     var series by remember { mutableStateOf<SeriesRow?>(null) }
+    var detail by remember { mutableStateOf<TitleDetailRow?>(null) }
     var episodes by remember { mutableStateOf<List<EpisodeRow>?>(null) }
     var failed by remember { mutableStateOf(false) }
     var loaded by remember { mutableStateOf(false) }
@@ -166,6 +249,7 @@ fun SeriesDetailScreen(playlistId: PlaylistId, seriesId: String, onPlayEpisode: 
             failed = !graph.loadSeriesDetail(playlistId, seriesId)
             lastWatchedId = graph.lastWatchedEpisodeId(seriesId)
             episodes = graph.episodes(playlistId, seriesId)
+            detail = graph.detail(playlistId, ContentType.SERIES, seriesId)
         }
     }
     val resolver = rememberArtworkResolver(playlistId)
@@ -191,8 +275,16 @@ fun SeriesDetailScreen(playlistId: PlaylistId, seriesId: String, onPlayEpisode: 
         item(key = "hero") {
             LuzHero(
                 title = item.title,
-                meta = listOfNotNull(item.year?.toString(), item.genres.take(2).joinToString(", ").ifEmpty { null }, item.rating),
-                detail = item.plot,
+                meta = listOfNotNull(
+                    item.year?.toString(),
+                    seasons.size.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.series_seasons, it, it) },
+                    item.genres.take(2).joinToString(", ").ifEmpty { null },
+                    detail?.ageRating,
+                    item.rating?.let { "\u2605 $it" },
+                ),
+                badges = badgesOf(item.quality, item.tags, item.language),
+                detail = item.plot ?: detail?.plot,
+                detailLines = HERO_PLOT_LINES,
                 modifier = Modifier.fillParentMaxHeight(Tokens.HERO_HEIGHT_FRACTION),
                 room = ambient,
                 artworkOf = item.backdrop ?: item.poster,
@@ -241,6 +333,21 @@ fun SeriesDetailScreen(playlistId: PlaylistId, seriesId: String, onPlayEpisode: 
                 }
             }
         }
+        val info = detail
+        val credits = creditsOf(info?.directors.orEmpty(), info?.cast.orEmpty())
+        if (credits.isNotEmpty()) {
+            item(key = "credits") { CreditsShelf(credits, focus, onPerson) }
+        }
+        item(key = "about") {
+            AboutPanel(
+                plot = item.plot ?: info?.plot,
+                facts = factsOf(
+                    item.genres, info?.releaseDate, item.year, null, info?.ageRating, item.rating, info?.country,
+                    info?.directors.orEmpty(), info?.cast.orEmpty(),
+                ),
+                modifier = Modifier.rememberedFocus(focus, DetailTags.ABOUT),
+            )
+        }
     }
     RestoreFocusEffect(focus, DetailTags.PLAY)
 }
@@ -251,11 +358,15 @@ fun SeriesDetailScreen(playlistId: PlaylistId, seriesId: String, onPlayEpisode: 
  * room is simply dark, so opening a page never flashes.
  */
 @Composable
-private fun DetailRoom(ambient: Color = Tokens.bgBase, content: LazyListScope.() -> Unit = {}) {
+private fun DetailRoom(
+    ambient: Color = Tokens.bgBase,
+    heroFraction: Float = Tokens.HERO_HEIGHT_FRACTION,
+    content: LazyListScope.() -> Unit = {},
+) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(0f to ambient, Tokens.HERO_HEIGHT_FRACTION to ambient, 1f to Tokens.bgBase)),
+            .background(Brush.verticalGradient(0f to ambient, heroFraction to ambient, 1f to Tokens.bgBase)),
     ) {
         CalmScrolling {
             LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(Tokens.shelfSpacing)) {
@@ -369,4 +480,6 @@ internal fun durationText(duration: Duration): String {
 }
 
 private val WATCHED_MARK = 24.dp
+private const val MOVIE_HERO_FRACTION = 0.86f
+private const val HERO_PLOT_LINES = 3
 private val WATCHED_ICON = 14.dp

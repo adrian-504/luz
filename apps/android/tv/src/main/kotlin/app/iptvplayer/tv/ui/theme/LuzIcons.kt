@@ -135,6 +135,26 @@ object LuzIcons {
         lineTo(16f, 12f)
         lineTo(9.5f, 18.5f)
     }
+    val Trailer = icon("trailer") {
+        roundRect(3f, 5.5f, 21f, 18.5f, 3f)
+        moveTo(10f, 9f)
+        lineTo(15f, 12f)
+        lineTo(10f, 15f)
+        close()
+    }
+    val Person = icon("person") {
+        circle(12f, 8.5f, 3.8f)
+        moveTo(4.5f, 20f)
+        curveTo(5.5f, 16f, 8.4f, 14f, 12f, 14f)
+        curveTo(15.6f, 14f, 18.5f, 16f, 19.5f, 20f)
+    }
+    val Versions = icon("versions") {
+        roundRect(3.5f, 7.5f, 16.5f, 19.5f, 2.5f)
+        moveTo(7.5f, 4.5f)
+        lineTo(18f, 4.5f)
+        curveTo(19.4f, 4.5f, 20.5f, 5.6f, 20.5f, 7f)
+        lineTo(20.5f, 15.5f)
+    }
     val Restart = icon("restart") {
         moveTo(4.5f, 12f)
         curveTo(4.5f, 7.9f, 7.9f, 4.5f, 12f, 4.5f)
