@@ -582,6 +582,12 @@ class AppGraph(context: Context) {
         null
     }
 
+    suspend fun moviesInUserGroup(playlistId: PlaylistId, groupId: String, limit: Int): List<MovieRow> =
+        io { library.moviesInUserGroup(playlistId, groupId, limit) }
+
+    suspend fun seriesInUserGroup(playlistId: PlaylistId, groupId: String, limit: Int): List<SeriesRow> =
+        io { library.seriesInUserGroup(playlistId, groupId, limit) }
+
     suspend fun recordChannelWatch(playlistId: PlaylistId, channelId: ChannelId) = io {
         library.recordChannelWatch(playlistId, channelId.value)
     }

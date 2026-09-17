@@ -13,11 +13,14 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.iptvplayer.domain.model.CustomisationTarget
+import app.iptvplayer.domain.model.ImportStatus
+import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.tv.app.IptvApplication
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.library.HOME_ROW_TITLES
 import app.iptvplayer.tv.ui.library.HomeTags
+import app.iptvplayer.tv.ui.library.LibraryTags
 import app.iptvplayer.tv.ui.live.LiveTags
 import app.iptvplayer.tv.ui.settings.SettingsTags
 import app.iptvplayer.tv.ui.shell.Section
@@ -122,6 +125,39 @@ class CustomisationFlowTest {
         }
         awaitFocus(LuzPromptTags.CONFIRM)
         rule.pressOkUntil(timeoutMs = 10_000) { done() }
+    }
+
+    @Test
+    fun aFilmCanBePutIntoAGroupTheViewerMakesAndTheGroupBecomesAShelf() {
+        awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
+        rule.waitUntil(30_000) { runBlocking { graph.libraryState(playlist, ImportUnit.MOVIES) }?.status == ImportStatus.PUBLISHED }
+        val film = runBlocking { graph.recentMovies(playlist, 1) }.single()
+        press(KeyEvent.KEYCODE_BACK)
+        rule.waitUntil(5_000) { focusedTag()?.startsWith("rail-") == true }
+        walkTabsTo(
+            Section.MOVIES,
+            ::focusedTag,
+            { key -> press(key) },
+        ) { timeout, condition -> runCatching { rule.waitUntil(timeout, condition) } }
+        awaitFocus(ShellTags.rail(Section.MOVIES))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        val card = LibraryTags.shelfItem("recent", film.id)
+        awaitFocus(card, timeout = 20_000)
+
+        // Hold OK on the poster: its menu, then "Add to a group…", then a new group named here.
+        longPressOk()
+        awaitExists(LuzMenuTags.MENU)
+        repeat(4) { if (focusedTag() != LuzMenuTags.item("add-to-group")) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitFocus(LuzMenuTags.item("add-to-group"))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(LuzMenuTags.item("new-group"))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        renameTo("Film night") { runBlocking { graph.userGroups(playlist) }.any { it.title == "Film night" } }
+
+        val group = runBlocking { graph.userGroups(playlist) }.single()
+        assertEquals(1L to 0L, group.movieCount to group.channelCount)
+        // The group is a shelf of Movies, and not a list of channels in Live TV.
+        awaitExists(LibraryTags.shelfItem("group-${group.id}", film.id), timeout = 20_000)
     }
 
     @Test

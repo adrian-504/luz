@@ -56,7 +56,14 @@ public data class UnitStateRecord(
     public val errorCode: String?,
 )
 
-public data class GroupRow(public val id: String, public val title: String, public val channelCount: Long)
+public data class GroupRow(
+    public val id: String,
+    public val title: String,
+    public val channelCount: Long,
+    /** For the viewer's own groups: how many films and shows they hold (a provider category holds none). */
+    public val movieCount: Long = 0,
+    public val seriesCount: Long = 0,
+)
 
 public data class ChannelRow(
     public val id: ChannelId,
@@ -372,8 +379,8 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
         customisationQueries.deleteGroup(playlistId.value, id)
     }
 
-    public fun userGroups(playlistId: PlaylistId): List<GroupRow> =
-        customisationQueries.userGroups(playlistId.value).executeAsList().map { GroupRow(it.id, it.title, it.member_count) }
+    public fun userGroups(playlistId: PlaylistId): List<GroupRow> = customisationQueries.userGroups(playlistId.value).executeAsList()
+        .map { GroupRow(it.id, it.title, it.channel_count, it.movie_count, it.series_count) }
 
     public fun addToGroup(playlistId: PlaylistId, groupId: String, type: ContentType, id: String) {
         val order = customisationQueries.nextMemberOrder(playlistId.value, groupId).executeAsOne()

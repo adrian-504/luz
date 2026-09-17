@@ -200,6 +200,14 @@ class DetailStoreTest {
         content.setFavorite(ContentType.MOVIE, "mv_2", true)
         assertEquals(listOf("Collateral"), library.favoriteMovies(playlist, 10).map { it.title })
 
+        // The viewer's own groups hold films too, and say how many of each kind they hold.
+        content.createGroup(playlist, "ugrp_1", "Heist night")
+        content.addToGroup(playlist, "ugrp_1", ContentType.MOVIE, "mv_2")
+        content.addToGroup(playlist, "ugrp_1", ContentType.MOVIE, "mv_1")
+        assertEquals(listOf("Collateral", "Heat"), library.moviesInUserGroup(playlist, "ugrp_1", 10).map { it.title }, "in the order added")
+        val group = content.userGroups(playlist).single()
+        assertEquals(2L to 0L, group.movieCount to group.channelCount)
+
         library.saveDetail(playlist, ContentType.MOVIE, "mv_1", TitleDetail(plot = "A heist.", trailer = "abc"))
         library.saveDetail(playlist, ContentType.MOVIE, "mv_2", TitleDetail(plot = "A night."))
         val coverage = assertNotNull(library.detailCoverage(playlist).singleOrNull { it.type == ContentType.MOVIE })

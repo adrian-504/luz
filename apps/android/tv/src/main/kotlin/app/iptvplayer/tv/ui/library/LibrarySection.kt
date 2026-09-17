@@ -40,7 +40,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.PlaylistId
-import app.iptvplayer.domain.model.CustomisationTarget
+import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.domain.security.UrlTemplate
@@ -79,7 +79,14 @@ object LibraryTags {
 }
 
 /** One poster in a library grid. */
-data class PosterItem(val id: String, val title: String, val caption: String?, val poster: UrlTemplate?, val watched: Float?)
+data class PosterItem(
+    val id: String,
+    val title: String,
+    val caption: String?,
+    val poster: UrlTemplate?,
+    val watched: Float?,
+    val favorite: Boolean = false,
+)
 
 /**
  * Movies or Series (DESIGN_SYSTEM.md §5, FR-VOD-001, FR-SER-001): categories on the left, a poster grid on the right. Items
@@ -239,16 +246,11 @@ fun LibrarySection(
         }
 
         menuFor?.let { item ->
-            val target = if (unit == ImportUnit.MOVIES) CustomisationTarget.MOVIE else CustomisationTarget.SERIES
-            LuzMenu(
-                title = item.title,
-                items = listOf(
-                    LuzMenuItem("open", stringResource(R.string.menu_open)) { onOpen(current, item.id) },
-                    LuzMenuItem(
-                        "hide",
-                        stringResource(if (unit == ImportUnit.MOVIES) R.string.menu_hide_movie else R.string.menu_hide_series),
-                    ) { coroutines.launch { graph.hide(current, target, item.id) } },
-                ),
+            val type = if (unit == ImportUnit.MOVIES) ContentType.MOVIE else ContentType.SERIES
+            TitleMenu(
+                current,
+                TitleTarget(type, item.id, item.title, item.favorite),
+                onOpen = { onOpen(current, item.id) },
                 onDismiss = {
                     menuFor = null
                     coroutines.launch {
@@ -306,21 +308,24 @@ private fun PosterGrid(
     val category = filter.removePrefix("category:").takeIf { filter.startsWith("category:") }
     val genre = filter.removePrefix("genre:").takeIf { filter.startsWith("genre:") }
     val decade = filter.removePrefix("decade:").takeIf { filter.startsWith("decade:") }?.toInt()
+    val mine = filter.removePrefix("mine:").takeIf { filter.startsWith("mine:") }
     var loading by remember { mutableStateOf(false) }
 
     suspend fun page(offset: Int): List<PosterItem> = if (unit == ImportUnit.MOVIES) {
         when {
+            mine != null -> if (offset == 0) graph.moviesInUserGroup(playlist, mine, Int.MAX_VALUE) else emptyList()
             genre != null -> graph.moviesOfGenre(playlist, genre, PAGE_SIZE, offset)
             decade != null -> graph.moviesOfDecade(playlist, decade, PAGE_SIZE, offset)
             else -> graph.movies(playlist, category, PAGE_SIZE, offset)
         }.map {
-            PosterItem(it.id, it.title, it.year?.toString(), it.poster, it.progress?.takeIf { p -> !p.completed }?.fraction)
+            PosterItem(it.id, it.title, it.year?.toString(), it.poster, it.progress?.takeIf { p -> !p.completed }?.fraction, it.isFavorite)
         }
     } else {
         when {
+            mine != null -> if (offset == 0) graph.seriesInUserGroup(playlist, mine, Int.MAX_VALUE) else emptyList()
             genre != null -> graph.seriesOfGenre(playlist, genre, PAGE_SIZE, offset)
             else -> graph.series(playlist, category, PAGE_SIZE, offset)
-        }.map { PosterItem(it.id, it.title, it.year?.toString(), it.poster, null) }
+        }.map { PosterItem(it.id, it.title, it.year?.toString(), it.poster, null, it.isFavorite) }
     }
 
     LaunchedEffect(playlist, filter, revision) {

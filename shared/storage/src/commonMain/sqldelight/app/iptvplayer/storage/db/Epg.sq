@@ -78,7 +78,7 @@ SELECT COUNT(*) FROM channel_epg_link WHERE playlist_id = ?;
 
 -- Programmes of linked channels that have not ended before :now and start within the look-ahead, per channel by start.
 guideForChannels:
-SELECT l.channel_id, p.title, p.start_utc, p.end_utc
+SELECT l.channel_id, p.title, p.start_utc, p.end_utc, p.description
 FROM channel_epg_link l
 JOIN epg_active_snapshot a ON a.source_id = l.epg_source_id
 JOIN epg_program p ON p.source_id = l.epg_source_id AND p.snapshot = a.snapshot AND p.channel_key = l.epg_channel_id

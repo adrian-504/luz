@@ -139,9 +139,10 @@ class LiveTvFlowTest {
             runCatching { rule.onNodeWithTag(PlayerTags.STATE).assertExistsWithText(stateText(PlaybackState.PLAYING)) }.isSuccess
         }
 
-        // Hide the overlay, zap down twice quickly: the banner follows at once, one stream is opened for channel 3.
+        // Hide the overlay, zap forward twice quickly with Right (ADR-0036): the bar follows at once, one stream is opened
+        // for channel 3.
         press(KeyEvent.KEYCODE_BACK)
-        press(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_DOWN)
+        press(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_RIGHT)
         // The banner is transient (and the test clock runs fast), so the result is read from the overlay title.
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitExists(PlayerTags.TITLE, "Test Sports")
@@ -164,14 +165,22 @@ class LiveTvFlowTest {
         rule.waitUntil(20_000) {
             runCatching { rule.onNodeWithTag(PlayerTags.STATE).assertExistsWithText(stateText(PlaybackState.PLAYING)) }.isSuccess
         }
-        repeat(6) {
+        // Diagnostics: the controls are up (the state reads "Playing" only there); Info, last in their row, opens the panel
+        // on its Info tab, and Advanced is under it.
+        repeat(
+            8,
+        ) { if (runCatching { rule.onNodeWithTag(PlayerTags.INFO).assertIsFocused() }.isFailure) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        awaitFocus(PlayerTags.INFO)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(PlayerTags.tab("INFO"))
+        repeat(3) {
             if (runCatching {
                     rule.onNodeWithTag(
                         PlayerTags.DIAGNOSTICS_TOGGLE,
                     ).assertIsFocused()
                 }.isFailure
             ) {
-                press(KeyEvent.KEYCODE_DPAD_RIGHT)
+                press(KeyEvent.KEYCODE_DPAD_DOWN)
             }
         }
         awaitFocus(PlayerTags.DIAGNOSTICS_TOGGLE)

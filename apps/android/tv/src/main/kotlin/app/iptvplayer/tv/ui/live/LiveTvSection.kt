@@ -161,7 +161,9 @@ fun LiveTvSection(
         sources = graph.sources()
         playlist = source?.playlistId
         groups = source?.let { graph.groups(it.playlistId) }.orEmpty()
+        // Groups of channels, and new empty ones; a group the viewer filled with films belongs to Movies and Series.
         myGroups = source?.let { graph.userGroups(it.playlistId) }.orEmpty()
+            .filter { it.channelCount > 0 || it.movieCount + it.seriesCount == 0L }
         loaded = true
     }
     if (!loaded) return LuzSkeletonRows(Modifier.padding(start = Tokens.space6, top = Tokens.space16))

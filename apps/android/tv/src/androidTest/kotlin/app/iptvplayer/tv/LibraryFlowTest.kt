@@ -222,7 +222,8 @@ class LibraryFlowTest {
 
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitPlaying()
-        awaitText(PlayerTags.PROGRESS, "0:30")
+        // The bar shows the time played and the time left (ADR-0036).
+        awaitText(PlayerTags.PROGRESS, "−0:")
         // Hide the overlay, then skip 20 s forward with Right (movies seek instead of switching channels).
         press(KeyEvent.KEYCODE_BACK)
         press(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_RIGHT)

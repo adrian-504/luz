@@ -81,8 +81,13 @@ deleteGroup {
     DELETE FROM user_group WHERE playlist_id = :playlistId AND id = :id;
 }
 
+-- A group holds whatever the viewer puts in it; the counts per kind let Live TV list the groups of channels and Movies
+-- and Series the groups of titles.
 userGroups:
-SELECT g.id, g.title, COUNT(m.content_id) AS member_count
+SELECT g.id, g.title,
+    COUNT(CASE WHEN m.content_type = 'CHANNEL' THEN 1 END) AS channel_count,
+    COUNT(CASE WHEN m.content_type = 'MOVIE' THEN 1 END) AS movie_count,
+    COUNT(CASE WHEN m.content_type = 'SERIES' THEN 1 END) AS series_count
 FROM user_group g
 LEFT JOIN user_group_member m ON m.playlist_id = g.playlist_id AND m.group_id = g.id
 WHERE g.playlist_id = :playlistId

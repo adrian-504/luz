@@ -158,7 +158,9 @@ leaving and returning restores the element last focused; dialogs trap focus; the
 
 ## 7. Icons
 `LuzIcons`: one family of rounded line drawings on a 24-unit grid with a 1.8 stroke, drawn as vectors — no icon library.
-Home, Live TV, Guide, Movies, Series, Favorites, Search, Settings, Diagnostics, Play, Add, Check, Info, Chevron, Restart.
+Home, Live TV, Guide, Movies, Series, Favorites, Search, Settings, Diagnostics, Play, Pause, Add, Check, Info, Chevron,
+Restart, Trailer, Person, Versions, Back 10, Forward 10, Next episode, Subtitles, Audio, Last channel, Channel list,
+Warning.
 
 ## 8. Motion and scrolling
 
@@ -173,15 +175,20 @@ down, which pushed Home's hero off the screen the moment the remote landed on Pl
 ## 9. Home
 A featured title fills two thirds of the screen — a slow carousel (9 s, never while the remote is on it) of what the
 viewer is part-way through, then recent films and series with wide artwork; Play/Resume/Episodes, favourite,
-information, next. The room takes the featured picture's colour. Shelves beneath: Continue watching (landscape),
-favourite channels or Live now (logo plates), Recently added movies, Series. Empty shelves are left out; the viewer
-chooses and orders them in Settings → Home. The remote lands on the hero's Play.
+information, next. The room takes the featured picture's colour. Shelves beneath (ADR-0035): Continue watching (landscape),
+Your channels (favourites, then the most watched) or Live now, Popular films, New episodes, Recently added movies,
+Because you watched…, Highest rated films, Popular shows, Highest rated shows, My List. Empty shelves are left out, and
+so is a shelf that mostly repeats one above it; the viewer chooses and orders them in Settings → Home. On first opening,
+rows appear as they are read. The remote lands on the hero's Play.
 
 ## 10. Detail pages
-**Film:** one screen — the backdrop across all of it, title, facts (year, length, genre, rating), description, and
-Play/Resume (with the time), start again, favourite. **Series:** the same hero at two thirds, then seasons as quiet
-capsules over a shelf of episode cards (still, "3. Title", length, progress, a tick once watched). Cast, director and
-related titles are not shown yet: the data is not imported (ROADMAP).
+**Film:** the backdrop across most of the screen, title, facts (year, length, genres, age rating, ★ rating), badges
+(4K, HDR, language — outlined small capitals), the description, and Play/Resume (with the time), start again, Trailer
+(opens YouTube), favourite. Play on a film the provider lists in several versions asks which. Below: **Cast & Crew** — a
+shelf of round plates with initials, director first; OK opens the person's page — and an **About / Information** panel
+with the whole description and the facts. **Series:** the same hero at two thirds with the season count, then seasons as
+quiet capsules over a shelf of episode cards, then Cast & Crew and About. **Person:** the name large, how many titles,
+and their films and shows as shelves.
 
 ## 11. Live TV
 A screen title; categories (the chosen one white on glass); above the channels, **what is on the channel under the
@@ -196,14 +203,17 @@ shade brighter with a thin amber mark; the focused block is brightest with a whi
 Cells are drawn, not built from surfaces.
 
 ## 13. Movies and Series
-A screen title, categories as in Live TV, and a poster grid of `LuzCard`s that loads a page at a time. Holding OK on a
-poster offers Open and Hide.
+Drawn under the rail like Home: a featured title with a backdrop, then shelves Luz builds (ADR-0035) — Continue watching,
+Recently added / New episodes, Popular, Because you watched…, Highest rated, My List, the viewer's own groups, the six
+largest genres — then glass tiles for every genre, decade and provider category ("Browse all categories"). A tile opens
+the full grid: categories on the left and a poster grid that loads a page at a time; Back returns to the tile. Holding OK
+on a poster offers Open, My List, Add to a group…, Hide.
 
 ## 14. Search
 The query written large with a search symbol; a **letter strip** beneath it (123/abc, space, a–z, delete) so the remote
 types without the system keyboard covering the results; a hairline; results as shelves — channels, films, series —
-updating 150 ms after each change. OK on the line still opens the system keyboard. Searching by actor or director waits
-for that data to be imported.
+updating 150 ms after each change, with a **People** shelf (round plates, "In 12 titles" / "Director · 3 titles") that
+opens a person's page. OK on the line still opens the system keyboard.
 
 ## 15. Onboarding
 **Welcome to Luz** — "Your TV. Your providers. Your content." — with one honest sentence that Luz ships no content, and
@@ -212,24 +222,38 @@ the lower right) because there is no artwork to show before a provider exists. *
 a card with what it needs in plain words. Forms use glass fields and one white *Connect*.
 
 ## 16. Settings and providers
-A screen title; a short list of sections that do something (Providers, Home, Hidden items when something is hidden,
-About, Developer in debug builds); the chosen one on the right under its own heading. The directive's other sections —
+A screen title; a short list of sections that do something (Providers, Home, Film & show details once there is a
+provider — how many pages have been fetched and what share of them has each kind of detail — Hidden items when something
+is hidden, About, Developer in debug builds); the chosen one on the right under its own heading. The directive's other sections —
 playback, subtitles, appearance, parental controls, storage, privacy, account, devices — arrive with the features they
 configure, never as empty pages. A **provider** is a glass card: a status dot (green working, yellow failing, grey
 updating), name, address, channel count, encryption warning, guide status, and Refresh / Guide link / Remove.
 
-## 17. Player
-Nothing on the picture by default. OK brings the controls up out of a gradient at the foot of the picture: title large,
-programme, state, a thin progress line for films, and pill buttons (white Pause/Play). They fade after a few seconds. A
-zap shows a small glass banner in the corner. Audio and subtitles open as a glass sheet from the right; diagnostics as a
-glass panel. An error dims the picture from the left and says what happened, with Retry first.
+## 17. Player (ADR-0036)
+Nothing on the picture by default. OK brings the controls up out of a gradient at the foot of the picture, with the clock
+in the top corner:
+
+- **Films and episodes:** the title large, the episode, badges (from the title and from the decoder: 4K/HD/SD, Dolby
+  Vision, Dolby Digital), a full-width progress bar with the time played under its left end and the time left under its
+  right, and a row of round symbols — Play/Pause (white, focused), back 10 s, forward 10 s, next episode, Subtitles,
+  Audio, Info. Up from the row reaches the bar, where Left/Right scrub and the picture jumps when the remote rests.
+- **Television:** the **live bar** — a glass band with the logo plate, number, name, a red LIVE mark, what is on with its
+  times and progress, and what is next — over the symbols Play/Pause, favourite, previous channel, channel list,
+  Subtitles, Audio, Info. A channel change shows the live bar alone for three seconds.
+
+The **panel** comes down from the top on Down (or Subtitles / Audio / Info): tabs Info, Subtitles, Audio; Info holds the
+description of the film or the programme and **Advanced**, behind which the diagnostics sit. The **channel list** lays
+the list the channel came from over the left of the picture on Up, the playing channel focused. **Up next** is a glass
+card in the lower right during an episode's last 20 seconds, then counts down from 10 and plays the next one. Buffering is
+a small turning arc in the corner, shown only after 600 ms. An **error** dims the picture from the left: a warning symbol,
+what happened, what to do, and Try again (white), Next channel (television), Details.
 
 ## 18. Remote behaviour
 
 | Input | Behaviour |
 |---|---|
-| Up/Down | Rows, channels, shelves; in the player with controls hidden: zap |
-| Left/Right | Columns, cards, time; Left at the edge of content opens the rail; Right in the rail returns |
+| Up/Down | Rows, channels, shelves; in the player with controls hidden: Up — the channel list (television) or the controls, Down — the panel |
+| Left/Right | Columns, cards, time; Left at the edge of content opens the rail; Right in the rail returns; in the player with controls hidden: skip 10 s (faster while held) or the previous/next channel |
 | OK | Open / play / choose; in the player: show controls |
 | Hold OK | The item's menu (channels, categories, posters, Home rows) |
 | Back | Close a menu → leave content for the rail → Home → leave the app; in the player: hide controls, then leave |
@@ -257,9 +281,8 @@ Built and verified on the owner's Bbox TV (22 device tests, screenshots of every
 Not yet, and why:
 
 - **Help & Diagnostics** screen and rail entry — interface step 4.
-- **Cast, director, actor search, highest rated rows** — the provider data is not imported yet (ROADMAP).
-- **Favorites** is still the Live TV channel list; a library with films and series needs favourite films and series
-  listed from storage (they can already be saved).
+- **Favorites** in the rail is still the Live TV channel list; favourite films and shows are My List on Home and in
+  Movies and Series.
 - **Hero cast and "last synced"** on provider cards — not stored.
 - **Blur** — not used; this hardware cannot afford it, so materials are denser instead.
 - **Frame timing** of the redesigned Live TV and Guide rows is re-measured in PERFORMANCE.md §6.3.

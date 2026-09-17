@@ -20,6 +20,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +57,7 @@ import app.iptvplayer.tv.ui.theme.Tokens
 import app.iptvplayer.tv.ui.theme.luzClickable
 import app.iptvplayer.tv.ui.theme.luzLift
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * What a full grid of films or shows is filtered by, written as a short string so the choice survives leaving the screen:
@@ -69,6 +71,8 @@ object Browse {
     fun genre(name: String) = "genre:$name"
 
     fun decade(start: Int) = "decade:$start"
+
+    fun group(id: String) = "mine:$id"
 }
 
 /** A title on a shelf, whichever kind it is. */
@@ -81,6 +85,7 @@ private data class ShelfItem(
     val plot: String?,
     val facts: List<String>,
     val progress: Float?,
+    val favorite: Boolean,
 )
 
 /** A tile that opens a full grid: a genre, a decade, a category. */
@@ -135,6 +140,7 @@ fun LibraryShelves(
             row.plot,
             listOfNotNull(row.year?.toString(), row.genres.firstOrNull(), row.rating?.let { "★ $it" }),
             row.progress?.takeIf { !it.completed }?.fraction,
+            row.isFavorite,
         )
         fun series(row: SeriesRow) = ShelfItem(
             row.id,
@@ -145,6 +151,7 @@ fun LibraryShelves(
             row.plot,
             listOfNotNull(row.year?.toString(), row.genres.firstOrNull(), row.rating?.let { "★ $it" }),
             null,
+            row.isFavorite,
         )
         fun titles(key: String, title: Int, items: List<ShelfItem>) = Shelf.Titles(key, resources.getString(title), items)
         val built = mutableListOf<Shelf>()
@@ -154,7 +161,7 @@ fun LibraryShelves(
                 is Shelf.Tiles -> shelf.tiles.isEmpty()
             }
             if (empty) return
-            val personal = shelf.key == "continue" || shelf.key == "mine"
+            val personal = shelf.key == "continue" || shelf.key == "mine" || shelf.key.startsWith("group-")
             val kept = withoutRepeats(built.filterIsInstance<Shelf.Titles>() + listOfNotNull(shelf as? Shelf.Titles), { !personal }) {
                 it.items.map { item -> item.id }
             }
@@ -178,11 +185,17 @@ fun LibraryShelves(
             }
             add(titles("top", R.string.home_top_movies, graph.topRatedMovies(playlist, SHELF_LIMIT).map(::movie)))
             add(titles("mine", R.string.home_my_list, graph.favoriteMovies(playlist, SHELF_LIMIT).map(::movie)))
+            for (group in graph.userGroups(playlist).filter { it.movieCount > 0 }) {
+                add(Shelf.Titles("group-${group.id}", group.title, graph.moviesInUserGroup(playlist, group.id, SHELF_LIMIT).map(::movie)))
+            }
         } else {
             add(titles("new", R.string.home_new_episodes, graph.newEpisodeSeries(playlist, SHELF_LIMIT).map(::series)))
             add(titles("popular", R.string.home_popular_series, graph.popularSeries(playlist, SHELF_LIMIT).map(::series)))
             add(titles("top", R.string.home_top_series, graph.topRatedSeries(playlist, SHELF_LIMIT).map(::series)))
             add(titles("mine", R.string.home_my_list, graph.favoriteSeries(playlist, SHELF_LIMIT).map(::series)))
+            for (group in graph.userGroups(playlist).filter { it.seriesCount > 0 }) {
+                add(Shelf.Titles("group-${group.id}", group.title, graph.seriesInUserGroup(playlist, group.id, SHELF_LIMIT).map(::series)))
+            }
         }
         // Publish what is ready before the genre shelves, which take longer on a large library.
         shelves = built.toList()
@@ -238,6 +251,8 @@ fun LibraryShelves(
         shelves = built.toList()
     }
 
+    var menuFor by remember { mutableStateOf<Pair<String, ShelfItem>?>(null) }
+    val coroutines = rememberCoroutineScope()
     val loaded = shelves ?: return LuzSkeletonShelf(CardShape.POSTER, Modifier.padding(top = Tokens.space16))
     val resolver = rememberArtworkResolver(playlist)
     val featured = remember(loaded) {
@@ -333,6 +348,7 @@ fun LibraryShelves(
                                     shape = CardShape.POSTER,
                                     progress = item.progress,
                                     modifier = Modifier.rememberedFocus(focus, LibraryTags.shelfItem(shelf.key, item.id)),
+                                    onLongClick = { menuFor = shelf.key to item },
                                     onClick = { onOpen(item.id) },
                                 ) { art -> ArtworkImage(item.poster, resolver, item.title, art) }
                             }
@@ -348,6 +364,22 @@ fun LibraryShelves(
                 item(key = "end") { Spacer(Modifier.height(Tokens.space10)) }
             }
         }
+    }
+    menuFor?.let { (shelfKey, item) ->
+        TitleMenu(
+            playlist,
+            TitleTarget(if (movies) ContentType.MOVIE else ContentType.SERIES, item.id, item.title, item.favorite),
+            onOpen = { onOpen(item.id) },
+            onDismiss = {
+                menuFor = null
+                coroutines.launch {
+                    repeat(RETURN_ATTEMPTS) {
+                        if (focus.requestFocus(LibraryTags.shelfItem(shelfKey, item.id))) return@launch
+                        delay(RETURN_INTERVAL_MS)
+                    }
+                }
+            },
+        )
     }
 }
 

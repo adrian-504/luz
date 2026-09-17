@@ -26,7 +26,13 @@ public data class ChannelEpgLinkRow(
     public val confidence: Int,
 )
 
-public data class GuideProgramme(public val title: String, public val start: Instant, public val end: Instant)
+public data class GuideProgramme(
+    public val title: String,
+    public val start: Instant,
+    public val end: Instant,
+    /** What the programme is about, when the guide says; shown in the player's information panel. */
+    public val description: String? = null,
+)
 
 public data class NowNextRow(public val current: GuideProgramme?, public val next: GuideProgramme?)
 
@@ -159,8 +165,22 @@ public class EpgStore(private val driver: SqlDriver) {
             val current = programmes.firstOrNull { it.start_utc <= now.epochSeconds && it.end_utc > now.epochSeconds }
             val next = programmes.firstOrNull { it.start_utc > now.epochSeconds }
             result[channel] = NowNextRow(
-                current?.let { GuideProgramme(it.title, Instant.fromEpochSeconds(it.start_utc), Instant.fromEpochSeconds(it.end_utc)) },
-                next?.let { GuideProgramme(it.title, Instant.fromEpochSeconds(it.start_utc), Instant.fromEpochSeconds(it.end_utc)) },
+                current?.let {
+                    GuideProgramme(
+                        it.title,
+                        Instant.fromEpochSeconds(it.start_utc),
+                        Instant.fromEpochSeconds(it.end_utc),
+                        it.description,
+                    )
+                },
+                next?.let {
+                    GuideProgramme(
+                        it.title,
+                        Instant.fromEpochSeconds(it.start_utc),
+                        Instant.fromEpochSeconds(it.end_utc),
+                        it.description,
+                    )
+                },
             )
         }
         return result

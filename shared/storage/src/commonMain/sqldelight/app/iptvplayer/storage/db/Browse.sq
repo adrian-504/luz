@@ -85,6 +85,28 @@ WHERE f.content_type = 'MOVIE'
 ORDER BY f.created_at DESC
 LIMIT :limit;
 
+-- Films and shows in one of the viewer's own groups, in the order they were added.
+moviesInUserGroup:
+SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
+FROM user_group_member m
+JOIN movie mo ON mo.playlist_id = m.playlist_id AND mo.snapshot = :snapshot AND mo.id = m.content_id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+WHERE m.playlist_id = :playlistId AND m.group_id = :groupId AND m.content_type = 'MOVIE'
+    AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
+ORDER BY m.sort_order
+LIMIT :limit;
+
+seriesInUserGroup:
+SELECT s.*, (f.content_id IS NOT NULL) AS is_favorite
+FROM user_group_member m
+JOIN series s ON s.playlist_id = m.playlist_id AND s.snapshot = :snapshot AND s.id = m.content_id
+LEFT JOIN favorite f ON f.content_type = 'SERIES' AND f.content_id = s.id
+WHERE m.playlist_id = :playlistId AND m.group_id = :groupId AND m.content_type = 'SERIES'
+    AND s.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'SERIES')
+ORDER BY m.sort_order
+LIMIT :limit;
+
 recentlyWatchedMovieIds:
 SELECT content_id FROM watch_state
 WHERE playlist_id = :playlistId AND content_type = 'MOVIE'

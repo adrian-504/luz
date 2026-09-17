@@ -87,7 +87,7 @@ internal class ShortGuide(
             }
             fetched++
             if (error != null) errors[error.code] = (errors[error.code] ?: 0) + 1
-            val rows = if (error != null) emptyList() else programmes.map { GuideProgramme(it.title, it.start, it.end) }
+            val rows = if (error != null) emptyList() else programmes.map { GuideProgramme(it.title, it.start, it.end, it.description) }
             lock.withLock {
                 cache.remove(key)
                 cache[key] = Entry(rows, now)

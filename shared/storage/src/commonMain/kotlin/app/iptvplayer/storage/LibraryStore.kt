@@ -650,6 +650,27 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
         }
     }
 
+    public fun moviesInUserGroup(playlistId: PlaylistId, groupId: String, limit: Int): List<MovieRow> {
+        val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return emptyList()
+        return browseQueries.moviesInUserGroup(snapshot, playlistId.value, groupId, limit.toLong()).executeAsList().map {
+            movieRow(
+                it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
+                it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite, it.quality, it.tags, it.language,
+                it.version_count,
+            )
+        }
+    }
+
+    public fun seriesInUserGroup(playlistId: PlaylistId, groupId: String, limit: Int): List<SeriesRow> {
+        val snapshot = active(playlistId, ImportUnit.SERIES) ?: return emptyList()
+        return browseQueries.seriesInUserGroup(snapshot, playlistId.value, groupId, limit.toLong()).executeAsList().map {
+            seriesRow(
+                it.id, it.title, it.year, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template, it.provider_series_id,
+                it.is_favorite, it.quality, it.tags, it.language, it.last_modified_at,
+            )
+        }
+    }
+
     public fun recentlyWatchedMovieIds(playlistId: PlaylistId, limit: Int): List<String> =
         browseQueries.recentlyWatchedMovieIds(playlistId.value, limit.toLong()).executeAsList()
 

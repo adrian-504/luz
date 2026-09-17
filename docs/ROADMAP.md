@@ -437,10 +437,10 @@ Movies, Series) are done — ADR-0035 — and verified on the Bbox with the owne
 | 14 | "Your channels" (favourites, then most watched) | **Done** |
 | 15–19 | Shelf-based Movies and Series, genre shelves, decades, "Because you watched", categories at the bottom | **Done** |
 | 20 | My List | **Done** — Home row and a shelf in Movies/Series |
-| 21 | The viewer's own groups of films and shows | Not started |
-| 22–26 | Player redesign, scrubbing, info/subtitles/audio panel, next-episode countdown, quality badges | Stage 3 — not started |
-| 27–29 | Live channel bar, channel list over the picture, programme info | Stage 3 — not started |
-| 30–32 | Clock, quiet buffering, error screen | Stage 3 — not started |
+| 21 | The viewer's own groups of films and shows | **Done** — hold OK on a poster → Add to a group…; each group is a shelf in Movies or Series (emulator device test) |
+| 22–26 | Player redesign, scrubbing, info/subtitles/audio panel, next-episode countdown, quality badges | **Done — ADR-0036** (emulator device tests; the owner's TV shows the new film controls) |
+| 27–29 | Live channel bar, channel list over the picture, programme info | **Done — ADR-0036** (emulator with the test provider; not yet seen with the owner's channels) |
+| 30–32 | Clock, quiet buffering, error screen | **Done — ADR-0036** |
 | 33–34 | Guide timeline redesign and speed, a channel's guide from its menu | Stage 4 — not started |
 
 Follow-ups found on the way: a budget for film and show import times on the reference television (88 s and 3 min 41 s

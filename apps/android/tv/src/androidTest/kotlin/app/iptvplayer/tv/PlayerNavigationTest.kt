@@ -100,13 +100,18 @@ class PlayerNavigationTest {
         press(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
         awaitText(PlayerTags.STATE, string(R.string.player_state_playing))
 
-        // Audio/Subtitles buttons appear before Diagnostics when the stream offers tracks (MPEG-TS may declare captions).
-        repeat(4) { if (focusedTag() != PlayerTags.DIAGNOSTICS_TOGGLE) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        // Diagnostics sit behind Info → Advanced (ADR-0036). Info is the last symbol in the row.
+        repeat(8) { if (focusedTag() != PlayerTags.INFO) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        awaitFocus(PlayerTags.INFO)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(PlayerTags.tab("INFO"))
+        repeat(3) { if (focusedTag() != PlayerTags.DIAGNOSTICS_TOGGLE) press(KeyEvent.KEYCODE_DPAD_DOWN) }
         awaitFocus(PlayerTags.DIAGNOSTICS_TOGGLE)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         rule.waitUntil(5_000) {
             rule.onAllNodes(androidx.compose.ui.test.hasTestTag(PlayerTags.DIAGNOSTICS_PANEL)).fetchSemanticsNodes().isNotEmpty()
         }
+        awaitGone(PlayerTags.TRACK_PANEL)
         press(KeyEvent.KEYCODE_BACK)
         awaitGone(PlayerTags.DIAGNOSTICS_PANEL)
         press(KeyEvent.KEYCODE_BACK)
@@ -131,12 +136,10 @@ class PlayerNavigationTest {
         awaitFocus(PlayerTags.PLAY_PAUSE)
         rule.waitUntil(10_000) { hasNode(PlayerTags.SUBTITLES) && hasNode(PlayerTags.AUDIO) }
 
-        // Subtitles: "Off" first, then the English track, whose cue text then appears on screen.
-        press(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_RIGHT)
+        // Subtitles: the panel opens on its tab with the current choice, "Off", focused; the English track is under it.
+        repeat(6) { if (focusedTag() != PlayerTags.SUBTITLES) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
         awaitFocus(PlayerTags.SUBTITLES)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitFocusWhere("a subtitle option") { it == PlayerTags.SUBTITLES_OFF || it.startsWith("player-track-") }
-        press(KeyEvent.KEYCODE_DPAD_UP)
         awaitFocus(PlayerTags.SUBTITLES_OFF)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitGone(PlayerTags.TRACK_PANEL)
@@ -152,7 +155,7 @@ class PlayerNavigationTest {
         rule.waitUntil(5_000) { hasNode(PlayerTags.SUBTITLE_TEXT) }
 
         // Audio: the default track has focus; choosing the second one keeps it selected when the menu reopens.
-        press(KeyEvent.KEYCODE_DPAD_LEFT)
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
         awaitFocus(PlayerTags.AUDIO)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         val first = awaitFocusWhere("the selected audio option") { it.startsWith("player-track-") }

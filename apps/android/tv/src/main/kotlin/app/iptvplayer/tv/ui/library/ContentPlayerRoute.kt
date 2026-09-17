@@ -39,19 +39,26 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
     var subtitle by remember { mutableStateOf<String?>(null) }
     var episode by remember { mutableStateOf<EpisodeRow?>(null) }
     var next by remember { mutableStateOf<EpisodeRow?>(null) }
+    var description by remember { mutableStateOf<String?>(null) }
+    var badges by remember { mutableStateOf<List<String>>(emptyList()) }
     var newSession by remember { mutableStateOf(true) }
 
     LaunchedEffect(id) {
         request = null
         newSession = true
         if (type == ContentType.MOVIE) {
-            title = graph.movie(playlistId, id)?.title.orEmpty()
+            val movie = graph.movie(playlistId, id)
+            title = movie?.title.orEmpty()
+            description = movie?.plot
+            badges = movie?.let { badgesOf(it.quality, it.tags, it.language) }.orEmpty()
         } else {
             val current = graph.episode(playlistId, id)
             episode = current
             val series = current?.let { graph.seriesById(playlistId, it.seriesId) }
             title = series?.title.orEmpty()
             subtitle = current?.let { "S${it.seasonNumber} E${it.episodeNumber}" + (it.title?.let { t -> " · $t" } ?: "") }
+            description = current?.plot ?: series?.plot
+            badges = series?.let { badgesOf(it.quality, it.tags, it.language) }.orEmpty()
             next = current?.let { NextEpisode.after(graph.episodes(playlistId, it.seriesId), it) }
         }
         val resolved = graph.contentPlaybackRequest(playlistId, type, id, startFromBeginning)
@@ -73,6 +80,8 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
                 graph.saveProgress(playlistId, type, id, episode?.seriesId, position, duration, ended, first)
             }
         },
+        description = description,
+        badges = badges,
         nextLabel = following?.let { stringResource(R.string.player_next_episode, it.seasonNumber, it.episodeNumber) },
         onNext = following?.let {
             {

@@ -18,7 +18,9 @@ import app.iptvplayer.domain.playback.ChannelHistory
 import app.iptvplayer.domain.playback.PreparationWindow
 import app.iptvplayer.platform.playback.PlaybackRequest
 import app.iptvplayer.storage.ChannelRow
+import app.iptvplayer.storage.NowNextRow
 import app.iptvplayer.tv.app.LocalAppGraph
+import app.iptvplayer.tv.ui.library.rememberArtworkResolver
 import app.iptvplayer.tv.ui.live.ChannelScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -46,6 +48,8 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
     var request by remember { mutableStateOf<PlaybackRequest?>(null) }
     var unavailable by remember { mutableStateOf(false) }
     var subtitle by remember { mutableStateOf<String?>(null) }
+    var guide by remember { mutableStateOf<NowNextRow?>(null) }
+    var listGuide by remember { mutableStateOf<Map<String, NowNextRow>>(emptyMap()) }
     var direction by remember { mutableIntStateOf(0) }
     var intentAtMs by remember { mutableStateOf<Long?>(null) }
     val history = remember { ChannelHistory<String>() }
@@ -77,7 +81,8 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
         graph.recordChannelWatch(playlistId, channel.id)
         lastChannel = history.last
         playingChannel = history.current
-        subtitle = graph.nowNext(playlistId, listOf(channel.id), Clock.System.now())[channel.id.value]?.current?.title
+        guide = graph.nowNext(playlistId, listOf(channel.id), Clock.System.now())[channel.id.value]
+        subtitle = guide?.current?.title
 
         // T0 preparation for the next switch; cancelled by the next key press (this effect restarts).
         val candidates = PreparationWindow.candidates(list.map { it.id.value }, index, direction, history.last)
@@ -90,8 +95,28 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
         }
     }
 
+    // What is on around the current channel, for the channel list over the picture; the stored guide only, and only the
+    // part of a list of thousands the viewer is likely to scroll to.
+    LaunchedEffect(index, revision) {
+        val around = list.subList((index - GUIDE_AROUND).coerceAtLeast(0), (index + GUIDE_AROUND).coerceAtMost(list.size))
+        listGuide = listGuide + graph.storedNowNext(playlistId, around.filter { it.id.value !in listGuide }, Clock.System.now())
+    }
+    val resolver = rememberArtworkResolver(playlistId)
     PlayerScreen(
         request = request,
+        live = LiveInfo(channel.number, channel.name, channel.logo, guide?.current, guide?.next),
+        channels = list.map { ChannelChoice(it.id.value, it.number, it.name, it.logo, listGuide[it.id.value]?.current?.title) },
+        currentChannelId = channel.id.value,
+        onChooseChannel = { id ->
+            if (id != target) {
+                intentAtMs = SystemClock.elapsedRealtime()
+                direction = 0
+                target = id
+                subtitle = null
+                guide = null
+            }
+        },
+        resolver = resolver,
         title = listOfNotNull(channel.number?.toString(), channel.name).joinToString("  "),
         subtitle = subtitle,
         unavailable = unavailable,
@@ -103,6 +128,7 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
                 direction = delta
                 target = list[(index + delta).mod(list.size)].id.value
                 subtitle = null
+                guide = null
             }
         },
         // "Previous" is the channel the viewer was watching. A channel only counts as watched once a zap has settled on it
@@ -121,3 +147,4 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
 }
 
 private const val ZAP_SETTLE_MS = 350L
+private const val GUIDE_AROUND = 60

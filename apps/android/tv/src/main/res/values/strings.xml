@@ -43,7 +43,6 @@
     <string name="player_play">Play</string>
     <string name="player_pause">Pause</string>
     <string name="player_retry">Try again</string>
-    <string name="player_diagnostics">Diagnostics</string>
     <string name="player_favorite">Add to favorites</string>
     <string name="player_unfavorite">Remove from favorites</string>
     <string name="player_diagnostics_title">Playback diagnostics</string>
@@ -51,6 +50,19 @@
     <string name="player_audio">Audio</string>
     <string name="player_subtitles">Subtitles</string>
     <string name="player_subtitles_off">Off</string>
+    <string name="player_info">Info</string>
+    <string name="player_advanced">Advanced</string>
+    <string name="player_details">Details</string>
+    <string name="player_back_10">Back 10 seconds</string>
+    <string name="player_forward_10">Forward 10 seconds</string>
+    <string name="player_channel_list">Channels</string>
+    <string name="player_next_channel">Next channel</string>
+    <string name="player_live">LIVE</string>
+    <string name="player_no_guide">No guide information</string>
+    <string name="player_no_description">No description.</string>
+    <string name="player_next_programme">Next · %1$s %2$s</string>
+    <string name="player_up_next">Up next</string>
+    <string name="player_next_in">Starts in %1$d s</string>
     <string name="player_track_number">Track %1$d</string>
     <string name="player_track_forced">%1$s (forced)</string>
     <plurals name="player_track_channels">
@@ -319,6 +331,8 @@
     <string name="menu_hide_series">Hide this series</string>
     <string name="hidden_movie">Film</string>
     <string name="hidden_series">Series</string>
+    <string name="menu_add_my_list">Add to My List</string>
+    <string name="menu_remove_my_list">Remove from My List</string>
     <string name="menu_add_to_group">Add to a group…</string>
     <string name="menu_add_to">Add to %1$s</string>
     <string name="menu_remove_from">Remove from %1$s</string>

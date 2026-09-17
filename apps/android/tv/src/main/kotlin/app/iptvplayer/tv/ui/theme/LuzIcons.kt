@@ -135,6 +135,101 @@ object LuzIcons {
         lineTo(16f, 12f)
         lineTo(9.5f, 18.5f)
     }
+    val Pause = filled("pause") {
+        roundRect(6.5f, 5f, 10f, 19f, 1.2f)
+        roundRect(14f, 5f, 17.5f, 19f, 1.2f)
+    }
+
+    // A circle open at the top with the arrow at its opening: counter-clockwise to go back, clockwise to go forward. No
+    // digits: at this size they blur into the stroke.
+    val Back10 = icon("back-10") {
+        moveTo(9f, 4.9f)
+        curveTo(6.3f, 5.9f, 4.5f, 8.7f, 4.5f, 12f)
+        curveTo(4.5f, 16.1f, 7.9f, 19.5f, 12f, 19.5f)
+        curveTo(16.1f, 19.5f, 19.5f, 16.1f, 19.5f, 12f)
+        curveTo(19.5f, 7.9f, 16.1f, 4.5f, 12f, 4.5f)
+        moveTo(12f, 4.5f)
+        lineTo(9.5f, 2f)
+        moveTo(12f, 4.5f)
+        lineTo(9.5f, 7f)
+    }
+    val Forward10 = icon("forward-10") {
+        moveTo(15f, 4.9f)
+        curveTo(17.7f, 5.9f, 19.5f, 8.7f, 19.5f, 12f)
+        curveTo(19.5f, 16.1f, 16.1f, 19.5f, 12f, 19.5f)
+        curveTo(7.9f, 19.5f, 4.5f, 16.1f, 4.5f, 12f)
+        curveTo(4.5f, 7.9f, 7.9f, 4.5f, 12f, 4.5f)
+        moveTo(12f, 4.5f)
+        lineTo(14.5f, 2f)
+        moveTo(12f, 4.5f)
+        lineTo(14.5f, 7f)
+    }
+    val NextEpisode = icon("next-episode") {
+        moveTo(6f, 6f)
+        lineTo(15f, 12f)
+        lineTo(6f, 18f)
+        close()
+        moveTo(18.5f, 6f)
+        lineTo(18.5f, 18f)
+    }
+    val Audio = icon("audio") {
+        moveTo(4f, 9.5f)
+        lineTo(7.5f, 9.5f)
+        lineTo(12f, 5.5f)
+        lineTo(12f, 18.5f)
+        lineTo(7.5f, 14.5f)
+        lineTo(4f, 14.5f)
+        close()
+        moveTo(15.5f, 9f)
+        curveTo(16.5f, 10f, 16.5f, 14f, 15.5f, 15f)
+        moveTo(18.5f, 6.5f)
+        curveTo(21f, 9f, 21f, 15f, 18.5f, 17.5f)
+    }
+    val Subtitles = icon("subtitles") {
+        roundRect(3f, 5.5f, 21f, 18.5f, 3f)
+        moveTo(7f, 11f)
+        lineTo(11f, 11f)
+        moveTo(13.5f, 11f)
+        lineTo(17f, 11f)
+        moveTo(7f, 14.5f)
+        lineTo(13f, 14.5f)
+    }
+    val LastChannel = icon("last-channel") {
+        moveTo(4.5f, 9f)
+        lineTo(17f, 9f)
+        moveTo(14f, 6f)
+        lineTo(17f, 9f)
+        lineTo(14f, 12f)
+        moveTo(19.5f, 15f)
+        lineTo(7f, 15f)
+        moveTo(10f, 12f)
+        lineTo(7f, 15f)
+        lineTo(10f, 18f)
+    }
+    val ChannelList = icon("channel-list") {
+        moveTo(8.5f, 6.5f)
+        lineTo(20f, 6.5f)
+        moveTo(8.5f, 12f)
+        lineTo(20f, 12f)
+        moveTo(8.5f, 17.5f)
+        lineTo(20f, 17.5f)
+        moveTo(4f, 6.5f)
+        lineTo(4.1f, 6.5f)
+        moveTo(4f, 12f)
+        lineTo(4.1f, 12f)
+        moveTo(4f, 17.5f)
+        lineTo(4.1f, 17.5f)
+    }
+    val Warning = icon("warning") {
+        moveTo(12f, 3.5f)
+        lineTo(21f, 19.5f)
+        lineTo(3f, 19.5f)
+        close()
+        moveTo(12f, 9.5f)
+        lineTo(12f, 14f)
+        moveTo(12f, 16.9f)
+        lineTo(12f, 17f)
+    }
     val Trailer = icon("trailer") {
         roundRect(3f, 5.5f, 21f, 18.5f, 3f)
         moveTo(10f, 9f)
