@@ -93,7 +93,11 @@ class CustomisationFlowTest {
         // Back reaches the rail; which entry it lands on depends on where focus was, so walk to Settings from wherever.
         press(KeyEvent.KEYCODE_BACK)
         rule.waitUntil(5_000) { focusedTag()?.startsWith("rail-") == true }
-        repeat(Section.entries.size * 2) { if (focusedTag() != ShellTags.rail(Section.SETTINGS)) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        walkTabsTo(Section.SETTINGS, ::focusedTag, { key -> press(key) }) { timeout, condition ->
+            runCatching {
+                rule.waitUntil(timeout, condition)
+            }
+        }
         awaitFocus(ShellTags.rail(Section.SETTINGS))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
     }

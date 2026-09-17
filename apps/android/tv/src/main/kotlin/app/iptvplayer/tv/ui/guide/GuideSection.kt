@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -29,11 +30,19 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
@@ -48,6 +57,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.epg.GuideMath
 import app.iptvplayer.epg.TimeWindow
 import app.iptvplayer.storage.ChannelRow
@@ -56,10 +66,17 @@ import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
+import app.iptvplayer.tv.ui.library.ArtworkImage
+import app.iptvplayer.tv.ui.library.rememberArtworkResolver
 import app.iptvplayer.tv.ui.live.ChannelScope
 import app.iptvplayer.tv.ui.live.EmptyState
 import app.iptvplayer.tv.ui.rememberedFocus
+import app.iptvplayer.tv.ui.shortTime
+import app.iptvplayer.tv.ui.theme.LuzButton
+import app.iptvplayer.tv.ui.theme.LuzIcons
+import app.iptvplayer.tv.ui.theme.MetadataLine
 import app.iptvplayer.tv.ui.theme.Tokens
+import app.iptvplayer.tv.ui.theme.luzClickable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.ZoneId
@@ -85,9 +102,11 @@ object GuideTags {
 
 private const val WINDOW_MINUTES = 180
 private const val PAGE_MINUTES = 90
-private val MINUTE_WIDTH: Dp = 3.2.dp
-private val CHANNEL_COLUMN: Dp = 200.dp
-private val ROW_HEIGHT: Dp = 56.dp
+
+// Wide enough that three hours fill the space beside the channel column on a 960 dp television.
+private val MINUTE_WIDTH: Dp = 3.45.dp
+private val CHANNEL_COLUMN: Dp = 196.dp
+private val ROW_HEIGHT: Dp = 52.dp
 
 /**
  * Guide grid (EPG.md §5): a 3-hour window, one row per channel, programme cells sized by duration and clipped to the window,
@@ -220,16 +239,17 @@ fun GuideSection(focus: FocusMemory, onPlay: (PlaylistId, ChannelScope, ChannelI
         }
     }
 
+    val resolver = rememberArtworkResolver(current)
     Column(
-        modifier = Modifier.fillMaxSize().padding(
-            start = Tokens.space8,
-            end = Tokens.safeHorizontal,
-            top = Tokens.safeVertical,
-            bottom = Tokens.safeVertical,
-        ),
+        modifier = Modifier.fillMaxSize().padding(start = Tokens.space6, end = Tokens.safeHorizontal, top = Tokens.space8),
+        verticalArrangement = Arrangement.spacedBy(Tokens.space3),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.space6)) {
-            ActionButton(
+        Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(start = Tokens.space4)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.space3)) {
+                Text(stringResource(R.string.section_guide), style = MaterialTheme.typography.displaySmall, color = Tokens.textPrimary)
+                ProgrammeDetails(rows.getOrNull(focusedRow), focusedProgramme)
+            }
+            LuzButton(
                 stringResource(R.string.guide_now),
                 {
                     now = Clock.System.now()
@@ -238,8 +258,8 @@ fun GuideSection(focus: FocusMemory, onPlay: (PlaylistId, ChannelScope, ChannelI
                     pendingFocusRow = focusedRow
                 },
                 Modifier.rememberedFocus(focus, GuideTags.NOW),
+                icon = LuzIcons.Restart,
             )
-            ProgrammeDetails(rows.getOrNull(focusedRow), focusedProgramme)
         }
         TimeHeader(window.start)
         if (activity[current]?.guideRunning == true) {
@@ -264,12 +284,13 @@ fun GuideSection(focus: FocusMemory, onPlay: (PlaylistId, ChannelScope, ChannelI
                     }
                     val loaded = channel.id.value in programmes
                     val cells = visible(channel)
-                    GuideRow(channel, window) {
+                    GuideRow(channel, window, resolver) {
                         if (loaded && cells.isEmpty()) {
                             GuideCell(
                                 stringResource(R.string.live_no_guide),
                                 0.dp,
                                 MINUTE_WIDTH * WINDOW_MINUTES,
+                                airing = false,
                                 Modifier.rememberedFocus(focus, cellKey(rowIndex, channel, 0, null)).onFocusChanged {
                                     if (it.isFocused) {
                                         focusedRow = rowIndex
@@ -288,7 +309,8 @@ fun GuideSection(focus: FocusMemory, onPlay: (PlaylistId, ChannelScope, ChannelI
                                 GuideCell(
                                     programme.title,
                                     x,
-                                    width - 2.dp,
+                                    width - CELL_GAP,
+                                    airing = programme.start <= now && now < programme.end,
                                     Modifier.rememberedFocus(focus, cellKey(rowIndex, channel, index, programme)).onFocusChanged {
                                         if (it.isFocused) {
                                             focusedRow = rowIndex
@@ -308,96 +330,153 @@ fun GuideSection(focus: FocusMemory, onPlay: (PlaylistId, ChannelScope, ChannelI
                 Box(
                     modifier = Modifier
                         .offset { IntOffset((CHANNEL_COLUMN + MINUTE_WIDTH * (now - window.start).inWholeMinutes.toInt()).roundToPx(), 0) }
-                        .width(2.dp)
+                        .width(NOW_LINE)
                         .fillMaxHeight()
-                        .background(Tokens.stateLive),
+                        .background(Tokens.stateLive.copy(alpha = NOW_LINE_ALPHA)),
                 )
             }
         }
     }
 }
 
+/** The programme under the remote, large, with its channel and times beneath: the guide's context line. */
 @Composable
 private fun ProgrammeDetails(channel: ChannelRow?, programme: GuideProgramme?) {
-    val format = remember { DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()) }
-    Column(modifier = Modifier.testTag(GuideTags.DETAILS).semantics(mergeDescendants = true) {}) {
+    Column(
+        modifier = Modifier.height(DETAILS_HEIGHT).testTag(GuideTags.DETAILS).semantics(mergeDescendants = true) {},
+        verticalArrangement = Arrangement.spacedBy(Tokens.space1),
+    ) {
         Text(
             programme?.title ?: channel?.name.orEmpty(),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.headlineMedium,
             color = Tokens.textPrimary,
         )
         if (programme != null && channel != null) {
-            Text(
+            MetadataLine(
                 listOf(
                     channel.name,
-                    stringResource(
-                        R.string.guide_programme_time,
-                        format.format(programme.start.toJavaInstant()),
-                        format.format(programme.end.toJavaInstant()),
-                    ),
-                ).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
-                color = Tokens.textSecondary,
+                    stringResource(R.string.guide_programme_time, shortTime(programme.start), shortTime(programme.end)),
+                ),
             )
         }
     }
 }
 
+/** The half hours across the top of the grid, small and quiet, over a hairline. */
 @Composable
 private fun TimeHeader(start: Instant) {
-    val format = remember { DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()) }
-    Box(modifier = Modifier.fillMaxWidth().height(32.dp).padding(top = Tokens.space2)) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(TIME_HEADER_HEIGHT)
+            .drawBehind {
+                drawLine(Tokens.hairline, Offset(0f, size.height - 1f), Offset(size.width, size.height - 1f), 1f)
+            },
+    ) {
         for (slot in 0 until WINDOW_MINUTES / 30) {
             val time = start + (slot * 30).minutes
             Text(
-                format.format(time.toJavaInstant()),
-                style = MaterialTheme.typography.bodySmall,
-                color = Tokens.textSecondary,
+                shortTime(time),
+                style = MaterialTheme.typography.labelMedium,
+                color = Tokens.textTertiary,
                 modifier = Modifier
-                    .offset(x = CHANNEL_COLUMN + MINUTE_WIDTH * (slot * 30))
+                    .offset(x = CHANNEL_COLUMN + MINUTE_WIDTH * (slot * 30) + Tokens.space2)
                     .then(if (slot == 0) Modifier.testTag(GuideTags.WINDOW_START) else Modifier),
             )
         }
     }
 }
 
+/** One channel's row: its logo and name in a column of their own, then its programmes along the time line. */
 @Composable
-private fun GuideRow(channel: ChannelRow, window: TimeWindow, cells: @Composable () -> Unit) {
-    Row(modifier = Modifier.height(ROW_HEIGHT)) {
-        Text(
-            channel.name,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.labelLarge,
-            color = Tokens.textPrimary,
-            modifier = Modifier.width(CHANNEL_COLUMN).padding(end = Tokens.space3, top = Tokens.space4),
-        )
+private fun GuideRow(channel: ChannelRow, window: TimeWindow, resolver: ((UrlTemplate) -> String?)?, cells: @Composable () -> Unit) {
+    Row(modifier = Modifier.height(ROW_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.width(CHANNEL_COLUMN).padding(end = Tokens.space3),
+            horizontalArrangement = Arrangement.spacedBy(Tokens.space3),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ArtworkImage(
+                channel.logo,
+                resolver,
+                null,
+                Modifier.width(LOGO_WIDTH).height(LOGO_HEIGHT).clip(RoundedCornerShape(Tokens.radiusSmall)),
+                LOGO_PX_WIDTH,
+                LOGO_PX_HEIGHT,
+                fit = true,
+                inset = Tokens.space1,
+            )
+            Text(
+                channel.name,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleSmall,
+                color = Tokens.textPrimary,
+            )
+        }
         Box(modifier = Modifier.width(MINUTE_WIDTH * (window.duration.inWholeMinutes.toInt())).height(ROW_HEIGHT)) { cells() }
     }
 }
 
+/**
+ * A programme: a soft glass block as long as it runs. What is on now is a shade brighter with a thin mark at its start;
+ * the block under the remote is brightest and catches a white edge.
+ *
+ * Drawn, not built from surfaces: the guide can show several hundred of these, and a focus move repaints two of them
+ * instead of rebuilding them (PERFORMANCE.md §6.2).
+ */
 @Composable
-private fun GuideCell(title: String, x: Dp, width: Dp, modifier: Modifier, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier.offset(x = x).width(width).height(ROW_HEIGHT),
-        shape = ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(Tokens.radiusSmall)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Tokens.bgSurface1, focusedContainerColor = Tokens.bgSurface3),
-        border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(Tokens.focusRingWidth, Tokens.focusRing))),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+private fun GuideCell(title: String, x: Dp, width: Dp, airing: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val focused = remember { mutableStateOf(false) }
+    val density = LocalDensity.current
+    val radius = with(density) { Tokens.radiusMedium.toPx() }
+    val line = with(density) { Tokens.focusRingWidth.toPx() }
+    val mark = with(density) { AIRING_MARK.toPx() }
+    Box(
+        modifier = modifier
+            .offset(x = x)
+            .width(width)
+            .height(ROW_HEIGHT - CELL_GAP)
+            .luzClickable(onClick = onClick, onFocus = { focused.value = it })
+            .drawBehind {
+                val corner = CornerRadius(radius, radius)
+                val fill = when {
+                    focused.value -> Tokens.raisedFocused
+                    airing -> AIRING_FILL
+                    else -> Tokens.raised
+                }
+                drawRoundRect(fill, cornerRadius = corner)
+                if (airing && !focused.value) drawRect(Tokens.accent, size = Size(mark, size.height), topLeft = Offset(0f, 0f))
+                if (focused.value) {
+                    drawRoundRect(
+                        Tokens.focusRing.copy(alpha = Tokens.FOCUS_RING_ALPHA),
+                        topLeft = Offset(line / 2, line / 2),
+                        size = Size(size.width - line, size.height - line),
+                        cornerRadius = corner,
+                        style = Stroke(line),
+                    )
+                }
+            }
+            .padding(horizontal = Tokens.space3),
+        contentAlignment = Alignment.CenterStart,
     ) {
-        Text(
-            title,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodySmall,
-            color = Tokens.textPrimary,
-            modifier = Modifier.padding(Tokens.space3),
-        )
+        Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = Tokens.textPrimary)
     }
 }
+
+private val DETAILS_HEIGHT = 56.dp
+private val TIME_HEADER_HEIGHT = 24.dp
+private val CELL_GAP = 4.dp
+private val NOW_LINE = 2.dp
+private const val NOW_LINE_ALPHA = 0.85f
+private val AIRING_MARK = 3.dp
+private val AIRING_FILL = Color.White.copy(alpha = 0.12f)
+private val LOGO_WIDTH = 44.dp
+private val LOGO_HEIGHT = 27.dp
+private const val LOGO_PX_WIDTH = 132
+private const val LOGO_PX_HEIGHT = 81
 
 private fun halfHourFloor(instant: Instant): Instant = Instant.fromEpochSeconds(instant.epochSeconds - instant.epochSeconds % (30 * 60))
 

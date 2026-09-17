@@ -1,11 +1,7 @@
 package app.iptvplayer.tv.ui.theme
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,106 +20,110 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
-/** The shape of a card: 2:3 for a poster, 16:9 for a channel or a programme. */
+/** The shape of a card: 2:3 for a poster, 16:9 for anything landscape — an episode, a channel, something half-watched. */
 enum class CardShape(val ratio: Float, val width: Dp) {
-    POSTER(2f / 3f, 124.dp),
-    WIDE(16f / 9f, 220.dp),
+    POSTER(2f / 3f, Tokens.posterWidth),
+    LANDSCAPE(16f / 9f, Tokens.landscapeWidth),
 }
 
 /**
- * One piece of content on a shelf (DESIGN_SYSTEM.md §3.8).
+ * One piece of content on a shelf or in a grid (DESIGN_SYSTEM.md §5.3).
  *
- * The artwork is the card: it fills the shape edge to edge, and the name sits under it in small grey type, the way the
- * Apple TV app does it. Focus is a **lift** — the card grows a little, rises on a soft shadow and takes a white
- * hairline — not a coloured outline: on a wall of artwork, a ring on every focused item is what makes an interface look
- * like a set of boxes. The title brightens with the lift so the eye lands on it.
+ * The artwork **is** the card: edge to edge, small corners, no border and no plate at rest — nothing competes with the
+ * picture. Under the remote it comes towards the viewer on a soft shadow and catches a faint white edge, and the name
+ * beneath brightens. The name is white and the line under it grey, the reference app's two-step hierarchy.
+ *
+ * [modifier] is applied to the artwork, the element that takes focus, so a caller's test tag and focus requester sit
+ * on the focused node. [progress] draws a thin bar along the foot of the picture. [width] is the card's width on a shelf;
+ * in a grid pass Dp.Unspecified.
  */
 @Composable
 fun LuzCard(
-    title: String,
+    title: String?,
     subtitle: String?,
     shape: CardShape,
     modifier: Modifier = Modifier,
     progress: Float? = null,
     onLongClick: (() -> Unit)? = null,
+    width: Dp = shape.width,
     onClick: () -> Unit,
     artwork: @Composable (Modifier) -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val lift by animateFloatAsState(
-        targetValue = if (focused) Tokens.FOCUS_SCALE else 1f,
-        animationSpec = tween(Tokens.MOTION_FOCUS_MS),
-        label = "card-lift",
-    )
+    val corners = RoundedCornerShape(Tokens.radiusMedium)
+    // A shelf gives each card its shape's width; a grid passes Dp.Unspecified and lets the column decide.
     Column(
-        modifier = Modifier.width(shape.width),
+        modifier = if (width.isSpecified) Modifier.width(width) else Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(Tokens.space2),
     ) {
         Box(
-            // The caller's modifier goes on the artwork, not on the column around it: this is the element that takes
-            // focus and carries the click and long press, so its test tag and the focus requester have to be here too.
             modifier = modifier
                 .fillMaxWidth()
                 .aspectRatio(shape.ratio)
-                .scale(lift)
-                .shadow(if (focused) Tokens.focusElevation else 0.dp, RoundedCornerShape(Tokens.radiusMedium))
-                .clip(RoundedCornerShape(Tokens.radiusMedium))
-                .background(Tokens.raised)
-                .border(
-                    Tokens.focusRingWidth,
-                    if (focused) Tokens.focusRing.copy(alpha = Tokens.FOCUS_RING_ALPHA) else Tokens.hairline,
-                    RoundedCornerShape(Tokens.radiusMedium),
-                )
-                .onFocusChanged { focused = it.isFocused }
-                .combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onClick,
-                    onLongClick = onLongClick,
-                ),
+                .luzLift(focused, corners)
+                .clip(corners)
+                .background(Tokens.bgSurface2)
+                .then(if (focused) Modifier.border(Tokens.focusRingWidth, FOCUS_EDGE, corners) else Modifier)
+                .luzClickable(onClick = onClick, onLongClick = onLongClick, onFocus = { focused = it }),
         ) {
             artwork(Modifier.fillMaxSize())
-            if (progress != null && progress > 0f) {
-                Box(
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .height(PROGRESS_HEIGHT)
-                        .background(Tokens.bgBase.copy(alpha = PROGRESS_TRACK_ALPHA)),
-                ) {
-                    Box(Modifier.fillMaxWidth(progress).height(PROGRESS_HEIGHT).background(Tokens.accent))
-                }
-            }
+            if (progress != null && progress > 0f) ProgressBar(progress, Modifier.align(Alignment.BottomStart))
         }
-        Column(modifier = Modifier.padding(horizontal = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.labelLarge,
-                color = if (focused) Tokens.textPrimary else Tokens.textSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            subtitle?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Tokens.textTertiary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+        if (title != null || subtitle != null) {
+            Column(modifier = Modifier.padding(horizontal = Tokens.space1), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                title?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (focused) Tokens.textPrimary else Tokens.textPrimary.copy(alpha = RESTING_TITLE_ALPHA),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                subtitle?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Tokens.textTertiary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
 }
 
-private val PROGRESS_HEIGHT = 4.dp
-private const val PROGRESS_TRACK_ALPHA = 0.6f
+/** How far through something the viewer is: a thin white line on a dark track, inset from the card's edges. */
+@Composable
+fun ProgressBar(fraction: Float, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = Tokens.space2, vertical = Tokens.space2)
+            .height(PROGRESS_HEIGHT)
+            .clip(RoundedCornerShape(Tokens.radiusPill))
+            .background(Color.Black.copy(alpha = PROGRESS_TRACK_ALPHA)),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                .height(PROGRESS_HEIGHT)
+                .clip(RoundedCornerShape(Tokens.radiusPill))
+                .background(Tokens.accent),
+        )
+    }
+}
+
+private val PROGRESS_HEIGHT = 3.dp
+private const val PROGRESS_TRACK_ALPHA = 0.55f
+private const val RESTING_TITLE_ALPHA = 0.86f
+private val FOCUS_EDGE = Color.White.copy(alpha = 0.35f)

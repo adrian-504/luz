@@ -61,7 +61,11 @@ class PlayerNavigationTest {
         awaitFocus(ShellTags.ADD_SOURCE)
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.HOME))
-        repeat(Section.SETTINGS.ordinal) { press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        walkTabsTo(Section.SETTINGS, ::focusedTag, { key -> press(key) }) { timeout, condition ->
+            runCatching {
+                rule.waitUntil(timeout, condition)
+            }
+        }
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         // Settings: pick the developer section, then its streams.
         awaitFocus(SettingsTags.entry(SettingsTags.PROVIDERS))

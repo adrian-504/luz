@@ -12,14 +12,12 @@ The app ships **no channels, subscriptions, playlists or content of any kind**.
 
 ## Status
 
-**Phase 4 — XMLTV/EPG** complete on JVM (awaiting review): `shared/domain` (entities, stable IDs, capabilities,
-credential redaction, URL policy, playback state machine), `shared/protocols` (streaming M3U import, Xtream Codes
-discovery/import, streaming XMLTV import, HTTP policy layer, playback-time URL resolution), `shared/epg` (channel
-matching, now/next, guide geometry) and `shared/storage` (SQLDelight guide storage with full-text search). **Phase 5 — Android TV shell** complete on the
-Google TV emulator: `apps/android/tv` with onboarding placeholders, a side navigation rail and tested remote navigation;
-**Phase 6 — Android playback** verified on
-the emulator: Media3 player with recovery, error messages and diagnostics, tested with synthetic streams. See
-[docs/ROADMAP.md](docs/ROADMAP.md) for the phase plan and the next milestone.
+Android TV first. **Phases 1–8 complete** (shared core, M3U, Xtream, XMLTV, Android TV shell, playback, Live TV,
+movies and series), verified on emulators and the owner's Bbox TV. **Phase 9 (Android QA) in progress:** storage,
+launch, list-scrolling and memory gates met on the Bbox; frame timing on the guide and the 8-hour playback soak remain.
+Between Phase 9 and the Apple work (Phase 10), the **interface phase** is under way: the Apple TV–inspired design system
+is built across every screen (ADR-0034, [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)); provider diagnostics and the
+guide timeline remain. See [docs/ROADMAP.md](docs/ROADMAP.md) for the plan and progress.
 
 ## Source of truth
 

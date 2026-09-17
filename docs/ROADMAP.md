@@ -411,8 +411,22 @@ platform-neutral file, and components are described by intent so SwiftUI can imp
 | 1. Design foundation | **Done — ADR-0031:** tokens moved to `tooling/design/tokens.json` with a generator and a gate check; the accent is now the Luz amber (it was blue); focus is a lift plus an amber ring, drawn rather than recomposed; Luz's own list row replaces the Material one in Live TV and the library. Channel-list scrolling is inside the frame budget (2.7 % janky, P95 15 ms); 18 TV app device tests pass on the Bbox TV. What is still out of budget — holding the button through the two-pane category preview — is carried into step 2, which replaces that screen |
 | 2. Home and navigation | **Done — ADR-0032:** Live TV has the directive's three levels (categories are chosen with OK and hand focus to the channels; a long press opens the channel's menu: watch, favourite, information), which also closed the frame gate this screen failed — 61 % late frames down to 10–13 %. Home greets by time of day and builds its rows from what the source actually holds, described as data so the viewer can later choose them. Settings is now real sections (Providers, About Luz, and Developer in debug builds) and provider management moved there from its own rail entry. Carried forward: the guide entry in the channel menu needs cross-section navigation (guide step), "Recently watched" needs stored channel history (personalisation step) |
 | 3. Personalisation | **In progress:** the viewer's own choices now have their own storage (schema 4, `user_hidden` and `user_label`), kept apart from the provider's rows and keyed by the same stable ids as favourites, so a refresh keeps them and removing the source forgets them. Channels and categories can be hidden from their menus, categories renamed, and Settings grows a "Hidden items" section — only when something is hidden — that offers each one back. Films and series can be hidden from their own long press too, and the hidden list names them. The viewer can also make their own groups ("My sports"): a channel's menu offers to add it to one or start a new one, the groups appear above the provider's categories in Live TV, zapping stays inside them, and each can be renamed or deleted from its own long press. Home's rows are the viewer's choice too: Settings → Home turns each on or off and moves it, with the default order a press away. Still to do in this step: groups of films and series |
-| 4. Provider diagnostics | Not started |
-| 5. Guide | Not started |
+| 4. Provider diagnostics | Not started. Will add *Help & Diagnostics* to the navigation rail when the screen exists |
+| 5. Guide | **Visual redesign done (ADR-0034)**; the cinematic timeline, cross-section navigation from a channel's menu and the frame gate remain |
+| Design system (owner's Apple TV directive, 2026-09-17) | **Done — ADR-0034, DESIGN_SYSTEM.md:** one token set on tvOS proportions, one focus implementation, a floating navigation rail, hero/card/shelf/row/button/state components, and every screen rebuilt on them — Home (featured carousel, ambient colour), film and series pages, Live TV ("on now" panel, logo plates), Guide, Movies/Series, Search (letter strip), Settings and provider cards, onboarding, player overlay, menus and prompts. 22 device tests pass on the Bbox; frame timing re-measured (PERFORMANCE.md §6.3) |
+
+### Requested by the owner (2026-09-17), not yet scheduled into a step
+
+Recorded so they are not lost; each becomes a requirement with its data source decided before it is built.
+
+| Request | What it needs | Notes |
+|---|---|---|
+| Cast and director on film and series pages | Import the Xtream `cast` and `director` fields (`get_vod_info` / `get_series_info`), schema change, detail page rows | The owner's provider sends good metadata (they saw it in another player) |
+| Search by actor (and director) | The above, plus a people index next to the title index (ADR-0029) | Search results gain a *People* shelf |
+| Recently added movies | Exists on Home (by the provider's `added` date) | — |
+| Recently added TV shows | Series ordered by the provider's date added; Home row today is not date-ordered | Needs the series `added` field stored |
+| Highest rated movies / TV shows | A rating source. First choice: the provider's own `rating` field (already stored, often from TMDB). External enrichment is a separate decision | IMDb offers no public API (its datasets are non-commercial); Letterboxd's API is by application only; TMDB has a free API with attribution — adding any online lookup needs an ADR (network, privacy, keys) |
+| Favorites as a library (films, series, programmes) | List favourite films and series from storage (they can already be saved) | Favorites is still the channel list |
 
 ## Proposed interim gate: Android TV personal alpha
 

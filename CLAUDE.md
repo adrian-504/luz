@@ -12,9 +12,10 @@ diagnostics and low perceived latency — not feature count.
 
 ## Current phase
 
-**Phase 8 (Android VOD/Series) complete 2026-09-16** (emulator + the owner's Bbox TV with their own provider: movies,
-series, home and search). **Phase 9 (Android QA) in progress:** the storage query gate passes on that device
-(docs/PERFORMANCE.md §6.1, ADR-0029); launch, frame and memory measurements remain. Open review items are tracked in
+**Phase 8 (Android VOD/Series) complete 2026-09-16.** **Phase 9 (Android QA) in progress:** storage queries, launch,
+list scrolling and memory meet their gates on the owner's Bbox TV (docs/PERFORMANCE.md §6); guide frame timing and the
+8-hour playback soak remain. **Interface phase** (owner's review, before Phase 10): the design system is built across all
+screens (ADR-0034, docs/DESIGN_SYSTEM.md); provider diagnostics and the guide timeline remain. Open items are tracked in
 [docs/ROADMAP.md](docs/ROADMAP.md). Work strictly phase by phase.
 
 ## Non-negotiable rules

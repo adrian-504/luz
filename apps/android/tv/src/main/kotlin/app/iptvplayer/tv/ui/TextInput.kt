@@ -4,6 +4,7 @@ import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -19,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -49,18 +51,36 @@ fun TvTextField(
     password: Boolean = false,
     imeAction: ImeAction = ImeAction.Next,
     hint: String? = null,
+    /** Search draws the field as one large line of type rather than a form box, with the label as its placeholder. */
+    large: Boolean = false,
 ) {
     var focused by remember { mutableStateOf(false) }
     val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
-    Column(modifier = Modifier.widthIn(max = 760.dp)) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = Tokens.textSecondary)
+    Column(modifier = if (large) Modifier.fillMaxWidth() else Modifier.widthIn(max = 760.dp)) {
+        if (!large) Text(label, style = MaterialTheme.typography.labelLarge, color = Tokens.textSecondary)
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
             singleLine = true,
-            textStyle = TextStyle(color = Tokens.textPrimary, fontSize = Tokens.body),
+            textStyle = if (large) {
+                MaterialTheme.typography.displaySmall.copy(color = Tokens.textPrimary)
+            } else {
+                TextStyle(color = Tokens.textPrimary, fontSize = Tokens.body)
+            },
+            decorationBox = { field ->
+                Box {
+                    if (large && value.isEmpty()) {
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.displaySmall,
+                            color = if (focused) Tokens.textSecondary else Tokens.textTertiary,
+                        )
+                    }
+                    field()
+                }
+            },
             cursorBrush = SolidColor(Tokens.accent),
             visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
             // TV: moving focus through a form must not pop up the keyboard; OK on a field opens it.
@@ -105,10 +125,21 @@ fun TvTextField(
                         else -> false
                     }
                 }
-                .background(if (focused) Tokens.bgSurface3 else Tokens.bgSurface1, RoundedCornerShape(Tokens.radiusSmall))
-                .border(
-                    BorderStroke(if (focused) Tokens.focusRingWidth else 1.dp, if (focused) Tokens.focusRing else Tokens.lineSubtle),
-                    RoundedCornerShape(Tokens.radiusSmall),
+                .then(
+                    if (large) {
+                        // The search line is words on the room; the remote on it is a faint glass capsule, not a box.
+                        Modifier.background(if (focused) Tokens.raised else Color.Transparent, RoundedCornerShape(Tokens.radiusMedium))
+                    } else {
+                        Modifier
+                            .background(if (focused) Tokens.raisedFocused else Tokens.raised, RoundedCornerShape(Tokens.radiusMedium))
+                            .border(
+                                BorderStroke(
+                                    Tokens.focusRingWidth,
+                                    if (focused) Tokens.focusRing.copy(alpha = Tokens.FOCUS_RING_ALPHA) else Tokens.hairline,
+                                ),
+                                RoundedCornerShape(Tokens.radiusMedium),
+                            )
+                    },
                 )
                 .padding(horizontal = Tokens.space4, vertical = Tokens.space3),
         )

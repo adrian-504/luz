@@ -3,6 +3,7 @@ package app.iptvplayer.tv.ui.theme
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -51,6 +53,10 @@ fun LuzMenu(title: String, items: List<LuzMenuItem>, onDismiss: () -> Unit) {
     ) {
         Column(
             modifier = Modifier
+                // A dialog holds the remote until it is dismissed: without this, Down past its last button walked into the
+                // screen dimmed behind it, and the viewer was moving through a list they could not see.
+                .focusProperties { onExit = { cancelFocusChange() } }
+                .focusGroup()
                 .widthIn(min = 360.dp, max = 560.dp)
                 .clip(RoundedCornerShape(Tokens.radiusLarge))
                 .background(Tokens.panel)
@@ -60,7 +66,7 @@ fun LuzMenu(title: String, items: List<LuzMenuItem>, onDismiss: () -> Unit) {
         ) {
             Text(
                 title,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.headlineMedium,
                 color = Tokens.textPrimary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -76,11 +82,9 @@ fun LuzMenu(title: String, items: List<LuzMenuItem>, onDismiss: () -> Unit) {
                         .testTag(LuzMenuTags.item(item.key))
                         .then(if (index == 0) Modifier.focusRequester(first) else Modifier),
                 ) {
-                    Text(item.label, style = MaterialTheme.typography.bodyLarge, color = Tokens.textPrimary)
+                    Text(item.label, style = MaterialTheme.typography.titleSmall, color = Tokens.textPrimary)
                 }
             }
         }
     }
 }
-
-private const val SCRIM_ALPHA = 0.7f

@@ -108,6 +108,16 @@ def kotlin(tokens: dict) -> str:
         constant = "MOTION_" + name.removesuffix("Ms").upper() + "_MS"
         out.append(f"    const val {constant} = {ms}")
     out.append("")
+    for name, entry in tokens["layout"].items():
+        if name.startswith("$"):
+            continue
+        value = value_of(entry)
+        if name.endswith("Fraction"):
+            constant = "".join("_" + c if c.isupper() else c.upper() for c in name).lstrip("_")
+            out.append(f"    const val {constant} = {value}f")
+        else:
+            out.append(f"    val {name} = {value}.dp")
+    out.append("")
     out.append(f"    const val FOCUS_SCALE = {value_of(tokens['focus']['scale'])}f")
     out.append(f"    val focusRingWidth = {value_of(tokens['focus']['ringWidth'])}.dp")
     out.append(f"    val focusElevation = {value_of(tokens['focus']['elevation'])}.dp")

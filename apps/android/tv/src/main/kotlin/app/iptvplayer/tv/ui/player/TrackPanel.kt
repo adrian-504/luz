@@ -2,6 +2,7 @@ package app.iptvplayer.tv.ui.player
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -14,6 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -50,9 +52,13 @@ fun TrackPanel(
     Column(
         modifier = modifier
             .fillMaxHeight()
-            .width(420.dp)
-            .background(Tokens.bgSurface2.copy(alpha = 0.95f))
-            .padding(horizontal = Tokens.space6, vertical = Tokens.safeVertical)
+            // A sheet of glass floating in from the right edge, like every other Luz panel.
+            .padding(Tokens.space4)
+            .width(380.dp)
+            .clip(RoundedCornerShape(Tokens.radiusLarge))
+            .background(Tokens.panel)
+            .border(1.dp, Tokens.hairline, RoundedCornerShape(Tokens.radiusLarge))
+            .padding(horizontal = Tokens.space5, vertical = Tokens.space6)
             .testTag(PlayerTags.TRACK_PANEL),
         verticalArrangement = Arrangement.spacedBy(Tokens.space2),
     ) {

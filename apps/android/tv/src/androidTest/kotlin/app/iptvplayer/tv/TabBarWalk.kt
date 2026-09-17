@@ -5,22 +5,29 @@ import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
 
 /**
- * Walks the top bar to [section] the way a viewer does: one press at a time, waiting for focus to actually move.
+ * Opens the navigation panel and walks it to [section], the way a viewer does: one press at a time, waiting for focus
+ * to actually move.
  *
- * Reading the focused tag straight after a key press can still return the previous one, and pressing again on that
- * stale reading walks past the section being aimed at. The direction is worked out from where focus is, so the same
- * helper goes either way along the bar.
+ * The panel is not on screen until it is asked for, so this presses Left until focus lands on it — from inside a
+ * section that has its own columns, the first Left presses move within the content — and then walks it with Up and
+ * Down. Reading the focused tag straight after a key press can still return the previous one, and pressing again on
+ * that stale reading walks past the section being aimed at, so every press waits for focus to change.
  */
 internal fun walkTabsTo(section: Section, focusedTag: () -> String?, press: (Int) -> Unit, await: (Long, () -> Boolean) -> Unit) {
     val target = ShellTags.rail(section)
-    // A section can pull focus into its content just after it opens; walk only once focus is back on the bar.
-    await(5_000) { focusedTag()?.startsWith("rail-") == true }
+    repeat(OPEN_PRESSES) {
+        if (focusedTag()?.startsWith(RAIL_PREFIX) == true) return@repeat
+        val before = focusedTag()
+        press(KeyEvent.KEYCODE_DPAD_LEFT)
+        await(2_000) { focusedTag() != before }
+    }
+    await(5_000) { focusedTag()?.startsWith(RAIL_PREFIX) == true }
     repeat(Section.entries.size) {
         val before = focusedTag()
         if (before == target) return
         val from = Section.entries.indexOfFirst { ShellTags.rail(it) == before }
-        val forward = from < Section.entries.indexOf(section)
-        press(if (forward) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT)
+        val down = from < Section.entries.indexOf(section)
+        press(if (down) KeyEvent.KEYCODE_DPAD_DOWN else KeyEvent.KEYCODE_DPAD_UP)
         await(2_000) { focusedTag() != before }
     }
 }
@@ -46,3 +53,6 @@ internal fun pressUntilFocused(
         await(2_000) { focusedTag() != before }
     }
 }
+
+private const val RAIL_PREFIX = "rail-"
+private const val OPEN_PRESSES = 4

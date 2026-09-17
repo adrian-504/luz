@@ -2,16 +2,20 @@
 <resources>
     <string name="app_name">Luz</string>
 
-    <string name="welcome_title">Welcome</string>
-    <string name="welcome_body">This player plays streams from sources you add yourself. It does not include any channels or content.</string>
-    <string name="welcome_add_source">Add a source</string>
-    <string name="welcome_explore">Explore without a source</string>
+    <string name="welcome_title">Welcome to Luz</string>
+    <string name="welcome_tagline">Your TV. Your providers. Your content.</string>
+    <string name="welcome_body">Luz plays what your own provider gives you access to. It comes with no channels or content of its own.</string>
+    <string name="welcome_add_source">Add your provider</string>
+    <string name="welcome_explore">Look around first</string>
 
-    <string name="source_type_title">Add a source</string>
-    <string name="source_type_body">Choose how your provider gives you access.</string>
+    <string name="source_type_title">How do you connect?</string>
+    <string name="source_type_body">Pick what your provider sent you. You can change it later in Settings.</string>
     <string name="source_type_xtream">Xtream Codes login</string>
     <string name="source_type_m3u_url">M3U playlist link</string>
     <string name="source_type_m3u_file">M3U playlist file</string>
+    <string name="source_type_xtream_detail">A server address, a username and a password.</string>
+    <string name="source_type_m3u_url_detail">A web address ending in .m3u or .m3u8.</string>
+    <string name="source_type_m3u_file_detail">A playlist file saved on this TV.</string>
 
     <string name="source_form_placeholder">This form is a placeholder. Adding sources arrives in a later phase.</string>
     <string name="action_go_back">Go back</string>
@@ -120,12 +124,17 @@
 
     <string name="live_all_channels">All channels</string>
     <string name="live_favorites">Favorites</string>
-    <string name="live_no_source">No source yet. Add your provider to see channels.</string>
+    <string name="live_no_source">Your channels will appear here</string>
     <string name="live_importing">Importing channels…</string>
     <string name="live_no_channels">No channels in this group.</string>
-    <string name="live_no_favorites">No favorites yet. Long-press OK on a channel to add it.</string>
+    <string name="live_no_favorites">Nothing saved yet. Hold OK on a channel to keep it here.</string>
     <string name="live_now">Now: %1$s</string>
     <string name="live_no_guide">No guide information</string>
+    <string name="live_title">Live TV</string>
+    <string name="favorites_title">Favorites</string>
+    <string name="live_time_range">%1$s – %2$s</string>
+    <string name="live_next_at">Next at %1$s · %2$s</string>
+    <string name="live_on_now">On now</string>
     <string name="channel_unavailable">This channel has no playable stream.</string>
 
     <string name="guide_loading">Downloading the guide…</string>
@@ -187,15 +196,22 @@
     <string name="series_episode_untitled">Episode %1$d</string>
     <string name="player_next_episode">Next: S%1$d E%2$d</string>
     <string name="home_live_now">Live now</string>
-    <string name="home_greeting_morning">Good morning</string>
-    <string name="home_greeting_afternoon">Good afternoon</string>
-    <string name="home_greeting_evening">Good evening</string>
+    <string name="home_hero_play">Play</string>
+    <string name="home_hero_resume">Resume</string>
+    <string name="home_hero_open">Episodes</string>
+    <string name="home_hero_info">More information</string>
+    <string name="home_hero_favorite">Add to favorites</string>
+    <string name="home_hero_unfavorite">Remove from favorites</string>
+    <string name="home_hero_next">Next</string>
+    <string name="home_kind_movie">Film</string>
+    <string name="home_kind_series">Series</string>
     <string name="home_continue">Continue watching</string>
     <string name="home_favorite_channels">Favorite channels</string>
     <string name="home_recent_movies">Recently added movies</string>
     <string name="home_series">Series</string>
-    <string name="search_label">Search channels, movies and series</string>
-    <string name="search_hint">Press OK on the field to type. Results appear as you type.</string>
+    <string name="search_label">Channels, films, series and more</string>
+    <string name="search_key_space">SPACE</string>
+    <string name="search_hint">Type with the letters above. Results appear as you type.</string>
     <string name="search_nothing">Nothing matches “%1$s”.</string>
     <string name="search_channels">Channels</string>
     <string name="search_movies">Movies</string>
@@ -216,8 +232,8 @@
     <string name="about_version">Version %1$s</string>
     <string name="about_neutral">Luz is a player. It does not provide channels, playlists or subscriptions — you bring your own provider.</string>
     <string name="about_local">Everything Luz imports stays on this device. Your login is kept in the TV\'s secure storage and never leaves it except to reach your provider.</string>
-    <string name="home_empty_title">Welcome to Luz</string>
-    <string name="home_empty_body">Add your provider to get started. Luz will bring in your channels, films and series, and the TV guide if your provider offers one.</string>
+    <string name="home_empty_title">Your Luz library starts here</string>
+    <string name="home_empty_body">Add your provider and Luz brings in your channels, films and series — and the guide, if your provider has one.</string>
     <string name="prompt_save">Save</string>
     <string name="prompt_use_original">Use the provider\'s name</string>
     <string name="prompt_name_label">Name</string>

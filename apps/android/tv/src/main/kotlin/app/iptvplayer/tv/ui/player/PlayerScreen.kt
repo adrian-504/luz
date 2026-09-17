@@ -4,6 +4,7 @@ import android.view.KeyEvent
 import android.view.SurfaceView
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,8 +32,10 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -77,6 +80,9 @@ object PlayerTags {
     const val RETRY = "player-retry"
     const val BANNER = "player-banner"
     const val TITLE = "player-title"
+
+    /** What is on the channel, under the overlay title; it appears once a zap has settled on the channel. */
+    const val PROGRAMME = "player-programme"
     const val FAVORITE = "player-favorite"
     const val LAST_CHANNEL = "player-last-channel"
     const val NEXT = "player-next"
@@ -187,11 +193,17 @@ fun PlayerScreen(
         }
     }
 
+    // Focus moves to the picture *before* the controls go: removing the focused button first leaves a frame with nothing
+    // focused, and a remote press in that frame — the last-channel key, a zap — is silently dropped.
+    fun hideOverlay() {
+        runCatching { rootFocus.requestFocus() }
+        overlayVisible = false
+    }
     BackHandler(enabled = trackMenu != null || diagnosticsVisible || (overlayVisible && !isError)) {
         when {
             trackMenu != null -> trackMenu = null
             diagnosticsVisible -> diagnosticsVisible = false
-            else -> overlayVisible = false
+            else -> hideOverlay()
         }
     }
     // A new channel has other tracks; close a menu that was open for the previous one.
@@ -219,7 +231,7 @@ fun PlayerScreen(
     LaunchedEffect(overlayVisible, lastInputAt, snapshot.state, trackMenu) {
         if (overlayVisible && trackMenu == null && snapshot.state == PlaybackState.PLAYING) {
             delay(OVERLAY_TIMEOUT_MS)
-            overlayVisible = false
+            hideOverlay()
         }
     }
     // Movie/episode position for the overlay progress bar and periodic saving.
@@ -325,8 +337,11 @@ fun PlayerScreen(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(horizontal = Tokens.safeHorizontal, vertical = Tokens.safeVertical)
-                    .background(Tokens.bgBase.copy(alpha = 0.75f), RoundedCornerShape(Tokens.radiusMedium))
-                    .padding(Tokens.space4)
+                    // The zap banner is small and transient: glass in the corner, never a band across the picture.
+                    .clip(RoundedCornerShape(Tokens.radiusLarge))
+                    .background(Tokens.panel)
+                    .border(1.dp, Tokens.hairline, RoundedCornerShape(Tokens.radiusLarge))
+                    .padding(horizontal = Tokens.space6, vertical = Tokens.space4)
                     .testTag(PlayerTags.BANNER),
             ) {
                 Text(title, style = MaterialTheme.typography.headlineMedium, color = Tokens.textPrimary)
@@ -339,8 +354,8 @@ fun PlayerScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(Tokens.bgBase.copy(alpha = 0.6f))
-                    .padding(horizontal = Tokens.safeHorizontal, vertical = Tokens.safeVertical)
+                    .background(OVERLAY_GRADIENT)
+                    .padding(start = Tokens.space16, end = Tokens.space16, top = Tokens.space16, bottom = Tokens.space10)
                     .testTag(PlayerTags.SEEK_HUD),
             ) { VodProgress(positionMs, durationMs) }
         }
@@ -362,21 +377,29 @@ fun PlayerScreen(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .background(Tokens.bgBase.copy(alpha = 0.6f))
-                    .padding(horizontal = Tokens.safeHorizontal, vertical = Tokens.safeVertical)
+                    // The controls rise out of the picture on a gradient rather than sitting on a band across it.
+                    .background(OVERLAY_GRADIENT)
+                    .padding(start = Tokens.space16, end = Tokens.space16, top = Tokens.space16 + Tokens.space8, bottom = Tokens.space10)
                     .testTag(PlayerTags.OVERLAY),
                 verticalArrangement = Arrangement.spacedBy(Tokens.space3),
             ) {
                 Text(
                     title,
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.displaySmall,
                     color = Tokens.textPrimary,
                     modifier = Modifier.testTag(PlayerTags.TITLE),
                 )
-                subtitle?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = Tokens.textSecondary) }
+                subtitle?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Tokens.textSecondary,
+                        modifier = Modifier.testTag(PlayerTags.PROGRAMME),
+                    )
+                }
                 StateText(snapshot, Modifier)
                 if (isVod && durationMs > 0) VodProgress(positionMs, durationMs)
-                Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space4)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), modifier = Modifier.padding(top = Tokens.space2)) {
                     val paused = snapshot.state == PlaybackState.PAUSED
                     if (onNext != null && nextLabel != null) {
                         ActionButton(
@@ -482,7 +505,7 @@ private fun StateText(snapshot: PlaybackSnapshot, modifier: Modifier) {
     } else {
         stringResource(text)
     }
-    Text(label, style = MaterialTheme.typography.titleLarge, color = Tokens.textSecondary, modifier = modifier.testTag(PlayerTags.STATE))
+    Text(label, style = MaterialTheme.typography.labelLarge, color = Tokens.textSecondary, modifier = modifier.testTag(PlayerTags.STATE))
 }
 
 @Composable
@@ -495,8 +518,21 @@ private fun ErrorPanel(
 ) {
     val code = snapshot.error ?: PlaybackErrorCode.UNKNOWN
     val (message, hint) = if (unavailable) R.string.channel_unavailable to R.string.playback_error_http_not_found_hint else errorText(code)
-    Box(modifier = Modifier.fillMaxSize().background(Tokens.bgBase.copy(alpha = 0.85f)), contentAlignment = Alignment.Center) {
-        Column(verticalArrangement = Arrangement.spacedBy(Tokens.space3), modifier = Modifier.widthIn(max = 760.dp)) {
+    // An error keeps the room: the picture behind dims, and what went wrong is said plainly on the left, the way every
+    // other Luz screen speaks. The technical reason lives behind Diagnostics.
+    Box(
+        modifier = Modifier.fillMaxSize().background(
+            Brush.horizontalGradient(
+                0f to Tokens.bgBase,
+                ERROR_FADE to Tokens.bgBase.copy(alpha = ERROR_DIM),
+            ),
+        ),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(Tokens.space3),
+            modifier = Modifier.padding(start = Tokens.space16).widthIn(max = 620.dp),
+        ) {
             Text(
                 stringResource(message),
                 style = MaterialTheme.typography.headlineMedium,
@@ -512,7 +548,12 @@ private fun ErrorPanel(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space4), modifier = Modifier.padding(top = Tokens.space4)) {
-                ActionButton(stringResource(R.string.player_retry), onRetry, Modifier.focusRequester(retryFocus).testTag(PlayerTags.RETRY))
+                ActionButton(
+                    stringResource(R.string.player_retry),
+                    onRetry,
+                    Modifier.focusRequester(retryFocus).testTag(PlayerTags.RETRY),
+                    primary = true,
+                )
                 ActionButton(stringResource(R.string.player_diagnostics), onDiagnostics, Modifier.testTag(PlayerTags.DIAGNOSTICS_TOGGLE))
             }
         }
@@ -560,8 +601,10 @@ private fun DiagnosticsPanel(snapshot: PlaybackSnapshot, d: PlaybackDiagnostics,
         modifier = modifier
             .padding(horizontal = Tokens.safeHorizontal, vertical = Tokens.safeVertical)
             .width(460.dp)
-            .background(Tokens.bgSurface2.copy(alpha = 0.92f), RoundedCornerShape(Tokens.radiusMedium))
-            .padding(Tokens.space4)
+            .clip(RoundedCornerShape(Tokens.radiusLarge))
+            .background(Tokens.panel)
+            .border(1.dp, Tokens.hairline, RoundedCornerShape(Tokens.radiusLarge))
+            .padding(Tokens.space5)
             .testTag(PlayerTags.DIAGNOSTICS_PANEL),
         verticalArrangement = Arrangement.spacedBy(Tokens.space2),
     ) {
@@ -619,8 +662,12 @@ private fun VodProgress(positionMs: Long, durationMs: Long) {
         verticalArrangement = Arrangement.spacedBy(Tokens.space2),
         modifier = Modifier.testTag(PlayerTags.PROGRESS).semantics(mergeDescendants = true) {},
     ) {
-        Box(Modifier.fillMaxWidth().height(6.dp).background(Tokens.bgSurface3, RoundedCornerShape(3.dp))) {
-            Box(Modifier.fillMaxWidth(fraction).height(6.dp).background(Tokens.accent, RoundedCornerShape(3.dp)))
+        Box(
+            Modifier.fillMaxWidth().height(
+                PROGRESS_HEIGHT,
+            ).background(Tokens.textPrimary.copy(alpha = TRACK_ALPHA), RoundedCornerShape(Tokens.radiusPill)),
+        ) {
+            Box(Modifier.fillMaxWidth(fraction).height(PROGRESS_HEIGHT).background(Tokens.accent, RoundedCornerShape(Tokens.radiusPill)))
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(clock(positionMs), style = MaterialTheme.typography.bodySmall, color = Tokens.textSecondary)
@@ -652,3 +699,12 @@ private const val PROGRESS_SAVE_TICKS = 10
 private const val OVERLAY_TIMEOUT_MS = 5_000L
 private const val BANNER_TIMEOUT_MS = 3_000L
 private val SELECT_KEYS = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
+
+/** Rises from the foot of the picture so the controls read over any frame without covering it. */
+private val OVERLAY_GRADIENT = Brush.verticalGradient(
+    listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f), Color.Black.copy(alpha = 0.85f)),
+)
+private val PROGRESS_HEIGHT = 4.dp
+private const val TRACK_ALPHA = 0.2f
+private const val ERROR_FADE = 0.7f
+private const val ERROR_DIM = 0.6f

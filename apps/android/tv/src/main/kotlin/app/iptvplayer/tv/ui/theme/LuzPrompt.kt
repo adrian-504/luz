@@ -3,6 +3,7 @@ package app.iptvplayer.tv.ui.theme
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -55,6 +57,10 @@ fun LuzPrompt(title: String, initial: String, onConfirm: (String) -> Unit, onCle
     ) {
         Column(
             modifier = Modifier
+                // A dialog holds the remote until it is dismissed: without this, Down past its last button walked into the
+                // screen dimmed behind it, and the viewer was moving through a list they could not see.
+                .focusProperties { onExit = { cancelFocusChange() } }
+                .focusGroup()
                 .widthIn(min = 480.dp, max = 720.dp)
                 .clip(RoundedCornerShape(Tokens.radiusLarge))
                 .background(Tokens.panel)
@@ -64,7 +70,7 @@ fun LuzPrompt(title: String, initial: String, onConfirm: (String) -> Unit, onCle
         ) {
             Text(
                 title,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.headlineMedium,
                 color = Tokens.textPrimary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -100,5 +106,3 @@ fun LuzPrompt(title: String, initial: String, onConfirm: (String) -> Unit, onCle
         }
     }
 }
-
-private const val SCRIM_ALPHA = 0.7f

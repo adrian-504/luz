@@ -1,187 +1,265 @@
 # Design System
 
-Spec: §9, §10, §11. Decision: ADR-0001 (native UI per platform).
+Spec: §9, §10, §11. Decisions: ADR-0001 (native UI per platform), ADR-0031 (one token file), ADR-0033 (the Apple TV
+app's language), ADR-0034 (the complete system: rail, focus, components, screens). Owner's brief:
+[PRODUCT_DIRECTIVE.md](PRODUCT_DIRECTIVE.md) and the Apple TV visual directive of 2026-09-17.
 
-Phase 0 defines principles, token structure and initial token values. **No polished UI is built before its
-roadmap phase** (Android TV shell: Phase 5). Token values are *Proposed* and will be tuned on real TVs — colors
-and type read very differently at 3 m on a TV panel than on a monitor.
+Luz should read as *"Apple TV, redesigned as a premium IPTV player"*: content first, interface second, technical detail
+third. This document is the intent; [`tooling/design/tokens.json`](../tooling/design/tokens.json) is the values and
+`apps/android/tv/src/main/kotlin/app/iptvplayer/tv/ui/theme/` is the Android implementation. Section numbers here are
+referenced from the code.
 
-## 1. Principles (§10.1)
+## 1. Principles
 
-1. **Dark-first**, high contrast, minimal chrome — content and artwork carry the interface.
-2. **Large, confident typography**; clear hierarchy readable from the couch.
-3. **Focus is the cursor on TV**: always visible, never ambiguous, never lost after navigation or data refresh.
-4. **Subtle, purposeful motion**; no decorative or blocking animation; respect reduce-motion.
-5. **Platform-native conventions**: tvOS focus engine and card/parallax behaviors; Compose for TV focus semantics
-   on Android TV; standard touch patterns on iOS. Shared tokens, native components.
-6. **Never a blank screen** (§10.3): every screen defines loading, partial, empty and error states.
-7. **Works without metadata**: provider data alone must produce a coherent, attractive library (§9.5).
+1. **Cinematic and calm.** Content floats in a dark room; the picture is the interface. No dashboards, no grey boxes.
+2. **Artwork first.** A card is its picture; a hero is a picture with words over it — never a picture inside a frame.
+3. **Focus has physical presence.** The thing under the remote comes towards the viewer. It is never ambiguous and
+   never lost.
+4. **Restraint with colour.** Near-monochrome; the Luz amber marks progress, a switched-on tick, a live mark — little else.
+5. **One system.** Every screen is built from the same components on the same tokens. A screen that looks like a
+   generic Android app means the redesign is not finished.
+6. **Never a blank screen** (§10.3): every screen has a designed loading, empty and error state.
+7. **Honest.** No empty settings pages pretending to be features; no placeholder data; the technical reason for a
+   failure lives in diagnostics, not on the main screen.
+8. **Remote first, and fast.** Beauty never costs a frame budget (PERFORMANCE.md) or a focus trap.
 
-## 2. Information architecture (§9.1)
+## 2. Information architecture and navigation
 
 `Home · Live TV · Guide · Movies · Series · Favorites · Search · Settings`
 
-The app works with one playlist source at a time (the owner's decision, PRODUCT_DIRECTIVE.md), so there is no Playlists
-section: the source lives in Settings.
+One provider at a time (the owner's decision), so the provider lives under Settings. *Help & Diagnostics* joins the
+navigation when its screen exists (ROADMAP interface step 4) — not before.
 
-- **TV**: a line of section names across the top, in the manner of the Apple TV app — the open one in white, the one
-  under the remote in a white pill, the bar dimmed while focus is in the content (ADR-0033, superseding the Phase 5 rail
-  of ADR-0023). tvOS follows `TabView` conventions (Phase 11). Player is full-screen with overlays.
-- **iOS**: tab bar with ≤ 5 primary items (Home, Live, Guide, Library, Search) and Playlists/Settings/Favorites reachable from Home/Library — mapping finalized in Phase 12.
+**The navigation rail** (`ui/shell/NavigationRail.kt`, ADR-0034). A floating glass strip down the left edge:
 
-## 3. Tokens (§10.2)
-
-**The tokens live in [`tooling/design/tokens.json`](../tooling/design/tokens.json)**, in no platform's language, and
-`tooling/scripts/generate_design_tokens.py` writes the platform files from it (ADR-0031). Today it writes the Android
-token object; the Apple apps read the same file when they arrive, so the two platforms cannot drift by hand-editing one
-of them. `verify.sh` fails if a generated file no longer matches the source. Change the JSON, run the script, never edit
-a generated file. This document explains the intent behind the values; the JSON is the values.
-
-### 3.1 Color (dark-first)
-
-| Token | Value | Use | Contrast on `bg.base` |
-|---|---|---|---|
-| `bg.base` | `#0B0D10` | app background | — |
-| `bg.surface1` | `#14171C` | rows, cards | — |
-| `bg.surface2` | `#1C2027` | sheets, overlays, guide cells | — |
-| `bg.surface3` | `#262B33` | focused/selected cell fill (non-TV focus) | — |
-| `bg.scrim` | `#000000` @ 60 % | player overlay scrim | — |
-| `line.subtle` | `#333A44` | dividers, guide grid lines | — |
-| `text.primary` | `#F2F4F7` | titles, body | ≈ 18:1 |
-| `text.secondary` | `#A9B1BC` | metadata | ≈ 9:1 |
-| `text.tertiary` | `#7D8590` | timestamps, hints (≥ 4.5:1) | ≈ 5:1 |
-| `accent` | `#FFA24B` | the single restrained accent: primary action, selection, focus ring, progress | ≈ 9.4:1 |
-| `accentPressed` | `#E8842A` | the accent while a control is held | — |
-| `onAccent` | `#140C04` | text and icons on top of the accent | ≈ 11:1 on `accent` |
-| `state.live` | `#E5484D` | LIVE badge, now-line | — |
-| `state.success` | `#3FB950` | healthy source | — |
-| `state.warning` | `#E3B341` | cleartext source, partial import | — |
-| `state.error` | `#F85149` | errors | — |
-| `focus.ring` | `#FFA24B` | TV focus border | — |
-
-The amber is the Luz mark's own colour, sampled from the owner's artwork (hue 28°) and lightened until it reads on the
-near-black base. It is an **accent, not a theme**: surfaces, text and chrome stay black, charcoal and the neutral text
-ramp, and a screen should look almost monochrome until something is focused, selected, playing or in progress. If a
-screen looks orange, the accent is being overused.
-
-Contrast values are calculated from sRGB relative luminance (WCAG 2.x formula), not measured on panels.
-A light theme is not planned for V1 TV; iOS may follow system appearance later (decision in Phase 12).
-
-### 3.2 Typography
-
-Platform-native fonts (Roboto/Google Sans system font on Android; SF Pro on Apple). Semantic roles map to
-platform text styles so system text-size settings apply.
-
-| Role | Android TV (sp) | tvOS (system style) | iOS (Dynamic Type style) |
-|---|---|---|---|
-| `display` | 48 | Title 1 | Large Title |
-| `headline` | 32 | Title 2 | Title 1 |
-| `title` | 24 | Title 3 / Headline | Title 3 |
-| `body` | 18 | Body | Body |
-| `label` | 16 | Callout | Subheadline |
-| `caption` | 14 (minimum on TV) | Caption 1 | Caption 1 |
-
-The spec range "12–32+ pt depending on surface" is honored; 12 pt applies to mobile captions only — TV
-never goes below the `caption` role.
-
-### 3.3 Spacing (4/8 scale)
-
-`space.1=4 · space.2=8 · space.3=12 · space.4=16 · space.6=24 · space.8=32 · space.12=48 · space.16=64` (dp / pt).
-
-TV safe area: Android TV 48 dp horizontal / 27 dp vertical overscan margins; tvOS 80 pt horizontal / 60 pt vertical.
-
-### 3.4 Radius
-
-`radius.sm=8` (chips, small cells) · `radius.md=12` (cards, posters) · `radius.lg=16` (sheets, large panels).
-Avoid pill shapes except badges. On tvOS, card components use system shapes where they provide focus effects.
-
-### 3.5 Motion
-
-| Token | Duration | Use |
-|---|---|---|
-| `motion.focus` | 120 ms | focus scale/border change |
-| `motion.standard` | 200 ms | overlay show/hide, list item changes |
-| `motion.emphasized` | 300 ms | screen transitions, sheets |
-
-Rules: animations never block input; key repeat is never delayed by animation; reduce-motion replaces movement
-with cross-fades; player overlay auto-hides after 5 s of inactivity (live) — tunable.
-
-### 3.6 Focus (TV)
-
-Focus is **a lift first and a colour second**, so it still reads for a viewer who cannot separate amber from grey, and on
-a panel with the colour pushed flat.
-
-- Android TV: focused item scales by `focus.scale` (`motion.focus`), gains a `focus.ring` border at `focus.ringWidth`
-  and an elevated surface; unfocused items never use the ring colour.
-- tvOS: use the system focus effects (lift, parallax on posters, highlight) — do not re-implement them. Where tvOS draws
-  a border of our own (guide cells, rows that are not focusable images), it uses the same `focus.ring` and width, so the
-  two platforms agree on what "focused" means without fighting the platform's own idea of it.
-- Focus must be restored to the last focused item when returning to a screen and preserved across data refreshes
-  (stable lazy-list keys = stable domain IDs).
-- Guide: focused programme cell uses `bg.surface3` fill + ring; the time under focus is shown in the time header.
-
-### 3.7 Touch (iOS / future Android mobile)
-
-Minimum hit target 44 × 44 pt (iOS) / 48 × 48 dp (Android). Swipe gestures always have a visible alternative.
-
-### 3.8 Components
-
-- `LuzRow` — one row of a list (a channel, a category, a settings entry). Focus is drawn, not recomposed: the ring and
-  the raised background are painted from the focus state, and a full-width row does not scale (ADR-0031). A long press
-  on a remote arrives as key repeats, which the row translates into the secondary action.
-- `LuzMenu` — the panel behind a long press (ADR-0032). It belongs to the screen, not to the list that raised it, so it
-  dims everything behind; Back closes it and focus returns to the row it came from.
-- `ActionButton` — `primary = true` marks the single action a screen steers towards, which fills with the accent when
-  focused. Every other control lifts and takes the ring.
-
-## 4. Screen state contract (§10.3)
-
-Every screen specification (written at the start of its phase) must define:
-
-| State | Required behavior |
+| State | Looks like |
 |---|---|
-| Loading | Skeleton shaped like final content within 100 ms; no spinners in lists; focusable once content appears |
-| Partial | Show what exists + inline, non-blocking status (e.g. "Guide is still importing — 40 %") |
-| Empty | Explain why and offer the next action (e.g. "No channels in this group" / "Add a playlist") |
-| Error | Human-readable message + hint + retry + diagnostics entry; never raw exception text |
-| Offline | Cached content usable with an unobtrusive offline indicator (§13.1) |
+| At rest | Symbols only on faint glass (64 dp); the open section's symbol sits on a small light |
+| Remote in the rail | Widens to 232 dp with names; nearly opaque (this hardware cannot blur); the room dims from the left; the item under the remote is a white capsule with black symbol and name |
 
-## 4.5 Branding (owner's artwork)
+It overlays the content, so opening it moves nothing. Home's picture runs underneath it; other sections start clear of it.
 
-The app is called **Luz**. `tooling/branding/luz-icon-source.png` is the owner's icon artwork; everything else is generated
-from it by `tooling/scripts/generate_branding.py` (Pillow, development machine only) and committed:
+**Moving:** Left at the edge of the content enters the rail on the open section. OK chooses a section and drops the remote
+into it. **Right leaves the rail and returns to exactly the element the remote was on.** Back walks out one level at a
+time: content → rail → Home (staying in the rail) → out of the app.
 
-| Asset | Where | Notes |
+Player, details and onboarding are full screens of their own, with no rail.
+
+## 3. Tokens
+
+All values live in `tokens.json`; `generate_design_tokens.py` writes `Tokens.kt`, and `verify.sh` fails if they differ.
+Never edit a generated file.
+
+### 3.1 Colour
+
+| Token | Value | Use |
 |---|---|---|
-| Launcher / settings icon | `mipmap-*/ic_launcher.png` (48–192 px) | the tile with rounded, transparent corners |
-| Android TV banner | `drawable-*/tv_banner.png` (320×180 dp) | the play mark and the "LUZ / IPTV" wordmark cut from the same artwork on the icon's background |
+| `bgBase` | `#07080B` | The room: a deep blue-charcoal, not black. Every gradient over artwork ends here. |
+| `bgSurface1/2/3` | `#0F1116` / `#161920` / `#1E222B` | Layers a few percent apart — depth, never grey boxes |
+| `textPrimary / Secondary / Tertiary` | `#F5F5F7` / `#A1A1A8` / `#6E6E76` | Titles · descriptions · metadata |
+| `accent` | `#FFA24B` (Luz amber) | Progress, a switched-on tick, the airing mark — sparingly |
+| `stateLive / stateOk / stateWarning / stateError` | red / green / yellow / red | Small marks and dots, never fills |
 
-Re-run the script after changing the artwork; the app ships no other logo files.
+**Ambient colour.** A screen with a picture takes its colour from it (`ui/library/Ambient.kt`): the dominant colour of
+the colourful pixels, darkened and held below a saturation ceiling, washes the room from the top and fades over 800 ms as
+the picture changes. Home and detail pages use it; list screens sit on a faint glow falling from above.
 
-## 5. Key surfaces (content defined by spec, visuals in later phases)
+### 3.2 Materials
 
-- **Home** (§9.2): continue watching, favorites, live now, tonight, recently added (if metadata permits), movies, series, per-playlist shortcuts.
-- **Live TV** (§9.3): categories, channel list with now/next and progress, favorite action, quick EPG, zap controls.
-- **Guide** (§8.4): see EPG.md §5.
-- **Player** (§9.4): minimal controls; channel info overlay; programme title and progress; audio/subtitle selection; EPG access; favorite; diagnostics entry. PiP is post-beta (SPEC_REVIEW §3).
-- **Onboarding** (§11.1–11.2): welcome → add source (Xtream / M3U URL / M3U file) → validate → staged import progress → ready. Cleartext warning when applicable (ADR-0016).
-- **Playlists** (§11.3): rename, enable/disable, refresh now, refresh policy, edit credentials, import diagnostics, delete, reorder, default, unified library mode.
+Surfaces are white or dark at an opacity over what is behind them, with a one-pixel white hairline: `panel` (dark 90 %,
+menus, sheets, the open rail), `raised` (white 8 %, resting controls), `raisedFocused` (white 18 %), `hairline` (white
+10 %), `scrim` (black 60 %, behind modals). Where the reference app blurs, Luz makes the material denser instead.
 
-## 6. Remote behavior (§9.6)
+### 3.3 Spacing, radius, layout
 
-| Input | Behavior |
+A 4-point scale (`space1`=4 … `space16`=64). Named sizes map onto it: XS=space1, S=space2, M=space4, L=space6,
+XL=space10, XXL=space16. Radii are soft: 6 / 8 / 16 dp, and `radiusPill` for buttons. Layout tokens size the shared
+pieces for a 960×540 dp television: hero 66 % of the height, poster 118 dp, landscape card 196 dp, rail 64/232 dp,
+content starts at 96 dp, shelves 28 dp apart, cards 16 dp apart.
+
+## 4. Typography
+
+The platform's own sans (Android: system; Apple: SF). The scale follows tvOS proportions: tvOS sizes are points on a
+1920×1080 canvas, and a 1080p Android television renders 960×540 dp, so a tvOS size halves into sp here. Every Material
+role is defined (`ui/theme/Theme.kt`) — a role left out silently falls back to Material's own size, which is how a
+second type scale gets into an app.
+
+| Role | Size | Used for |
+|---|---|---|
+| hero (`displayLarge`) | 38 sp bold, tight | The title over a hero |
+| display (`displayMedium/Small`) | 30 sp | A screen's title; the search line |
+| headline (`headlineMedium`) | 22 sp semibold | Pane headings; the programme under the remote |
+| title (`titleLarge`) | 19 sp semibold | Shelf names |
+| subtitle (`titleMedium`) | 16 sp semibold | Buttons |
+| callout (`titleSmall`, `labelLarge`, `bodyMedium`) | 14 sp | Row names, card titles, metadata lines |
+| body (`bodyLarge`) | 15 sp | Descriptions |
+| caption (`bodySmall`, `labelMedium`) | 12 sp | Card subtitles, times, counts |
+
+## 5. Components
+
+All in `ui/theme/` unless noted. Screens do not style themselves; they compose these.
+
+### 5.1 Hero — `LuzHero`
+A picture filling most of the screen; title, metadata line and a short description over its lower left; an actions
+slot beneath. Three gradients take the picture into the room (up from the bottom, in from the left, a faint one from
+the top) and all end in the room's colour, so there is no seam. Crossfades between pictures (700 ms) from the state the
+crossfade hands back. Optional carousel page indicator. Backdrops decode at 1920×1080 px, never at poster size.
+
+### 5.2 Buttons — `LuzButton`, `LuzIconButton`
+PRIMARY is a white pill, always; it lifts under the remote. SECONDARY is faint glass that turns white when focused, so
+exactly one thing on screen is white at a time. `LuzIconButton` is the round version for quiet actions (favourite,
+information, next). No amber fills.
+
+### 5.3 Cards — `LuzCard`
+The artwork is the card: 2:3 poster or 16:9 landscape, 8 dp corners, no border or plate at rest. Focused: lift, soft
+shadow, faint white edge. Name in white below, one grey line under it. Optional thin progress bar. The caller's modifier
+goes on the artwork — the node that takes focus — so tags and focus requesters sit where focus is. Channel logos are
+shown whole (`fit`) on a plate lit from its top corner.
+
+### 5.4 Rows — `LuzRow`
+A list row is nothing at rest; the row under the remote gets glass and a hairline. Focus is **drawn, not recomposed**,
+so moving down ten thousand channels repaints two rows. Rows never scale.
+
+### 5.5 Shelves — `LuzShelf`, `SectionHeader`
+A named horizontal row of cards starting where content starts, with room for the lift, returning to the card last
+focused on it.
+
+### 5.6 Navigation rail — `NavigationRail` (§2)
+
+### 5.7 Loading — `LuzSkeletonShelf`, `LuzSkeletonRows`
+The shapes of what is coming, breathing slowly. The screen keeps its layout from the first frame. No spinners.
+
+### 5.8 Empty — `LuzEmptyState`
+What will be here, why it isn't, and the one thing to do about it. No "no data", no counts of zero.
+
+### 5.9 Error — `LuzErrorState`
+What happened in the viewer's terms and what they can do (Retry first). The technical reason is behind Diagnostics.
+
+### 5.10 Menus and prompts — `LuzMenu`, `LuzPrompt`
+A panel of glass over a dimmed screen. They take focus when they open, **hold it until dismissed** (focus cannot walk
+into the screen behind), and give it back on Back.
+
+### 5.11 Text — `TvTextField`
+A glass field in forms; `large` draws it as one line of display type for Search. OK opens the system keyboard; Up and
+Down move focus; Back leaves.
+
+## 6. Focus
+
+One implementation (`ui/theme/LuzFocus.kt`):
+
+- `luzClickable` — OK presses; holding OK long-presses (a television reports a held key as repeats; the first repeat is
+  the long press and the release after it is swallowed).
+- `luzLift` — scale 1.06 and a 20 dp shadow on the graphics layer, animated in 160 ms on the Luz curve. Read in the
+  layer, so a focus move repaints and never rebuilds.
+
+Rules: focus is always somewhere (entering a section waits for its first element and falls back to the rail);
+leaving and returning restores the element last focused; dialogs trap focus; the player moves focus to the picture
+*before* removing its controls, so a key pressed as they fade is never dropped.
+
+## 7. Icons
+`LuzIcons`: one family of rounded line drawings on a 24-unit grid with a 1.8 stroke, drawn as vectors — no icon library.
+Home, Live TV, Guide, Movies, Series, Favorites, Search, Settings, Diagnostics, Play, Add, Check, Info, Chevron, Restart.
+
+## 8. Motion and scrolling
+
+One curve for everything (`LuzEase`, quick start, gentle settle, no overshoot) and no springs. Focus 160 ms; standard
+240 ms; emphasised 420 ms; hero crossfade 700 ms; ambient colour 800 ms. Things the remote drives are fast; scenery is
+slow so it never competes with the remote.
+
+**Calm scrolling** (`CalmScrolling`): something already comfortably on screen does not move the list; something that is
+not is brought to one steady line near the top. Android TV's default slides every focused item to a third of the way
+down, which pushed Home's hero off the screen the moment the remote landed on Play.
+
+## 9. Home
+A featured title fills two thirds of the screen — a slow carousel (9 s, never while the remote is on it) of what the
+viewer is part-way through, then recent films and series with wide artwork; Play/Resume/Episodes, favourite,
+information, next. The room takes the featured picture's colour. Shelves beneath: Continue watching (landscape),
+favourite channels or Live now (logo plates), Recently added movies, Series. Empty shelves are left out; the viewer
+chooses and orders them in Settings → Home. The remote lands on the hero's Play.
+
+## 10. Detail pages
+**Film:** one screen — the backdrop across all of it, title, facts (year, length, genre, rating), description, and
+Play/Resume (with the time), start again, favourite. **Series:** the same hero at two thirds, then seasons as quiet
+capsules over a shelf of episode cards (still, "3. Title", length, progress, a tick once watched). Cast, director and
+related titles are not shown yet: the data is not imported (ROADMAP).
+
+## 11. Live TV
+A screen title; categories (the chosen one white on glass); above the channels, **what is on the channel under the
+remote** — programme, times, progress, what is next — updated without rebuilding the list; channel rows with a logo
+plate, number, name, programme, thin progress and a small heart for favourites. OK plays; holding OK opens the channel's
+menu.
+
+## 12. Guide
+A screen title with the focused programme and its channel and times beneath, and a glass *Now* button. Half-hour marks
+over a hairline; each channel's logo and name; programmes as soft glass blocks as long as they run. What is on now is a
+shade brighter with a thin amber mark; the focused block is brightest with a white edge; a red line marks the time.
+Cells are drawn, not built from surfaces.
+
+## 13. Movies and Series
+A screen title, categories as in Live TV, and a poster grid of `LuzCard`s that loads a page at a time. Holding OK on a
+poster offers Open and Hide.
+
+## 14. Search
+The query written large with a search symbol; a **letter strip** beneath it (123/abc, space, a–z, delete) so the remote
+types without the system keyboard covering the results; a hairline; results as shelves — channels, films, series —
+updating 150 ms after each change. OK on the line still opens the system keyboard. Searching by actor or director waits
+for that data to be imported.
+
+## 15. Onboarding
+**Welcome to Luz** — "Your TV. Your providers. Your content." — with one honest sentence that Luz ships no content, and
+*Add your provider* / *Look around first*. The room carries the mood (a glow from the upper left, a trace of amber from
+the lower right) because there is no artwork to show before a provider exists. **How do you connect?** offers each way as
+a card with what it needs in plain words. Forms use glass fields and one white *Connect*.
+
+## 16. Settings and providers
+A screen title; a short list of sections that do something (Providers, Home, Hidden items when something is hidden,
+About, Developer in debug builds); the chosen one on the right under its own heading. The directive's other sections —
+playback, subtitles, appearance, parental controls, storage, privacy, account, devices — arrive with the features they
+configure, never as empty pages. A **provider** is a glass card: a status dot (green working, yellow failing, grey
+updating), name, address, channel count, encryption warning, guide status, and Refresh / Guide link / Remove.
+
+## 17. Player
+Nothing on the picture by default. OK brings the controls up out of a gradient at the foot of the picture: title large,
+programme, state, a thin progress line for films, and pill buttons (white Pause/Play). They fade after a few seconds. A
+zap shows a small glass banner in the corner. Audio and subtitles open as a glass sheet from the right; diagnostics as a
+glass panel. An error dims the picture from the left and says what happened, with Retry first.
+
+## 18. Remote behaviour
+
+| Input | Behaviour |
 |---|---|
-| Up/Down | Navigate rows/channels; in player with overlay hidden: zap (configurable) |
-| Left/Right | Navigate time/programmes or horizontal content |
-| OK/Select | Open / play / focus current item; in player: show overlay |
-| Back | Dismiss overlay → previous screen → Home |
-| Play/Pause | Playback control |
-| Channel +/- | Previous/next channel where the remote has them |
-| Long press OK | Context actions (favorite, hide, EPG mapping) where platform conventions allow |
-| Number keys (Android remotes) | Direct channel number entry (proposed; not in spec — decision in Phase 7) |
+| Up/Down | Rows, channels, shelves; in the player with controls hidden: zap |
+| Left/Right | Columns, cards, time; Left at the edge of content opens the rail; Right in the rail returns |
+| OK | Open / play / choose; in the player: show controls |
+| Hold OK | The item's menu (channels, categories, posters, Home rows) |
+| Back | Close a menu → leave content for the rail → Home → leave the app; in the player: hide controls, then leave |
+| Play/Pause, Channel ±, Last channel | As labelled; "last channel" during a zap returns to the channel still playing |
 
-## 7. Accessibility
+## 19. Platform strategy
+The visual DNA — tokens, materials, typography proportions, focus-as-lift, artwork-first composition — is identical on
+every platform; layout is not. **TV:** as above. **iPhone:** touch-first, vertical scrolling, a tab bar, large artwork,
+the same type and materials. **iPad:** wider layouts, adaptive columns, a sidebar where it helps. **Mac:** desktop
+layout with keyboard and pointer. Apple apps read the same `tokens.json` (Phases 11–12).
 
-TalkBack / VoiceOver labels for all focusable elements (including guide cells: channel, title, time); text
-contrast ≥ 4.5:1; honor system font scale / Dynamic Type; reduce motion; system caption styling
-(Android `CaptioningManager`, Apple `MACaptionAppearance`); no information conveyed by color alone (LIVE badge has text).
+## 20. Accessibility
+Labels for every focusable element (icon buttons carry a spoken label; rail symbols are named); text contrast ≥ 4.5:1 on
+the room colour; system font scale honoured; reduce-motion respected; system caption styling for subtitles; colour
+never the only signal (a favourite is a heart shape, the airing mark sits with a time, provider status has words).
+
+## 21. Branding
+The app is **Luz**. `tooling/branding/luz-icon-source.png` is the owner's artwork; `tooling/scripts/generate_branding.py`
+produces the launcher icon and the Android TV banner from it. No other logo files ship.
+
+## 22. Status and known gaps (2026-09-17)
+
+Built and verified on the owner's Bbox TV (22 device tests, screenshots of every screen): everything in §§2–18.
+
+Not yet, and why:
+
+- **Help & Diagnostics** screen and rail entry — interface step 4.
+- **Cast, director, actor search, highest rated rows** — the provider data is not imported yet (ROADMAP).
+- **Favorites** is still the Live TV channel list; a library with films and series needs favourite films and series
+  listed from storage (they can already be saved).
+- **Hero cast and "last synced"** on provider cards — not stored.
+- **Blur** — not used; this hardware cannot afford it, so materials are denser instead.
+- **Frame timing** of the redesigned Live TV and Guide rows is re-measured in PERFORMANCE.md §6.3.

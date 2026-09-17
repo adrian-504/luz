@@ -2,29 +2,10 @@ package app.iptvplayer.tv.ui.shell
 
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddCircle
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,38 +13,21 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import androidx.tv.material3.Border
-import androidx.tv.material3.Card
-import androidx.tv.material3.CardDefaults
-import androidx.tv.material3.Icon
-import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.NavigationDrawer
-import androidx.tv.material3.NavigationDrawerItem
-import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.ImportUnit
-import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.tv.R
-import app.iptvplayer.tv.app.LocalAppGraph
-import app.iptvplayer.tv.developer.DeveloperStreams
-import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
-import app.iptvplayer.tv.ui.PlaceholderPage
 import app.iptvplayer.tv.ui.RestoreFocusEffect
 import app.iptvplayer.tv.ui.guide.GuideSection
 import app.iptvplayer.tv.ui.guide.GuideTags
@@ -79,20 +43,23 @@ import app.iptvplayer.tv.ui.rememberFocusMemory
 import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.settings.SettingsSection
 import app.iptvplayer.tv.ui.settings.SettingsTags
+import app.iptvplayer.tv.ui.theme.ButtonKind
+import app.iptvplayer.tv.ui.theme.LuzButton
+import app.iptvplayer.tv.ui.theme.LuzEmptyState
+import app.iptvplayer.tv.ui.theme.LuzIcons
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /** Top-level sections (DESIGN_SYSTEM.md §2) with the roadmap phase that fills them, when planned. */
 enum class Section(@param:StringRes val title: Int, val icon: ImageVector, val phase: Int?) {
-    HOME(R.string.section_home, Icons.Filled.Home, 8),
-    LIVE_TV(R.string.section_live_tv, Icons.Filled.PlayArrow, 7),
-    GUIDE(R.string.section_guide, Icons.Filled.DateRange, 7),
-    MOVIES(R.string.section_movies, Icons.Filled.Star, 8),
-    SERIES(R.string.section_series, Icons.Filled.Menu, 8),
-    FAVORITES(R.string.section_favorites, Icons.Filled.Favorite, 7),
-    SEARCH(R.string.section_search, Icons.Filled.Search, 8),
-    SETTINGS(R.string.section_settings, Icons.Filled.Settings, null),
+    HOME(R.string.section_home, LuzIcons.Home, 8),
+    LIVE_TV(R.string.section_live_tv, LuzIcons.LiveTv, 7),
+    GUIDE(R.string.section_guide, LuzIcons.Guide, 7),
+    MOVIES(R.string.section_movies, LuzIcons.Movies, 8),
+    SERIES(R.string.section_series, LuzIcons.Series, 8),
+    FAVORITES(R.string.section_favorites, LuzIcons.Favorites, 7),
+    SEARCH(R.string.section_search, LuzIcons.Search, 8),
+    SETTINGS(R.string.section_settings, LuzIcons.Settings, null),
 }
 
 object ShellTags {
@@ -101,11 +68,16 @@ object ShellTags {
     fun rail(section: Section) = "rail-${section.name}"
 }
 
+/** Sections whose top is a picture that runs under the navigation; the rest start clear of it. */
+private val FULL_BLEED = setOf(Section.HOME)
+
 /**
- * The shell: a line of sections across the top and the chosen one underneath (ADR-0033).
+ * The shell: every section fills the screen, and the navigation rail floats over its left edge (ADR-0034).
  *
- * Back steps out of the content to the bar, then to Home, then leaves the app — the same walk back the Apple TV app
- * has. Choosing a section with OK drops focus into it, so the bar is only ever passed through.
+ * The rail is always there as a slim strip of symbols and opens with names when the remote reaches it — by pressing
+ * Left at the edge of the content, or Back. Choosing a section with OK drops the remote into it; Right leaves the rail
+ * and returns to exactly where the viewer was. Back walks out one level at a time: the content, the rail, Home, and
+ * then out of the app.
  */
 @Composable
 fun MainShell(
@@ -121,57 +93,75 @@ fun MainShell(
 ) {
     var homeFirstKey by remember { mutableStateOf<String?>(null) }
     var selected by rememberSaveable { mutableStateOf(initialSection) }
-    val focusManager = LocalFocusManager.current
-    var railHasFocus by remember { mutableStateOf(false) }
+    var railFocused by remember { mutableStateOf(false) }
     var contentFocusRequests by remember { mutableIntStateOf(0) }
+    val focusManager = LocalFocusManager.current
     val focus = rememberFocusMemory()
-    val context = LocalContext.current
-    val developerStreams = remember { DeveloperStreams.list(context) }
+    // What last had focus in the content, so leaving the rail puts the remote back where it was.
+    var lastContentKey by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(focus) {
+        snapshotFlow { focus.lastFocusedKey }.collect { key ->
+            if (key != null && !key.startsWith(RAIL_PREFIX)) lastContentKey = key
+        }
+    }
 
-    BackHandler(enabled = !(railHasFocus && selected == Section.HOME)) {
-        if (!railHasFocus) {
+    BackHandler(enabled = !(railFocused && selected == Section.HOME)) {
+        if (!railFocused) {
             focus.requestFocus(ShellTags.rail(selected))
         } else {
+            // In the rail, somewhere other than Home: Back goes Home and stays in the rail, so the viewer sees where
+            // it took them. One more Back leaves the app.
             selected = Section.HOME
             focus.requestFocus(ShellTags.rail(Section.HOME))
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Tokens.bgBase)) {
-        TabBar(
+    // The room every section sits in, painted once behind the rail and the content alike so there is no strip where
+    // one ends: a faint glow from above settling into the environment colour. Home paints its own picture over it.
+    Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Tokens.bgSurface1, ROOM_GLOW_END to Tokens.bgBase))) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (selected in FULL_BLEED) Modifier else Modifier.padding(start = Tokens.railCollapsedWidth)),
+        ) {
+            // Keyed so each section starts with its own scroll and focus-restoration state.
+            key(selected) {
+                when (selected) {
+                    Section.LIVE_TV -> LiveTvSection(focus, favoritesOnly = false, onPlay = onPlayChannel, onAddSource = onAddSource)
+                    Section.FAVORITES -> LiveTvSection(focus, favoritesOnly = true, onPlay = onPlayChannel, onAddSource = onAddSource)
+                    Section.GUIDE -> GuideSection(focus, onPlay = onPlayChannel, onAddSource = onAddSource)
+                    Section.HOME -> HomeSection(
+                        focus,
+                        onPlayChannel = onPlayChannel,
+                        onOpenMovie = onOpenMovie,
+                        onOpenSeries = onOpenSeries,
+                        onPlayContent = onPlayContent,
+                        onFirstKey = { homeFirstKey = it },
+                    ) { NoSourceYet(focus, onAddSource) }
+                    Section.SEARCH -> SearchSection(
+                        focus,
+                        onPlayChannel = onPlayChannel,
+                        onOpenMovie = onOpenMovie,
+                        onOpenSeries = onOpenSeries,
+                        onAddSource = onAddSource,
+                    )
+                    Section.SETTINGS -> SettingsSection(focus, onAddSource, onEditGuideLink, onPlayDeveloperStream, onSourceAdded)
+                    Section.MOVIES -> LibrarySection(focus, ImportUnit.MOVIES, onOpen = onOpenMovie, onAddSource = onAddSource)
+                    Section.SERIES -> LibrarySection(focus, ImportUnit.SERIES, onOpen = onOpenSeries, onAddSource = onAddSource)
+                }
+            }
+        }
+        NavigationRail(
             sections = Section.entries,
             selected = selected,
             focus = focus,
-            modifier = Modifier.onFocusChanged { railHasFocus = it.hasFocus },
+            onFocusChange = { railFocused = it },
+            onLeave = {
+                if (lastContentKey?.let { focus.requestFocus(it) } != true) contentFocusRequests++
+            },
         ) { section ->
             selected = section
             contentFocusRequests++
-        }
-        // Keyed so each section starts with its own scroll and focus-restoration state.
-        key(selected) {
-            when (selected) {
-                Section.LIVE_TV -> LiveTvSection(focus, favoritesOnly = false, onPlay = onPlayChannel, onAddSource = onAddSource)
-                Section.FAVORITES -> LiveTvSection(focus, favoritesOnly = true, onPlay = onPlayChannel, onAddSource = onAddSource)
-                Section.GUIDE -> GuideSection(focus, onPlay = onPlayChannel, onAddSource = onAddSource)
-                Section.HOME -> HomeSection(
-                    focus,
-                    onPlayChannel = onPlayChannel,
-                    onOpenMovie = onOpenMovie,
-                    onOpenSeries = onOpenSeries,
-                    onPlayContent = onPlayContent,
-                    onFirstKey = { homeFirstKey = it },
-                ) { NoSourceYet(focus, onAddSource) }
-                Section.SEARCH -> SearchSection(
-                    focus,
-                    onPlayChannel = onPlayChannel,
-                    onOpenMovie = onOpenMovie,
-                    onOpenSeries = onOpenSeries,
-                    onAddSource = onAddSource,
-                )
-                Section.SETTINGS -> SettingsSection(focus, onAddSource, onEditGuideLink, onPlayDeveloperStream, onSourceAdded)
-                Section.MOVIES -> LibrarySection(focus, ImportUnit.MOVIES, onOpen = onOpenMovie, onAddSource = onAddSource)
-                Section.SERIES -> LibrarySection(focus, ImportUnit.SERIES, onOpen = onOpenSeries, onAddSource = onAddSource)
-            }
         }
     }
 
@@ -192,15 +182,12 @@ fun MainShell(
                 if (candidates.any { focus.requestFocus(it) }) return@LaunchedEffect
                 delay(ENTER_INTERVAL_MS)
             }
-            // The bar is across the top, so the content is below it: moving right would only walk to the next section.
-            if (!focusManager.moveFocus(FocusDirection.Down)) {
-                // Nothing down there took it. Focus goes back to the bar rather than nowhere: a remote with no focus is
-                // a dead remote, and the viewer would have to leave the app to recover.
-                focus.requestFocus(ShellTags.rail(selected))
-            }
+            // The content is to the right of the rail. If nothing there takes focus, it stays on the rail rather than
+            // going nowhere: a remote with nothing focused is a dead remote.
+            if (!focusManager.moveFocus(FocusDirection.Right)) focus.requestFocus(ShellTags.rail(selected))
         }
     }
-    // First display: enter the selected section like selecting it in the rail; afterwards restore the last focus.
+    // First display: enter the selected section like choosing it in the rail; afterwards restore the last focus.
     LaunchedEffect(Unit) {
         if (focus.lastFocusedKey == null) contentFocusRequests++
     }
@@ -209,31 +196,20 @@ fun MainShell(
 
 @Composable
 private fun NoSourceYet(focus: FocusMemory, onAddSource: () -> Unit) {
-    // Home before there is anything to show (PRODUCT_DIRECTIVE.md §3): the welcome, and the one thing worth doing.
-    PlaceholderPage(title = stringResource(R.string.home_empty_title), body = stringResource(R.string.home_empty_body)) {
-        ActionButton(
+    // Home before there is anything to show (PRODUCT_DIRECTIVE.md §3): what Luz will be, and the one thing worth doing.
+    LuzEmptyState(title = stringResource(R.string.home_empty_title), message = stringResource(R.string.home_empty_body)) {
+        LuzButton(
             stringResource(R.string.playlists_add_source),
             onAddSource,
             Modifier.rememberedFocus(focus, ShellTags.ADD_SOURCE),
-            primary = true,
+            kind = ButtonKind.PRIMARY,
+            icon = LuzIcons.Add,
         )
     }
 }
 
-@Composable
-private fun PlaceholderCard(label: String, modifier: Modifier) {
-    Card(
-        onClick = {},
-        modifier = modifier.size(width = 196.dp, height = 110.dp),
-        scale = CardDefaults.scale(focusedScale = Tokens.FOCUS_SCALE),
-        border = CardDefaults.border(focusedBorder = Border(BorderStroke(Tokens.focusRingWidth, Tokens.focusRing))),
-        colors = CardDefaults.colors(containerColor = Tokens.bgSurface1, focusedContainerColor = Tokens.bgSurface3),
-    ) {
-        Box(modifier = Modifier.padding(Tokens.space4)) {
-            Text(text = label, style = MaterialTheme.typography.titleLarge, color = Tokens.textPrimary)
-        }
-    }
-}
+private const val RAIL_PREFIX = "rail-"
+private const val ROOM_GLOW_END = 0.5f
 
 /** How long entering a section waits for its first element: the screen may still be reading from the database. */
 private const val ENTER_ATTEMPTS = 40

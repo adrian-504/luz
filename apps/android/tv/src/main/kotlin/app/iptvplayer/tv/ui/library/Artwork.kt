@@ -14,10 +14,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -53,14 +55,22 @@ fun ArtworkImage(
     modifier: Modifier = Modifier,
     widthPx: Int = 300,
     heightPx: Int = 450,
+    fit: Boolean = false,
+    /** How far a fitted logo sits in from its plate's edges; small plates need a small inset or the logo vanishes. */
+    inset: Dp = LOGO_INSET,
 ) {
     val context = LocalContext.current
     val url = remember(template, resolver) { template?.let { resolver?.invoke(it) } }
-    android.util.Log.i(
-        "luz-art",
-        "template=" + (template?.template ?: "null") + " resolver=" + (resolver != null) + " url=" + (url != null),
-    )
-    Box(modifier = modifier.clip(RoundedCornerShape(Tokens.radiusSmall)).background(Tokens.bgSurface2)) {
+    // A logo sits on a plate lit faintly from its top corner, so a row of channels reads as objects rather than grey
+    // boxes; a picture needs no plate, only a dark ground to load onto.
+    val ground = if (fit) {
+        Modifier.background(
+            Brush.linearGradient(listOf(Tokens.bgSurface3, Tokens.bgSurface1)),
+        )
+    } else {
+        Modifier.background(Tokens.bgSurface2)
+    }
+    Box(modifier = modifier.then(ground)) {
         if (fallbackTitle != null) {
             Text(
                 fallbackTitle,
@@ -81,7 +91,13 @@ fun ArtworkImage(
                     .size(widthPx, heightPx)
                     .build()
             }
-            AsyncImage(model = request, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            // A logo is shown whole, inset on its plate; a poster or backdrop fills its shape edge to edge.
+            AsyncImage(
+                model = request,
+                contentDescription = null,
+                contentScale = if (fit) ContentScale.Fit else ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().then(if (fit) Modifier.padding(inset) else Modifier),
+            )
         }
     }
 }
@@ -94,3 +110,9 @@ fun WatchedBar(fraction: Float?, modifier: Modifier = Modifier) {
         Box(Modifier.fillMaxWidth(fraction).height(4.dp).background(Tokens.accent))
     }
 }
+
+/** The pixel size a full-screen backdrop is decoded at: the television's own resolution, never a poster's. */
+const val BACKDROP_WIDTH_PX = 1920
+const val BACKDROP_HEIGHT_PX = 1080
+
+private val LOGO_INSET = 18.dp

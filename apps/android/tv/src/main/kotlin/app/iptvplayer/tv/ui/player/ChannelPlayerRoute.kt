@@ -44,6 +44,7 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
     var intentAtMs by remember { mutableStateOf<Long?>(null) }
     val history = remember { ChannelHistory<String>() }
     var lastChannel by remember { mutableStateOf<String?>(null) }
+    var playingChannel by remember { mutableStateOf<String?>(null) }
     val prepared = remember { mutableMapOf<String, PlaybackRequest>() }
 
     LaunchedEffect(revision) {
@@ -68,6 +69,7 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
         request = resolved?.copy(intentAtMs = intentAtMs, prepared = ahead != null)
         history.played(channel.id.value)
         lastChannel = history.last
+        playingChannel = history.current
         subtitle = graph.nowNext(playlistId, listOf(channel.id), Clock.System.now())[channel.id.value]?.current?.title
 
         // T0 preparation for the next switch; cancelled by the next key press (this effect restarts).
@@ -96,13 +98,18 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
                 subtitle = null
             }
         },
-        onLastChannel = lastChannel?.takeIf { id -> id != target && list.any { it.id.value == id } }?.let { id ->
-            {
-                intentAtMs = SystemClock.elapsedRealtime()
-                target = id
-                subtitle = null
-            }
-        },
+        // "Previous" is the channel the viewer was watching. A channel only counts as watched once a zap has settled on it
+        // (passing through one does not), so in the moment between pressing a zap and it settling, the previous channel is
+        // the one still playing — not the one before that, which the viewer may have left minutes ago.
+        onLastChannel = (playingChannel?.takeIf { it != target } ?: lastChannel)
+            ?.takeIf { id -> id != target && list.any { it.id.value == id } }
+            ?.let { id ->
+                {
+                    intentAtMs = SystemClock.elapsedRealtime()
+                    target = id
+                    subtitle = null
+                }
+            },
     )
 }
 

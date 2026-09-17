@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
@@ -28,6 +29,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.PlaylistId
@@ -43,6 +45,7 @@ import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.library.HOME_ROW_TITLES
 import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.sources.SourcesList
+import app.iptvplayer.tv.ui.theme.LuzIcons
 import app.iptvplayer.tv.ui.theme.LuzMenu
 import app.iptvplayer.tv.ui.theme.LuzMenuItem
 import app.iptvplayer.tv.ui.theme.LuzRow
@@ -111,82 +114,91 @@ fun SettingsSection(
     }
     var selected by rememberSaveable { mutableStateOf(SettingsTags.PROVIDERS) }
 
-    Row(
-        modifier = Modifier.fillMaxSize().padding(
-            start = Tokens.space8,
-            end = Tokens.safeHorizontal,
-            top = Tokens.safeVertical,
-            bottom = Tokens.safeVertical,
-        ),
+    Column(
+        modifier = Modifier.fillMaxSize().padding(start = Tokens.space6, end = Tokens.safeHorizontal, top = Tokens.space8),
+        verticalArrangement = Arrangement.spacedBy(Tokens.space4),
     ) {
-        Column(
-            modifier = Modifier.width(320.dp).fillMaxHeight(),
-            verticalArrangement = Arrangement.spacedBy(Tokens.space2),
-        ) {
-            Text(
-                stringResource(R.string.section_settings),
-                style = MaterialTheme.typography.headlineMedium,
-                color = Tokens.textPrimary,
-                modifier = Modifier.padding(bottom = Tokens.space4, start = Tokens.space4),
-            )
-            entries.forEach { entry ->
-                LuzRow(
-                    onClick = { selected = entry.key },
-                    modifier = Modifier.rememberedFocus(focus, SettingsTags.entry(entry.key)),
-                    selected = selected == entry.key,
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            stringResource(entry.title),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (selected == entry.key) Tokens.accent else Tokens.textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            if (entry.plural) {
-                                pluralStringResource(entry.summary, hiddenCount.toInt(), hiddenCount.toInt())
-                            } else {
-                                stringResource(entry.summary)
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Tokens.textTertiary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+        Text(
+            stringResource(R.string.section_settings),
+            style = MaterialTheme.typography.displaySmall,
+            color = Tokens.textPrimary,
+            modifier = Modifier.padding(start = Tokens.space4),
+        )
+        Row(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier.width(SECTION_LIST_WIDTH).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(Tokens.space1),
+            ) {
+                entries.forEach { entry ->
+                    LuzRow(
+                        onClick = { selected = entry.key },
+                        modifier = Modifier.rememberedFocus(focus, SettingsTags.entry(entry.key)),
+                        selected = selected == entry.key,
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                stringResource(entry.title),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = if (selected == entry.key) Tokens.textPrimary else Tokens.textSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                if (entry.plural) {
+                                    pluralStringResource(entry.summary, hiddenCount.toInt(), hiddenCount.toInt())
+                                } else {
+                                    stringResource(entry.summary)
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Tokens.textTertiary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }
-        }
-        Column(
-            modifier = Modifier
-                .padding(start = Tokens.space8)
-                .fillMaxHeight()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(Tokens.space4),
-        ) {
-            when (selected) {
-                SettingsTags.HOME -> HomeRows(focus)
-                SettingsTags.HIDDEN -> playlist?.let { HiddenItems(focus, it) }
-                SettingsTags.ABOUT -> About()
-                SettingsTags.DEVELOPER -> DeveloperStreamsPane(focus, onPlayDeveloperStream, onSourceAdded)
-                else -> {
-                    ActionButton(
-                        stringResource(R.string.playlists_add_source),
-                        onAddSource,
-                        Modifier.rememberedFocus(focus, SettingsTags.ADD_SOURCE),
-                        primary = true,
-                    )
-                    SourcesList(focus, onEditGuideLink)
+            Column(
+                modifier = Modifier
+                    .padding(start = Tokens.space8)
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState())
+                    // Room for a lifted button at the pane's edges, so its shadow is never cut off.
+                    .padding(horizontal = Tokens.space2, vertical = Tokens.space2),
+                verticalArrangement = Arrangement.spacedBy(Tokens.space4),
+            ) {
+                when (selected) {
+                    SettingsTags.HOME -> HomeRows(focus)
+                    SettingsTags.HIDDEN -> playlist?.let { HiddenItems(focus, it) }
+                    SettingsTags.ABOUT -> About()
+                    SettingsTags.DEVELOPER -> DeveloperStreamsPane(focus, onPlayDeveloperStream, onSourceAdded)
+                    else -> {
+                        ActionButton(
+                            stringResource(R.string.playlists_add_source),
+                            onAddSource,
+                            Modifier.rememberedFocus(focus, SettingsTags.ADD_SOURCE),
+                            primary = true,
+                        )
+                        SourcesList(focus, onEditGuideLink)
+                    }
                 }
             }
         }
     }
 }
 
+/** The name at the top of a settings pane. */
+@Composable
+private fun PaneHeading(text: String) {
+    Text(text, style = MaterialTheme.typography.headlineMedium, color = Tokens.textPrimary)
+}
+
+private val SECTION_LIST_WIDTH = 260.dp
+private val CHECK_SIZE = 14.dp
+
 @Composable
 private fun About() {
-    Text(stringResource(R.string.settings_about), style = MaterialTheme.typography.titleLarge, color = Tokens.textPrimary)
+    PaneHeading(stringResource(R.string.settings_about))
     Text(
         stringResource(R.string.about_version, BuildConfig.VERSION_NAME),
         style = MaterialTheme.typography.bodyLarge,
@@ -205,9 +217,9 @@ private fun DeveloperStreamsPane(focus: FocusMemory, onPlay: (String) -> Unit, o
     val streams = remember { DeveloperStreams.list(context) }
     if (streams.isEmpty()) return
     val testProvider = remember { DeveloperStreams.testProvider(context) }
-    Text(stringResource(R.string.developer_streams_title), style = MaterialTheme.typography.titleLarge, color = Tokens.textPrimary)
+    PaneHeading(stringResource(R.string.developer_streams_title))
     Text(stringResource(R.string.developer_streams_body), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary)
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), contentPadding = PaddingValues(vertical = Tokens.space2)) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), contentPadding = PaddingValues(Tokens.space3)) {
         items(count = streams.size, key = { streams[it].id }) { index ->
             val stream = streams[index]
             ActionButton(stream.label, { onPlay(stream.id) }, Modifier.rememberedFocus(focus, SettingsTags.developerStream(stream.id)))
@@ -255,7 +267,7 @@ private fun HiddenItems(focus: FocusMemory, playlist: PlaylistId) {
             series.map { Triple(CustomisationTarget.SERIES, it, seriesNames[it] ?: it) }
     }
     val shown = items ?: return
-    Text(stringResource(R.string.settings_hidden), style = MaterialTheme.typography.titleLarge, color = Tokens.textPrimary)
+    PaneHeading(stringResource(R.string.settings_hidden))
     if (shown.isEmpty()) {
         Text(stringResource(R.string.hidden_empty), style = MaterialTheme.typography.bodyLarge, color = Tokens.textSecondary)
         return
@@ -286,7 +298,7 @@ private fun HiddenItems(focus: FocusMemory, playlist: PlaylistId) {
                     color = Tokens.textTertiary,
                 )
             }
-            Text(stringResource(R.string.hidden_show_again), style = MaterialTheme.typography.bodySmall, color = Tokens.accent)
+            Text(stringResource(R.string.hidden_show_again), style = MaterialTheme.typography.bodySmall, color = Tokens.textSecondary)
         }
     }
 }
@@ -316,7 +328,7 @@ private fun HomeRows(focus: FocusMemory) {
     val entries = order.mapNotNull { id -> HOME_ROW_TITLES.firstOrNull { it.first == id } } +
         HOME_ROW_TITLES.filterNot { it.first in shown }
 
-    Text(stringResource(R.string.settings_home), style = MaterialTheme.typography.titleLarge, color = Tokens.textPrimary)
+    PaneHeading(stringResource(R.string.settings_home))
     Text(stringResource(R.string.settings_home_help), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary)
     entries.forEach { (id, title) ->
         val visible = id in shown
@@ -330,14 +342,16 @@ private fun HomeRows(focus: FocusMemory) {
         ) {
             Text(
                 stringResource(title),
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.titleSmall,
                 color = if (visible) Tokens.textPrimary else Tokens.textTertiary,
                 modifier = Modifier.weight(1f),
             )
+            // A small amber tick is the one colour here: it marks what is switched on.
+            if (visible) Icon(LuzIcons.Check, contentDescription = null, tint = Tokens.accent, modifier = Modifier.size(CHECK_SIZE))
             Text(
                 stringResource(if (visible) R.string.home_row_shown else R.string.home_row_hidden),
                 style = MaterialTheme.typography.bodySmall,
-                color = if (visible) Tokens.accent else Tokens.textTertiary,
+                color = if (visible) Tokens.textSecondary else Tokens.textTertiary,
             )
         }
     }

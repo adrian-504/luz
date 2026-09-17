@@ -210,3 +210,26 @@ found and fixed on the way (ADR-0030): the focus memory kept a focus requester f
 
 The specification's 8-hour **live-playback** soak has NOT been run: the synthetic fixture's stream URLs are unreachable
 by design, so it needs either the owner's provider or a long run against the in-app test server.
+
+### 6.3 After the design system (ADR-0034, 2026-09-17)
+
+Same method as §6.2: `tooling/scripts/measure_frames.sh` on the **release build** on the owner's Bbox TV, holding the
+synthetic 10,072-channel playlist (`SeedLargePlaylistTest`), one press every 120 ms. Focus was confirmed by screenshot to
+have travelled the whole run each time.
+
+| Measurement | Before (§6.2) | After the redesign | Target | Verdict |
+|---|---|---|---|---|
+| Channel list, 120 presses | 2.7 % janky, P95 15 ms, P99 26 ms | **2.0 % janky, P50 7 ms, P95 14 ms, P99 25 ms** | P95 ≤ 16.7, P99 ≤ 33 | **Met** |
+| Live TV categories, 60 presses | 9.2 % janky, P95 36 ms (with preview on focus) | **0 % janky, P50 6 ms, P95 9 ms, P99 11 ms** | same | **Met** |
+| Guide, down the channels, 60 presses | 25.4 % janky, P95 32 ms, P99 46 ms | 10.6 % janky, P95 25 ms, P99 36 ms | same | **Not met — and not comparable** |
+| Guide, forward in time, 40 presses | 28.4 % janky, P95 85 ms, P99 121 ms | 14.8 % janky, P95 23 ms, P99 31 ms | same | **Not met — and not comparable** |
+
+Two caveats, stated so the numbers are not over-read:
+
+- **The fixture playlist has no logos**, so the new logo plates in Live TV and guide rows drew empty. The cost of loading
+  and drawing real logos while scrolling is not in these numbers; it needs a large fixture with artwork.
+- **The guide runs are not like-for-like.** The guide seeded 13,755 programmes inside the window this time (36,773 in
+  §6.2, because the fixture's dates fall differently against today), and the channels on screen during the runs had no
+  programmes — each row was one "no guide information" block rather than a row of programme cells. The guide gate stays
+  open and carries into interface step 5 (the guide timeline), to be measured with a fixture whose programmes cover the
+  channels in view.

@@ -2,6 +2,7 @@
 
 - **Status:** Accepted (delegated technical decision, 2026-09-16 — implemented; 22 device tests pass on the owner's Bbox TV)
 - **Date:** 2026-09-16
+- **Superseded in part:** the top tab bar is replaced by a floating navigation rail in [ADR-0034](0034-luz-design-system-rail-and-components.md) (2026-09-17); the rest stands and is extended there.
 - **Spec:** §9.1, §9.6; PRODUCT_DIRECTIVE.md §1–§3; DESIGN_SYSTEM.md §2, §3.5–3.8; supersedes the shell navigation part of [ADR-0023](0023-android-tv-app-toolchain-and-shell-navigation.md)
 
 ## Context

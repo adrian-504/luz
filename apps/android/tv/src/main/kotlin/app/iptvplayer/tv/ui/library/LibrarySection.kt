@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -29,6 +30,7 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
@@ -47,9 +49,13 @@ import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.live.EmptyState
 import app.iptvplayer.tv.ui.rememberedFocus
+import app.iptvplayer.tv.ui.theme.CalmScrolling
+import app.iptvplayer.tv.ui.theme.CardShape
+import app.iptvplayer.tv.ui.theme.LuzCard
 import app.iptvplayer.tv.ui.theme.LuzMenu
 import app.iptvplayer.tv.ui.theme.LuzMenuItem
 import app.iptvplayer.tv.ui.theme.LuzRow
+import app.iptvplayer.tv.ui.theme.LuzSkeletonShelf
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -91,7 +97,7 @@ fun LibrarySection(focus: FocusMemory, unit: ImportUnit, onOpen: (PlaylistId, St
         status = source?.let { graph.libraryState(it.playlistId, unit)?.status }
         loaded = true
     }
-    if (!loaded) return
+    if (!loaded) return LuzSkeletonShelf(CardShape.POSTER, Modifier.padding(top = Tokens.space16))
     val current = playlist
     if (current == null) {
         EmptyState(
@@ -109,56 +115,61 @@ fun LibrarySection(focus: FocusMemory, unit: ImportUnit, onOpen: (PlaylistId, St
     var menuFor by remember { mutableStateOf<PosterItem?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(
-                start = Tokens.space8,
-                end = Tokens.safeHorizontal,
-                top = Tokens.safeVertical,
-                bottom = Tokens.safeVertical,
-            ),
+        Column(
+            modifier = Modifier.fillMaxSize().padding(start = Tokens.space6, end = Tokens.safeHorizontal, top = Tokens.space8),
+            verticalArrangement = Arrangement.spacedBy(Tokens.space4),
         ) {
-            LazyColumn(
-                modifier = Modifier.width(260.dp).fillMaxHeight().focusRestorer(),
-                verticalArrangement = Arrangement.spacedBy(Tokens.space2),
-            ) {
-                item(key = "all") {
-                    CategoryItem(
-                        stringResource(if (unit == ImportUnit.MOVIES) R.string.library_all_movies else R.string.library_all_series),
-                        null,
-                        category == null,
-                        Modifier.rememberedFocus(focus, LibraryTags.CATEGORY_ALL),
-                    ) { category = null }
-                }
-                items(groups.size, key = { groups[it].id }) { index ->
-                    val group = groups[index]
-                    CategoryItem(
-                        group.title,
-                        group.itemCount,
-                        category == group.id,
-                        Modifier.rememberedFocus(focus, LibraryTags.category(group.id)),
-                    ) {
-                        category = group.id
+            Text(
+                stringResource(if (unit == ImportUnit.MOVIES) R.string.section_movies else R.string.section_series),
+                style = MaterialTheme.typography.displaySmall,
+                color = Tokens.textPrimary,
+                modifier = Modifier.padding(start = Tokens.space4),
+            )
+            Row(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier.width(CATEGORY_WIDTH).fillMaxHeight().focusRestorer(),
+                    verticalArrangement = Arrangement.spacedBy(Tokens.space1),
+                    contentPadding = PaddingValues(bottom = Tokens.space8),
+                ) {
+                    item(key = "all") {
+                        CategoryItem(
+                            stringResource(if (unit == ImportUnit.MOVIES) R.string.library_all_movies else R.string.library_all_series),
+                            null,
+                            category == null,
+                            Modifier.rememberedFocus(focus, LibraryTags.CATEGORY_ALL),
+                        ) { category = null }
+                    }
+                    items(groups.size, key = { groups[it].id }) { index ->
+                        val group = groups[index]
+                        CategoryItem(
+                            group.title,
+                            group.itemCount,
+                            category == group.id,
+                            Modifier.rememberedFocus(focus, LibraryTags.category(group.id)),
+                        ) {
+                            category = group.id
+                        }
                     }
                 }
+                PosterGrid(
+                    focus = focus,
+                    playlist = current,
+                    unit = unit,
+                    category = category,
+                    revision = revision,
+                    emptyText = stringResource(
+                        when {
+                            importing || status == null || status == ImportStatus.RUNNING -> R.string.library_importing
+                            status == ImportStatus.FAILED -> R.string.library_failed
+                            else -> R.string.library_empty
+                        },
+                    ),
+                    resolver = resolver,
+                    onOpen = { onOpen(current, it) },
+                    onMenu = { menuFor = it },
+                    modifier = Modifier.padding(start = Tokens.space6).weight(1f),
+                )
             }
-            PosterGrid(
-                focus = focus,
-                playlist = current,
-                unit = unit,
-                category = category,
-                revision = revision,
-                emptyText = stringResource(
-                    when {
-                        importing || status == null || status == ImportStatus.RUNNING -> R.string.library_importing
-                        status == ImportStatus.FAILED -> R.string.library_failed
-                        else -> R.string.library_empty
-                    },
-                ),
-                resolver = resolver,
-                onOpen = { onOpen(current, it) },
-                onMenu = { menuFor = it },
-                modifier = Modifier.padding(start = Tokens.space6).weight(1f),
-            )
         }
 
         menuFor?.let { item ->
@@ -199,8 +210,8 @@ private fun CategoryItem(title: String, count: Long?, selected: Boolean, modifie
     LuzRow(onClick = onSelect, modifier = modifier.onFocusChanged { focused = it.isFocused }, selected = selected) {
         Text(
             title,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (selected) Tokens.accent else Tokens.textPrimary,
+            style = MaterialTheme.typography.titleSmall,
+            color = if (selected) Tokens.textPrimary else Tokens.textSecondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
@@ -253,7 +264,7 @@ private fun PosterGrid(
         }
     }
 
-    val rows = items ?: return
+    val rows = items ?: return LuzSkeletonShelf(CardShape.POSTER, modifier.padding(top = Tokens.space3), count = 5)
     Box(modifier = modifier.fillMaxHeight()) {
         if (rows.isEmpty()) {
             Text(
@@ -264,22 +275,26 @@ private fun PosterGrid(
             )
             return@Box
         }
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(150.dp),
-            modifier = Modifier.fillMaxSize().focusRestorer(),
-            horizontalArrangement = Arrangement.spacedBy(Tokens.space4),
-            verticalArrangement = Arrangement.spacedBy(Tokens.space6),
-        ) {
-            items(rows.size, key = { rows[it].id }) { index ->
-                val item = rows[index]
-                PosterCard(
-                    item,
-                    resolver,
-                    Modifier.rememberedFocus(focus, LibraryTags.item(item.id)).onFocusChanged {
-                        if (it.isFocused && index >= rows.size - LOAD_AHEAD) loadMore()
-                    },
-                    onMenu = { onMenu(item) },
-                ) { onOpen(item.id) }
+        CalmScrolling {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(Tokens.posterWidth),
+                modifier = Modifier.fillMaxSize().focusRestorer(),
+                horizontalArrangement = Arrangement.spacedBy(Tokens.cardGap),
+                verticalArrangement = Arrangement.spacedBy(Tokens.space5),
+                // Room above and below for a lifted poster, so the first and last rows are never clipped.
+                contentPadding = PaddingValues(top = Tokens.space3, bottom = Tokens.space10, end = Tokens.space2),
+            ) {
+                items(rows.size, key = { rows[it].id }) { index ->
+                    val item = rows[index]
+                    PosterCard(
+                        item,
+                        resolver,
+                        Modifier.rememberedFocus(focus, LibraryTags.item(item.id)).onFocusChanged {
+                            if (it.isFocused && index >= rows.size - LOAD_AHEAD) loadMore()
+                        },
+                        onMenu = { onMenu(item) },
+                    ) { onOpen(item.id) }
+                }
             }
         }
     }
@@ -293,31 +308,19 @@ private fun PosterCard(
     onMenu: () -> Unit,
     onClick: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(Tokens.space2)) {
-        Surface(
-            onClick = onClick,
-            onLongClick = onMenu,
-            modifier = modifier.fillMaxWidth().aspectRatio(2f / 3f),
-            shape = ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(Tokens.radiusSmall)),
-            colors = ClickableSurfaceDefaults.colors(containerColor = Tokens.bgSurface1, focusedContainerColor = Tokens.bgSurface3),
-            border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(Tokens.focusRingWidth, Tokens.focusRing))),
-            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
-        ) {
-            Box(Modifier.fillMaxSize()) {
-                ArtworkImage(item.poster, resolver, item.title, Modifier.fillMaxSize())
-                WatchedBar(item.watched, Modifier.align(Alignment.BottomStart))
-            }
-        }
-        Text(
-            item.title,
-            style = MaterialTheme.typography.bodySmall,
-            color = Tokens.textPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        item.caption?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Tokens.textTertiary) }
-    }
+    LuzCard(
+        title = item.title,
+        subtitle = item.caption,
+        shape = CardShape.POSTER,
+        modifier = modifier,
+        progress = item.watched,
+        onLongClick = onMenu,
+        width = Dp.Unspecified,
+        onClick = onClick,
+    ) { art -> ArtworkImage(item.poster, resolver, item.title, art) }
 }
+
+private val CATEGORY_WIDTH = 220.dp
 
 private val PREVIEW_DELAY = 900.milliseconds
 

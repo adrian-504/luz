@@ -98,7 +98,7 @@ fun XtreamFormScreen(onAdded: (PlaylistId) -> Unit) {
                     is AddSourceResult.Rejected -> state = FormState.Failed(result.reason)
                 }
             }
-        }, Modifier.rememberedFocus(focus, FormTags.SUBMIT))
+        }, Modifier.rememberedFocus(focus, FormTags.SUBMIT), primary = true)
     }
     RestoreFocusEffect(focus, FormTags.SERVER)
 }
@@ -212,7 +212,7 @@ fun GuideLinkFormScreen(playlistId: PlaylistId, onDone: () -> Unit) {
                     else -> state = FormState.Failed(failure)
                 }
             }
-        }, Modifier.rememberedFocus(focus, FormTags.SUBMIT))
+        }, Modifier.rememberedFocus(focus, FormTags.SUBMIT), primary = true)
         if (hasLink) {
             ActionButton(stringResource(R.string.guide_link_clear), {
                 scope.launch {

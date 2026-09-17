@@ -1,9 +1,15 @@
 package app.iptvplayer.tv.ui.sources
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -12,10 +18,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.PlaylistId
@@ -85,12 +94,36 @@ fun SourcesList(focus: FocusMemory, onEditGuideLink: (PlaylistId) -> Unit) {
     }
 
     if (rows.isEmpty()) return
-    Text(stringResource(R.string.sources_title), style = MaterialTheme.typography.titleLarge, color = Tokens.textPrimary)
+    Text(stringResource(R.string.sources_title), style = MaterialTheme.typography.headlineMedium, color = Tokens.textPrimary)
     for (row in rows) {
         val id = row.record.playlistId
         val state = activity[id]
-        Column(verticalArrangement = Arrangement.spacedBy(Tokens.space2), modifier = Modifier.padding(vertical = Tokens.space2)) {
-            Text(row.record.name, style = MaterialTheme.typography.titleLarge, color = Tokens.textPrimary)
+        // A provider is a card of glass: its name, what it holds, whether it is working, and what can be done with it.
+        Column(
+            verticalArrangement = Arrangement.spacedBy(Tokens.space2),
+            modifier = Modifier
+                .clip(RoundedCornerShape(Tokens.radiusLarge))
+                .background(Tokens.raised)
+                .border(1.dp, Tokens.hairline, RoundedCornerShape(Tokens.radiusLarge))
+                .padding(Tokens.space5),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), verticalAlignment = Alignment.CenterVertically) {
+                val broken = row.liveStatus == ImportStatus.FAILED
+                val busy = state?.liveRunning == true || state?.guideRunning == true
+                Box(
+                    Modifier
+                        .size(STATUS_DOT)
+                        .clip(CircleShape)
+                        .background(
+                            when {
+                                broken -> Tokens.stateWarning
+                                busy -> Tokens.textTertiary
+                                else -> Tokens.stateOk
+                            },
+                        ),
+                )
+                Text(row.record.name, style = MaterialTheme.typography.titleLarge, color = Tokens.textPrimary)
+            }
             Text(
                 listOfNotNull(
                     row.record.endpointDisplay,
@@ -130,7 +163,7 @@ fun SourcesList(focus: FocusMemory, onEditGuideLink: (PlaylistId) -> Unit) {
                     },
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), modifier = Modifier.padding(top = Tokens.space2)) {
                 if (rows.size > 1 && id != current) {
                     ActionButton(
                         stringResource(R.string.sources_watch),
@@ -164,6 +197,8 @@ fun SourcesList(focus: FocusMemory, onEditGuideLink: (PlaylistId) -> Unit) {
         }
     }
 }
+
+private val STATUS_DOT = 8.dp
 
 /** Guide result in plain language (EPG unit state): programmes kept, or why none were. */
 @Composable

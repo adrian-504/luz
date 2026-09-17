@@ -12,28 +12,32 @@ import androidx.compose.ui.unit.sp
  * apart (ADR-0031). Change the JSON and run the script.
  */
 object Tokens {
-    /** The screen behind everything. */
-    val bgBase = Color(0xFF000000)
+    /**
+     * The environment behind everything. Not #000000: the owner's directive asks for a deep, faintly blue charcoal so the screen reads as
+     * a space rather than a hole. Every gradient over artwork ends in this colour, so pictures dissolve into the room instead of into a
+     * black edge.
+     */
+    val bgBase = Color(0xFF07080B)
 
-    /** Resting cards and rows. */
-    val bgSurface1 = Color(0xFF14171C)
+    /** The first layer above the environment: a list, a pane. */
+    val bgSurface1 = Color(0xFF0F1116)
 
-    /** Raised surfaces: panels, menus. */
-    val bgSurface2 = Color(0xFF1C2027)
+    /** Elevated surfaces: menus, panels. */
+    val bgSurface2 = Color(0xFF161920)
 
-    /** The surface under a focused item. */
-    val bgSurface3 = Color(0xFF262B33)
+    /** A surface under the remote. */
+    val bgSurface3 = Color(0xFF1E222B)
 
-    /** Hairlines, track behind a progress bar. */
-    val lineSubtle = Color(0xFF333A44)
+    /** Hairlines and the track behind a progress bar. */
+    val lineSubtle = Color(0xFF2A2E37)
 
-    /** Titles and anything that must be read at 3 m. */
-    val textPrimary = Color(0xFFFFFFFF)
+    /** Titles and anything that must be read at 3 m — a soft white, not a glaring one. */
+    val textPrimary = Color(0xFFF5F5F7)
 
-    /** Supporting lines — white at about 60 %. */
-    val textSecondary = Color(0xFF9E9EA5)
+    /** Descriptions and supporting lines. */
+    val textSecondary = Color(0xFFA1A1A8)
 
-    /** Captions and counts — white at about 40 %. */
+    /** Metadata, captions, counts. */
     val textTertiary = Color(0xFF6E6E76)
 
     /**
@@ -51,6 +55,9 @@ object Tokens {
     /** The live marker and the now-line in the guide. */
     val stateLive = Color(0xFFE5484D)
 
+    /** Working: a connected provider, a loaded guide — a small dot, never a fill. */
+    val stateOk = Color(0xFF3FB950)
+
     /** Warnings. */
     val stateWarning = Color(0xFFE3B341)
 
@@ -65,52 +72,71 @@ object Tokens {
     val focusRing = Color(0xFFFFFFFF)
 
     /** The transparent end of a gradient laid over artwork. */
-    val scrimTop = Color(0xFF000000)
+    val scrimTop = Color(0xFF07080B)
 
-    /** The solid end of that gradient, matching the background. */
-    val scrimBottom = Color(0xFF000000)
+    /** The solid end of that gradient, the environment colour. */
+    val scrimBottom = Color(0xFF07080B)
 
-    /** A menu or a settings pane: dark, and the screen behind it still shows through. */
-    val panel = Color(0xFF0B0B0C).copy(alpha = 0.72f)
+    /** A menu, a sheet, the navigation panel: dark, lifting off what is behind it. */
+    val panel = Color(0xFF101218).copy(alpha = 0.9f)
 
-    /** A resting card or row: white laid on very faintly. */
-    val raised = Color(0xFFFFFFFF).copy(alpha = 0.14f)
+    /** A resting control or row: white laid on very faintly. */
+    val raised = Color(0xFFFFFFFF).copy(alpha = 0.08f)
 
     /** The same surface under the remote. */
-    val raisedFocused = Color(0xFFFFFFFF).copy(alpha = 0.24f)
+    val raisedFocused = Color(0xFFFFFFFF).copy(alpha = 0.18f)
 
-    /** The one-pixel edge that separates a panel from what is behind it. */
-    val hairline = Color(0xFFFFFFFF).copy(alpha = 0.12f)
+    /** The one-pixel edge that separates a surface from what is behind it. */
+    val hairline = Color(0xFFFFFFFF).copy(alpha = 0.1f)
 
-    /** What dims the screen behind a menu. */
-    val scrim = Color(0xFF000000).copy(alpha = 0.55f)
+    /** What dims the screen behind a modal. */
+    val scrim = Color(0xFF000000).copy(alpha = 0.6f)
 
-    val display = 48.sp
-    val headline = 32.sp
-    val title = 24.sp
-    val body = 18.sp
-    val label = 16.sp
-    val caption = 14.sp
+    val hero = 38.sp
+    val display = 30.sp
+    val headline = 22.sp
+    val title = 19.sp
+    val subtitle = 16.sp
+    val body = 15.sp
+    val callout = 14.sp
+    val caption = 12.sp
+    val micro = 11.sp
 
+    val space1 = 4.dp
     val space2 = 8.dp
     val space3 = 12.dp
     val space4 = 16.dp
+    val space5 = 20.dp
     val space6 = 24.dp
     val space8 = 32.dp
+    val space10 = 40.dp
     val space12 = 48.dp
+    val space16 = 64.dp
     val safeHorizontal = 48.dp
     val safeVertical = 27.dp
 
     val radiusSmall = 6.dp
-    val radiusMedium = 10.dp
-    val radiusLarge = 18.dp
+    val radiusMedium = 8.dp
+    val radiusLarge = 16.dp
+    val radiusPill = 100.dp
 
-    const val MOTION_FOCUS_MS = 120
-    const val MOTION_STANDARD_MS = 200
-    const val MOTION_EMPHASIZED_MS = 300
+    const val MOTION_FOCUS_MS = 160
+    const val MOTION_STANDARD_MS = 240
+    const val MOTION_EMPHASIZED_MS = 420
+    const val MOTION_HERO_MS = 700
+    const val MOTION_AMBIENT_MS = 800
 
-    const val FOCUS_SCALE = 1.08f
+    const val HERO_HEIGHT_FRACTION = 0.66f
+    val posterWidth = 118.dp
+    val landscapeWidth = 196.dp
+    val railCollapsedWidth = 64.dp
+    val railExpandedWidth = 232.dp
+    val contentStart = 96.dp
+    val shelfSpacing = 28.dp
+    val cardGap = 16.dp
+
+    const val FOCUS_SCALE = 1.06f
     val focusRingWidth = 1.dp
-    val focusElevation = 18.dp
-    const val FOCUS_RING_ALPHA = 0.55f
+    val focusElevation = 20.dp
+    const val FOCUS_RING_ALPHA = 0.35f
 }

@@ -150,7 +150,8 @@ class LibraryFlowTest {
             rule.waitUntil(5_000) { !keyboardShown() }
         }
         awaitFocus(SearchTags.FIELD)
-        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        // Down passes the letter strip on its way to the results.
+        repeat(3) { if (focusedTag() != SearchTags.result("movie", two.id)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
         awaitFocus(SearchTags.result("movie", two.id))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(DetailTags.PLAY)
@@ -194,7 +195,9 @@ class LibraryFlowTest {
         ) { timeout, condition -> runCatching { rule.waitUntil(timeout, condition) } }
         awaitFocus(ShellTags.rail(Section.HOME))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitFocus(HomeTags.item(HomeTags.CONTINUE, movie.id), timeout = 20_000)
+        // Home opens on its hero, which features what the viewer is part-way through first: its Play resumes the movie.
+        awaitFocus(HomeTags.HERO_PLAY, timeout = 20_000)
+        awaitText(HomeTags.HERO_PLAY, rule.activity.getString(R.string.home_hero_resume))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitPlaying()
     }

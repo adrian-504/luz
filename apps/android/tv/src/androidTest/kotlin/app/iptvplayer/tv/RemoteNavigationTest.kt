@@ -116,7 +116,11 @@ class RemoteNavigationTest {
         enterMainShell()
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.HOME))
-        repeat(Section.SETTINGS.ordinal) { press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        walkTabsTo(Section.SETTINGS, ::focusedTag, { key -> press(key) }) { timeout, condition ->
+            runCatching {
+                rule.waitUntil(timeout, condition)
+            }
+        }
         awaitFocus(ShellTags.rail(Section.SETTINGS))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(SettingsTags.entry(SettingsTags.PROVIDERS))
@@ -126,10 +130,11 @@ class RemoteNavigationTest {
         repeat(3) { if (focusedTag() != SettingsTags.ADD_SOURCE) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
         awaitFocus(SettingsTags.ADD_SOURCE)
 
-        // Back jumps straight to the rail; Right returns to what had focus, not to the start of the screen.
+        // Back jumps straight to the panel; Right leaves it again and returns to what had focus, not to the start of
+        // the screen.
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.SETTINGS))
-        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
         awaitFocus(SettingsTags.ADD_SOURCE)
     }
 
@@ -160,8 +165,14 @@ class RemoteNavigationTest {
                 Section.SETTINGS -> SettingsTags.entry(SettingsTags.PROVIDERS)
             }
             awaitFocus(entry)
-            // No trap: the rail is always reachable from content, and returns to the selected section.
-            press(KeyEvent.KEYCODE_DPAD_UP)
+            // No trap: the navigation panel is always reachable from the content, and opens on the section you are in.
+            pressUntilFocused(
+                ShellTags.rail(section),
+                KeyEvent.KEYCODE_DPAD_LEFT,
+                attempts = 4,
+                ::focusedTag,
+                { key -> press(key) },
+            ) { timeout, condition -> runCatching { rule.waitUntil(timeout, condition) } }
             awaitFocus(ShellTags.rail(section))
         }
     }
@@ -197,7 +208,11 @@ class RemoteNavigationTest {
         enterMainShell()
         press(KeyEvent.KEYCODE_BACK)
         awaitFocus(ShellTags.rail(Section.HOME))
-        repeat(Section.SETTINGS.ordinal) { press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        walkTabsTo(Section.SETTINGS, ::focusedTag, { key -> press(key) }) { timeout, condition ->
+            runCatching {
+                rule.waitUntil(timeout, condition)
+            }
+        }
         awaitFocus(ShellTags.rail(Section.SETTINGS))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(SettingsTags.entry(SettingsTags.PROVIDERS))

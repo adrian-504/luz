@@ -149,7 +149,16 @@ class LiveTvFlowTest {
             runCatching { rule.onNodeWithTag(PlayerTags.STATE).assertExistsWithText(stateText(PlaybackState.PLAYING)) }.isSuccess
         }
 
-        // The last-channel key returns to the channel watched before; it was prepared ahead while Test Sports played.
+        // The last-channel key returns to the channel watched before; it was prepared ahead while Test Sports played. The
+        // state text alone can still read "Playing" from the channel before, so wait for the zap to settle on Test Sports —
+        // its programme appears under the title — which is when the channels around it are prepared.
+        awaitExists(PlayerTags.PROGRAMME, "Test Sports programme")
+        // The channels around it are prepared right after, one at a time, and the channel watched before comes third
+        // (PreparationWindow). Nothing on screen shows that work finishing, so give it a moment — on the test clock for
+        // the player's own delays, and in real time for the lookups it makes.
+        rule.mainClock.advanceTimeBy(PREPARE_GRACE_MS)
+        Thread.sleep(PREPARE_GRACE_MS)
+        rule.waitForIdle()
         press(KeyEvent.KEYCODE_LAST_CHANNEL)
         awaitExists(PlayerTags.TITLE, "Test News HD")
         rule.waitUntil(20_000) {
@@ -213,3 +222,6 @@ class LiveTvFlowTest {
         assertIsFocused()
     }
 }
+
+/** Time for the player to prepare the channels around the one it settled on (see the last-channel step). */
+private const val PREPARE_GRACE_MS = 1_500L
