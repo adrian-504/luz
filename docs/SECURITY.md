@@ -50,6 +50,9 @@ SecretBundle: { username?, password?, secretUrl?, secretHeaders? }   // in-memor
 - Database rows reference `credentialRef` (random ID). Losing the secret store (e.g. restore to a new device)
   yields `Auth(MISSING_CREDENTIALS)` → "re-enter credentials" flow; content and user state remain.
 - Deleting a provider deletes its secret entry in the same user action.
+- The viewer's **TMDB API key** (ADR-0038) is a secret of the same kind: kept only in the secret store under the fixed
+  reference `tmdb-api-key` (`SecretBundle.password`), checked with TMDB before it is kept, sent only as the `api_key`
+  query parameter of a `SensitiveUrl`, never shown back, and deleted — with every list read with it — by "Remove the key".
 
 ### 3.2 Apple Keychain
 
@@ -152,6 +155,9 @@ credentials, the host nor the stream path appear in `dumpsys media_session` (ADR
 - V1: **no remote analytics, no remote crash reporting, no advertising SDKs, no cloud backend.**
 - Local only: diagnostics ring buffer, performance metrics, import diagnostics — user-exportable, sanitized.
 - Apple MetricKit payloads may be read locally for development builds; not uploaded.
+- **TMDB** (ADR-0038) is the one outside service Luz contacts besides the viewer's providers, and only when the viewer
+  enters their own key: it receives requests for its public lists (trending, popular, top rated) about once a day. No
+  library contents, titles, watch history or device identifiers are sent; matching happens on the television.
 - Before public release (§21.2): choose crash monitoring with privacy controls (opt-in or clearly disclosed, redaction hook, no URL/title collection), documented by ADR and privacy policy.
 
 ## 10. Permissions (minimal)

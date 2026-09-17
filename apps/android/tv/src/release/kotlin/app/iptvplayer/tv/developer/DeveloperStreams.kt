@@ -12,4 +12,7 @@ object DeveloperStreams {
 
     @Suppress("UNUSED_PARAMETER")
     fun testProvider(context: Context): Triple<String, String, String>? = null
+
+    @Suppress("UNUSED_PARAMETER")
+    fun tmdbBase(context: Context): String? = null
 }

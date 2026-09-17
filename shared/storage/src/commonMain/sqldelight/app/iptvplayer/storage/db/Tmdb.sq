@@ -1,0 +1,66 @@
+-- Public lists read from TMDB with the viewer's own key (ADR-0038): trending, popular and top rated films and shows.
+-- Not tied to a source: a list is the same whoever's library it is matched against. Each list is replaced whole.
+CREATE TABLE tmdb_title (
+    list TEXT NOT NULL,
+    rank INTEGER NOT NULL,
+    tmdb_id INTEGER NOT NULL,
+    content_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    year INTEGER,
+    rating REAL,
+    votes INTEGER,
+    -- The keys a library row of the same work may carry: "tmdb:<id>"; the cleaned title with its year; and the title alone,
+    -- which only a row whose provider gave no year carries.
+    tmdb_key TEXT NOT NULL,
+    title_key TEXT NOT NULL,
+    bare_title_key TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    PRIMARY KEY (list, rank)
+);
+
+deleteList:
+DELETE FROM tmdb_title WHERE list = ?;
+
+insertTitle:
+INSERT OR REPLACE INTO tmdb_title(list, rank, tmdb_id, content_type, title, year, rating, votes, tmdb_key, title_key, bare_title_key,
+    fetched_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+lastFetched:
+SELECT MAX(fetched_at) FROM tmdb_title;
+
+listCounts:
+SELECT list, COUNT(*) AS title_count FROM tmdb_title GROUP BY list;
+
+deleteAll:
+DELETE FROM tmdb_title;
+
+-- The films of a list the library holds, in the list's order; the version shown is the primary one (ADR-0035). Each list
+-- entry is looked up by its two keys through the work index.
+moviesOfList:
+SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite,
+    MIN(t.rank) AS list_rank, MAX(t.rating) AS tmdb_rating
+FROM tmdb_title t
+JOIN movie mo ON mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.work_key IN (t.tmdb_key, t.title_key, t.bare_title_key)
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+WHERE t.list = :list AND (mo.is_primary IS NULL OR mo.is_primary = 1)
+    AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
+GROUP BY mo.id
+ORDER BY list_rank
+LIMIT :limit;
+
+seriesOfList:
+SELECT s.*, (f.content_id IS NOT NULL) AS is_favorite, MIN(t.rank) AS list_rank, MAX(t.rating) AS tmdb_rating
+FROM tmdb_title t
+JOIN series s ON s.playlist_id = :playlistId AND s.snapshot = :snapshot AND s.work_key IN (t.tmdb_key, t.title_key, t.bare_title_key)
+LEFT JOIN favorite f ON f.content_type = 'SERIES' AND f.content_id = s.id
+WHERE t.list = :list
+    AND s.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'SERIES')
+GROUP BY s.id
+ORDER BY list_rank
+LIMIT :limit;
+
+-- TMDB's rating of one work, from whichever list mentions it.
+ratingOf:
+SELECT MAX(rating) FROM tmdb_title WHERE content_type = :type AND (tmdb_key = :key OR title_key = :key OR bare_title_key = :key);

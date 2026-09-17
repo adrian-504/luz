@@ -433,7 +433,7 @@ Movies, Series) are done — ADR-0035 — and verified on the Bbox with the owne
 | 9 | New episodes | **Done** — ordered by the show's last update |
 | 10 | Highest rated films and shows (provider rating) | **Done** |
 | 11 | Popular without an outside source (rating and recency) | **Done** |
-| 12–13 | TMDB trending and ratings | Stage 5 — needs the owner's free TMDB key, typed into Settings |
+| 12–13 | TMDB trending and ratings | **Built — ADR-0038** (device test against the in-app fake of TMDB); needs the owner's free key to work for real |
 | 14 | "Your channels" (favourites, then most watched) | **Done** |
 | 15–19 | Shelf-based Movies and Series, genre shelves, decades, "Because you watched", categories at the bottom | **Done** |
 | 20 | My List | **Done** — Home row and a shelf in Movies/Series |

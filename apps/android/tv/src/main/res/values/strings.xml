@@ -257,6 +257,8 @@
     <string name="home_continue">Continue watching</string>
     <string name="home_recent_movies">Recently added movies</string>
     <string name="home_your_channels">Your channels</string>
+    <string name="home_trending_movies">Trending films</string>
+    <string name="home_trending_series">Trending shows</string>
     <string name="home_popular_movies">Popular films</string>
     <string name="home_popular_series">Popular shows</string>
     <string name="home_top_movies">Highest rated films</string>
@@ -306,6 +308,25 @@
         <item quantity="one">%1$d show with details</item>
         <item quantity="other">%1$d shows with details</item>
     </plurals>
+    <string name="settings_tmdb">TMDB</string>
+    <string name="settings_tmdb_summary">Trending and ratings, with your own key</string>
+    <string name="tmdb_help">With a free key from The Movie Database (themoviedb.org → Settings → API), Luz adds what is trending this week and uses TMDB\'s popularity and ratings for the Popular and Highest rated rows. Luz reads only TMDB\'s public lists, about once a day; nothing about your library or what you watch is sent.</string>
+    <string name="tmdb_no_key">No key yet: rows use your provider\'s ratings.</string>
+    <string name="tmdb_checking">Checking your key with TMDB…</string>
+    <string name="tmdb_refused">TMDB did not accept that key. Check it and try again.</string>
+    <string name="tmdb_failed">TMDB could not be reached last time. Luz will try again later.</string>
+    <string name="tmdb_reading">Key accepted. Reading TMDB\'s lists…</string>
+    <plurals name="tmdb_connected">
+        <item quantity="one">Connected · %1$d title read at %2$s</item>
+        <item quantity="other">Connected · %1$d titles read at %2$s</item>
+    </plurals>
+    <string name="tmdb_enter_key">Enter your TMDB key</string>
+    <string name="tmdb_replace_key">Replace the key</string>
+    <string name="tmdb_refresh">Update now</string>
+    <string name="tmdb_remove">Remove the key</string>
+    <string name="tmdb_key_label">API key (v3)</string>
+    <string name="tmdb_key_message">Type or paste the "API Key" shown on themoviedb.org under Settings → API. It is kept encrypted on this TV.</string>
+    <string name="tmdb_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
     <string name="settings_about">About Luz</string>
     <string name="settings_about_summary">Version and what Luz is</string>
     <string name="settings_developer">Developer</string>

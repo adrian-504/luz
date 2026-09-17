@@ -154,6 +154,8 @@ class CustomisationFlowTest {
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         renameTo("Film night") { runBlocking { graph.userGroups(playlist) }.any { it.title == "Film night" } }
 
+        // The group is made first and the film added right after it, so wait for the film.
+        rule.waitUntil(10_000) { runBlocking { graph.userGroups(playlist) }.singleOrNull()?.movieCount == 1L }
         val group = runBlocking { graph.userGroups(playlist) }.single()
         assertEquals(1L to 0L, group.movieCount to group.channelCount)
         // The group is a shelf of Movies, and not a list of channels in Live TV.

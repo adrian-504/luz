@@ -117,6 +117,30 @@ object TestPanel {
             """"episodes":{"1":[${episode(8101, 1, 1)},${episode(8102, 1, 2)},${episode(8103, 1, 3)}],"2":[${episode(8201, 2, 1)}]}}"""
     }
 
+    /** The only key the fake TMDB accepts (a canary: it must never appear in logs). */
+    const val TMDB_KEY = "tmdb-canary-3b7d91e4c2a8f605"
+
+    /**
+     * A fake of TMDB's v3 lists for device tests (ADR-0038): `/tmdb/3/{path}?api_key=…&page=…`. Page 1 of every film list
+     * names the test films in reverse order and a film the test library does not have; show lists name the test series.
+     * Other pages are empty. A wrong key gets TMDB's 401.
+     */
+    fun tmdb(route: String, query: String): Pair<Int, String> {
+        val params = params(query)
+        if (params["api_key"] != TMDB_KEY) return 401 to """{"status_code":7,"status_message":"Invalid API key"}"""
+        val path = route.removePrefix("/tmdb/3/")
+        if (path == "configuration") return 200 to """{"images":{}}"""
+        if (params["page"] != "1") return 200 to """{"page":2,"results":[]}"""
+        val results = if (path.contains("movie")) {
+            """{"id":990002,"title":"Test Movie Two","release_date":"2020-05-01","vote_average":8.1,"vote_count":321},""" +
+                """{"id":990009,"title":"Not In This Library","release_date":"2019-01-01","vote_average":7.0,"vote_count":10},""" +
+                """{"id":990001,"title":"Test Movie One","release_date":"2021-06-01","vote_average":7.4,"vote_count":210}"""
+        } else {
+            """{"id":991001,"name":"Test Series","first_air_date":"2026-01-01","vote_average":8.8,"vote_count":99}"""
+        }
+        return 200 to """{"page":1,"results":[$results]}"""
+    }
+
     /** `/movie/{user}/{password}/{id}.m3u8` and `/series/...`: true when the login and title exist. */
     fun libraryTarget(route: String): Boolean {
         val kind = route.removePrefix("/").substringBefore('/')

@@ -101,6 +101,9 @@ class TestMediaServer(private val assets: AssetManager, port: Int = 0) : AutoClo
                 route == "/player_api.php" -> respond(out, 200, "application/json", TestPanel.api(query, url("/")).toByteArray())
                 route == "/get.php" -> TestPanel.m3u(query, url(""))?.let { respond(out, 200, "audio/x-mpegurl", it.toByteArray()) }
                     ?: respond(out, 401, "text/plain", "unauthorized".toByteArray())
+                route.startsWith("/tmdb/3/") -> TestPanel.tmdb(route, query).let { (status, body) ->
+                    respond(out, status, "application/json", body.toByteArray())
+                }
                 route == "/xmltv.php" -> TestPanel.xmltv(query)?.let { respond(out, 200, "application/xml", it.toByteArray()) }
                     ?: respond(out, 401, "text/plain", "unauthorized".toByteArray())
                 route.startsWith("/live/") -> when (TestPanel.liveTarget(route)) {

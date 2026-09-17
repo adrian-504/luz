@@ -853,6 +853,39 @@
       "expected": {
         "duration_seconds": 2
       }
+    },
+    {
+      "path": "tmdb/trending-movies.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "ADR-0038",
+      "purpose": "TMDB trending films (v3 list shape): a title with a year, one without a release date and a zero rating, an empty title and a non-numeric id that must be skipped.",
+      "checks": {
+        "json_keys": [
+          "page",
+          "results"
+        ]
+      },
+      "expected": {
+        "titles": 3,
+        "rated": 2
+      }
+    },
+    {
+      "path": "tmdb/top-rated-tv.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "ADR-0038",
+      "purpose": "TMDB top rated shows: names and first air dates instead of titles and release dates.",
+      "checks": {
+        "json_keys": [
+          "page",
+          "results"
+        ]
+      },
+      "expected": {
+        "titles": 2
+      }
     }
   ]
 }

@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,18 +48,22 @@ import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.storage.DetailCoverage
 import app.iptvplayer.tv.BuildConfig
 import app.iptvplayer.tv.R
+import app.iptvplayer.tv.app.AppGraph
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.library.HOME_ROW_TITLES
 import app.iptvplayer.tv.ui.rememberedFocus
+import app.iptvplayer.tv.ui.shortTime
 import app.iptvplayer.tv.ui.sources.SourcesList
 import app.iptvplayer.tv.ui.theme.LuzIcons
 import app.iptvplayer.tv.ui.theme.LuzMenu
 import app.iptvplayer.tv.ui.theme.LuzMenuItem
+import app.iptvplayer.tv.ui.theme.LuzPrompt
 import app.iptvplayer.tv.ui.theme.LuzRow
 import app.iptvplayer.tv.ui.theme.Tokens
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 object SettingsTags {
@@ -68,6 +73,10 @@ object SettingsTags {
     const val HIDDEN = "settings-hidden"
     const val DETAILS = "settings-details"
     const val DETAILS_FETCH = "settings-details-fetch"
+    const val TMDB = "settings-tmdb"
+    const val TMDB_KEY = "settings-tmdb-key"
+    const val TMDB_REFRESH = "settings-tmdb-refresh"
+    const val TMDB_REMOVE = "settings-tmdb-remove"
 
     fun homeRow(id: String) = "settings-home-$id"
     const val DEVELOPER = "settings-developer"
@@ -119,6 +128,7 @@ fun SettingsSection(
             }
             // Only with a provider: before one is added there is nothing it could have sent.
             if (playlist != null) add(SettingsEntry(SettingsTags.DETAILS, R.string.settings_details, R.string.settings_details_summary))
+            add(SettingsEntry(SettingsTags.TMDB, R.string.settings_tmdb, R.string.settings_tmdb_summary))
             add(SettingsEntry(SettingsTags.ABOUT, R.string.settings_about, R.string.settings_about_summary))
             if (hasDeveloperStreams) {
                 add(SettingsEntry(SettingsTags.DEVELOPER, R.string.settings_developer, R.string.settings_developer_summary))
@@ -185,6 +195,7 @@ fun SettingsSection(
                     SettingsTags.HIDDEN -> playlist?.let { HiddenItems(focus, it) }
                     SettingsTags.ABOUT -> About()
                     SettingsTags.DETAILS -> playlist?.let { DetailCoveragePane(focus, it) }
+                    SettingsTags.TMDB -> TmdbPane(focus)
                     SettingsTags.DEVELOPER -> DeveloperStreamsPane(focus, onPlayDeveloperStream, onSourceAdded)
                     else -> {
                         ActionButton(
@@ -286,6 +297,81 @@ private fun DetailCoveragePane(focus: FocusMemory, playlist: PlaylistId) {
                 Text("$percent %", style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary)
             }
         }
+    }
+}
+
+/**
+ * TMDB (ADR-0038): what it adds, whether a key is kept and when the lists were last read, and the three things the
+ * viewer can do — enter or replace their key, read the lists now, remove the key. The key itself is never shown.
+ */
+@Composable
+private fun TmdbPane(focus: FocusMemory) {
+    val graph = LocalAppGraph.current
+    val scope = rememberCoroutineScope()
+    val lists by graph.listRevision.collectAsState()
+    var status by remember { mutableStateOf<AppGraph.TmdbStatus?>(null) }
+    var entering by remember { mutableStateOf(false) }
+    var checking by remember { mutableStateOf(false) }
+    var refused by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(lists, checking) { status = graph.tmdbStatus() }
+    PaneHeading(stringResource(R.string.settings_tmdb))
+    Text(stringResource(R.string.tmdb_help), style = MaterialTheme.typography.bodyMedium, color = Tokens.textSecondary)
+    val current = status ?: return
+    val line = when {
+        checking -> stringResource(R.string.tmdb_checking)
+        refused != null -> stringResource(R.string.tmdb_refused)
+        !current.hasKey -> stringResource(R.string.tmdb_no_key)
+        current.error != null -> stringResource(R.string.tmdb_failed)
+        current.fetchedAt == null -> stringResource(R.string.tmdb_reading)
+        else -> pluralStringResource(R.plurals.tmdb_connected, current.titles.toInt(), current.titles.toInt(), shortTime(current.fetchedAt))
+    }
+    Text(line, style = MaterialTheme.typography.titleSmall, color = Tokens.textPrimary, modifier = Modifier.testTag(SettingsTags.TMDB))
+    Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3)) {
+        ActionButton(
+            stringResource(if (current.hasKey) R.string.tmdb_replace_key else R.string.tmdb_enter_key),
+            { entering = true },
+            Modifier.rememberedFocus(focus, SettingsTags.TMDB_KEY),
+            primary = !current.hasKey,
+        )
+        if (current.hasKey) {
+            ActionButton(
+                stringResource(R.string.tmdb_refresh),
+                { graph.refreshTmdb(force = true) },
+                Modifier.rememberedFocus(focus, SettingsTags.TMDB_REFRESH),
+            )
+            ActionButton(
+                stringResource(R.string.tmdb_remove),
+                { scope.launch { graph.removeTmdbKey() } },
+                Modifier.rememberedFocus(focus, SettingsTags.TMDB_REMOVE),
+            )
+        }
+    }
+    Text(stringResource(R.string.tmdb_attribution), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary)
+    if (entering) {
+        LuzPrompt(
+            title = stringResource(R.string.tmdb_enter_key),
+            initial = "",
+            label = stringResource(R.string.tmdb_key_label),
+            message = stringResource(R.string.tmdb_key_message),
+            onConfirm = { key ->
+                checking = true
+                refused = null
+                scope.launch {
+                    refused = graph.setTmdbKey(key)
+                    checking = false
+                }
+            },
+            onClear = null,
+            onDismiss = {
+                entering = false
+                scope.launch {
+                    repeat(20) {
+                        if (focus.requestFocus(SettingsTags.TMDB_KEY)) return@launch
+                        delay(50)
+                    }
+                }
+            },
+        )
     }
 }
 

@@ -226,7 +226,7 @@ a card with what it needs in plain words. Forms use glass fields and one white *
 ## 16. Settings and providers
 A screen title; a short list of sections that do something (Providers, Home, Film & show details once there is a
 provider — how many pages have been fetched and what share of them has each kind of detail — Hidden items when something
-is hidden, About, Developer in debug builds); the chosen one on the right under its own heading. The directive's other sections —
+is hidden, TMDB — the viewer's key, when the lists were read, Update now and Remove — About, Developer in debug builds); the chosen one on the right under its own heading. The directive's other sections —
 playback, subtitles, appearance, parental controls, storage, privacy, account, devices — arrive with the features they
 configure, never as empty pages. A **provider** is a glass card: a status dot (green working, yellow failing, grey
 updating), name, address, channel count, encryption warning, guide status, and Refresh / Guide link / Remove.

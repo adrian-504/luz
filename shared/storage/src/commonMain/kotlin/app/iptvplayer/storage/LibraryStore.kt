@@ -107,6 +107,19 @@ public data class TitleDetailRow(
     public val tmdbId: String?,
 )
 
+/** One entry of an outside list (ADR-0038), as stored: its rank is its place in the list. */
+public data class ListEntry(
+    public val tmdbId: Long,
+    public val type: ContentType,
+    public val title: String,
+    public val year: Int?,
+    public val rating: Double?,
+    public val votes: Int?,
+    public val tmdbKey: String,
+    public val titleKey: String,
+    public val bareTitleKey: String = titleKey,
+)
+
 /** A person found by search, with how many of the viewer's films and shows they are in. */
 public data class PersonHit(public val name: String, public val titles: Int, public val directs: Boolean)
 
@@ -153,6 +166,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
     private val queries = content.libraryQueries
     private val detailQueries = content.detailQueries
     private val browseQueries = content.browseQueries
+    private val tmdbQueries = content.tmdbQueries
 
     private fun active(playlistId: PlaylistId, unit: ImportUnit): Long? = content.unitState(playlistId, unit)?.activeSnapshot
 
@@ -746,6 +760,55 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
         }
     }
 
+    // --- Outside lists (ADR-0038) ---
+
+    /** Replaces [list] with [entries], in their order. */
+    public fun saveList(list: String, entries: List<ListEntry>) {
+        val now = clock.now().toEpochMilliseconds()
+        content.transaction {
+            tmdbQueries.deleteList(list)
+            entries.forEachIndexed { rank, e ->
+                tmdbQueries.insertTitle(
+                    list, rank.toLong(), e.tmdbId, e.type.name, e.title, e.year?.toLong(), e.rating, e.votes?.toLong(),
+                    e.tmdbKey, e.titleKey, e.bareTitleKey, now,
+                )
+            }
+        }
+    }
+
+    public fun listsFetchedAt(): Instant? = tmdbQueries.lastFetched().executeAsOneOrNull()?.MAX?.let { Instant.fromEpochMilliseconds(it) }
+
+    public fun listCounts(): Map<String, Long> = tmdbQueries.listCounts().executeAsList().associate { it.list to it.title_count }
+
+    public fun clearLists() {
+        tmdbQueries.deleteAll()
+    }
+
+    /** The films of [list] the library holds, in the list's order. */
+    public fun moviesOfList(playlistId: PlaylistId, list: String, limit: Int): List<MovieRow> {
+        val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return emptyList()
+        return tmdbQueries.moviesOfList(playlistId.value, snapshot, list, limit.toLong()).executeAsList().map {
+            movieRow(
+                it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
+                it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite, it.quality, it.tags, it.language,
+                it.version_count,
+            )
+        }
+    }
+
+    public fun seriesOfList(playlistId: PlaylistId, list: String, limit: Int): List<SeriesRow> {
+        val snapshot = active(playlistId, ImportUnit.SERIES) ?: return emptyList()
+        return tmdbQueries.seriesOfList(playlistId.value, snapshot, list, limit.toLong()).executeAsList().map {
+            seriesRow(
+                it.id, it.title, it.year, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template, it.provider_series_id,
+                it.is_favorite, it.quality, it.tags, it.language, it.last_modified_at,
+            )
+        }
+    }
+
+    /** TMDB's rating of the work with [workKey], when a stored list mentions it. */
+    public fun listRating(type: ContentType, workKey: String): Double? = tmdbQueries.ratingOf(type.name, workKey).executeAsOneOrNull()?.MAX
+
     public fun recordChannelWatch(playlistId: PlaylistId, channelId: String) {
         detailQueries.recordChannelWatch(playlistId.value, channelId, clock.now().toEpochMilliseconds())
     }
@@ -813,7 +876,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
                     playlistId.value, snapshot, series.id.value, series.title, order, series.year?.toLong(), series.plot,
                     encodeList(series.genres), series.rating, poster?.template, backdrop?.template, series.providerSeriesId,
                     series.lastModifiedAt?.toEpochMilliseconds(), series.quality?.name, encodeList(series.tags), series.language,
-                    series.externalIds.tmdb, ratingValue(series.rating),
+                    series.externalIds.tmdb, ratingValue(series.rating), series.workKey,
                 )
                 // A show's list entry already carries its page (genres, cast, trailer), so it is kept without a second request.
                 val detail = (series.detail ?: TitleDetail()).copy(

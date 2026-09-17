@@ -100,6 +100,8 @@ fun AppNavHost() {
                 val target = if (graph.sources().isEmpty()) Routes.WELCOME else Routes.main(Section.LIVE_TV)
                 // Film pages keep arriving in the background from where the last session stopped (ADR-0035).
                 graph.currentSource()?.let { graph.startDetailFetch(it.playlistId) }
+                // TMDB lists, when the viewer gave a key: read again when more than a day old (ADR-0038).
+                graph.refreshTmdb()
                 navController.navigate(target) { popUpTo(Routes.START) { inclusive = true } }
             }
         }

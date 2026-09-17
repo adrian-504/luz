@@ -83,8 +83,12 @@ CREATE TABLE series (
     language TEXT,
     tmdb_id TEXT,
     rating_value REAL,
+    -- The show this row is, for matching outside lists (ADR-0038): "tmdb:<id>" when the provider sent one, else title and year.
+    work_key TEXT,
     PRIMARY KEY (playlist_id, snapshot, id)
 );
+
+CREATE INDEX series_work ON series(playlist_id, snapshot, work_key);
 
 CREATE INDEX series_order ON series(playlist_id, snapshot, sort_order);
 
@@ -218,8 +222,8 @@ WHERE playlist_id = :playlistId AND snapshot = :snapshot;
 
 insertSeries:
 INSERT OR IGNORE INTO series(playlist_id, snapshot, id, title, sort_order, year, plot, genres, rating, poster_template, backdrop_template,
-    provider_series_id, last_modified_at, quality, tags, language, tmdb_id, rating_value)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    provider_series_id, last_modified_at, quality, tags, language, tmdb_id, rating_value, work_key)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 insertSeason:
 INSERT OR REPLACE INTO season(playlist_id, snapshot, series_id, id, season_number, title, poster_template, episode_count)

@@ -1,0 +1,21 @@
+-- Migration 9 -> 10: TMDB lists (ADR-0038). Shows gain the work key films already have, so a show on a TMDB list can be
+-- found in the library; rows imported before this have none until the next refresh. Must match Library.sq and Tmdb.sq.
+ALTER TABLE series ADD COLUMN work_key TEXT;
+
+CREATE INDEX series_work ON series(playlist_id, snapshot, work_key);
+
+CREATE TABLE tmdb_title (
+    list TEXT NOT NULL,
+    rank INTEGER NOT NULL,
+    tmdb_id INTEGER NOT NULL,
+    content_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    year INTEGER,
+    rating REAL,
+    votes INTEGER,
+    tmdb_key TEXT NOT NULL,
+    title_key TEXT NOT NULL,
+    bare_title_key TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    PRIMARY KEY (list, rank)
+);

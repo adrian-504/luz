@@ -1,0 +1,7 @@
+{"page":1,"results":[
+{"adult":false,"id":900001,"title":"Example Heist","original_title":"Example Heist","release_date":"2024-03-01","vote_average":7.8,"vote_count":1520,"popularity":412.5,"media_type":"movie"},
+{"adult":false,"id":900002,"title":"The Example Voyage","release_date":"2021-11-19","vote_average":6.4,"vote_count":88,"media_type":"movie"},
+{"adult":false,"id":900003,"title":"","release_date":"2020-01-01","vote_average":5,"media_type":"movie"},
+{"adult":false,"id":"not-a-number","title":"Broken Entry","media_type":"movie"},
+{"adult":false,"id":900004,"title":"Unrated Example","release_date":"","vote_average":0,"vote_count":0,"media_type":"movie"}
+],"total_pages":1,"total_results":5}

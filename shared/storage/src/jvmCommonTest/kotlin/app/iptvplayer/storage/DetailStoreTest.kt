@@ -8,6 +8,7 @@ import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.id.ProviderId
 import app.iptvplayer.domain.id.SeriesId
 import app.iptvplayer.domain.library.Quality
+import app.iptvplayer.domain.library.TitleCleaner
 import app.iptvplayer.domain.model.ChannelGroup
 import app.iptvplayer.domain.model.ContentKind
 import app.iptvplayer.domain.model.ContentRef
@@ -244,6 +245,56 @@ class DetailStoreTest {
         val hit = library.searchPeople(playlist, "Person 42", 50).first { it.name == "Person 42" }
         assertEquals(library.titlesOfPerson(playlist, "Person 42").second.size, hit.titles)
         assertTrue(hit.titles > 0)
+    }
+
+    @Test
+    fun anOutsideListFindsItsTitlesByTmdbIdOrByTitleAndYearInItsOwnOrder() {
+        addSource()
+        val withId = movie("mv_heat", "Heat", "8", 3).copy(year = 1995, externalIds = ExternalIds(tmdb = "949"))
+        importMovies(withId, movie("mv_dune", "Dune", "7", 2).copy(year = 2021), movie("mv_other", "Other", "6", 1).copy(year = null))
+        library.saveList(
+            "TRENDING_MOVIES",
+            listOf(
+                ListEntry(438631, ContentType.MOVIE, "Dune", 2021, 7.8, 900, "tmdb:438631", TitleCleaner.workKey("Dune", 2021)),
+                ListEntry(
+                    1,
+                    ContentType.MOVIE,
+                    "Not In The Library",
+                    2020,
+                    6.0,
+                    10,
+                    "tmdb:1",
+                    TitleCleaner.workKey("Not In The Library", 2020),
+                ),
+                ListEntry(949, ContentType.MOVIE, "Heat", 1995, 8.3, 7000, "tmdb:949", TitleCleaner.workKey("Heat", 1995)),
+            ),
+        )
+        assertEquals(listOf("Dune", "Heat"), library.moviesOfList(playlist, "TRENDING_MOVIES", 10).map { it.title }, "the list's order")
+
+        // A film whose provider gave no year is found by its title alone.
+        library.saveList(
+            "POPULAR_MOVIES",
+            listOf(
+                ListEntry(
+                    2, ContentType.MOVIE, "Other", 2019, 5.0, 3, "tmdb:2",
+                    TitleCleaner.workKey(
+                        "Other",
+                        2019,
+                    ),
+                    TitleCleaner.workKey("Other", null),
+                ),
+            ),
+        )
+        assertEquals(listOf("Other"), library.moviesOfList(playlist, "POPULAR_MOVIES", 10).map { it.title })
+        assertEquals(8.3, library.listRating(ContentType.MOVIE, "tmdb:949"))
+        assertEquals(mapOf("TRENDING_MOVIES" to 3L, "POPULAR_MOVIES" to 1L), library.listCounts())
+        assertNotNull(library.listsFetchedAt())
+
+        // Replaced whole, and cleared when the key is removed.
+        library.saveList("TRENDING_MOVIES", emptyList())
+        assertTrue(library.moviesOfList(playlist, "TRENDING_MOVIES", 10).isEmpty())
+        library.clearLists()
+        assertNull(library.listsFetchedAt())
     }
 
     @Test

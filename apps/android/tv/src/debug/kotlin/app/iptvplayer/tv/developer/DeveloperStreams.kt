@@ -31,6 +31,13 @@ object DeveloperStreams {
         server(context)
     }
 
+    /** Device tests set this to read TMDB from the in-process test server instead of TMDB (ADR-0038). */
+    @Volatile
+    var useTestTmdb: Boolean = false
+
+    /** Where TMDB is read from: the test server's fake when [useTestTmdb], otherwise null (TMDB itself). */
+    fun tmdbBase(context: Context): String? = if (useTestTmdb) server(context).url("/tmdb/3") else null
+
     /** Server address and the canary login of the in-process test Xtream panel. */
     fun testProvider(context: Context): Triple<String, String, String>? =
         Triple(server(context).url(""), TestPanel.USERNAME, TestPanel.PASSWORD)

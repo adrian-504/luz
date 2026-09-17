@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.library.ExternalList
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.domain.security.UrlTemplate
@@ -127,10 +128,11 @@ fun LibraryShelves(
     val watched by graph.watchRevision.collectAsState()
     val details by graph.detailRevision.collectAsState()
     val detailsStep = details / SHELF_REFRESH_STEP
+    val lists by graph.listRevision.collectAsState()
     var shelves by remember { mutableStateOf<List<Shelf>?>(null) }
     val movies = unit == ImportUnit.MOVIES
 
-    LaunchedEffect(playlist, unit, revision, watched, detailsStep) {
+    LaunchedEffect(playlist, unit, revision, watched, detailsStep, lists) {
         fun movie(row: MovieRow) = ShelfItem(
             row.id,
             row.title,
@@ -178,20 +180,78 @@ fun LibraryShelves(
                     },
                 ),
             )
+            add(
+                titles(
+                    "trending",
+                    R.string.home_trending_movies,
+                    graph.moviesOfList(playlist, ExternalList.TRENDING_MOVIES, SHELF_LIMIT).map(::movie),
+                ),
+            )
             add(titles("recent", R.string.library_recently_added, graph.recentMovies(playlist, SHELF_LIMIT).map(::movie)))
-            add(titles("popular", R.string.home_popular_movies, graph.popularMovies(playlist, SHELF_LIMIT).map(::movie)))
+            add(
+                titles(
+                    "popular",
+                    R.string.home_popular_movies,
+                    graph.moviesOfList(
+                        playlist,
+                        ExternalList.POPULAR_MOVIES,
+                        SHELF_LIMIT,
+                    ).ifEmpty { graph.popularMovies(playlist, SHELF_LIMIT) }
+                        .map(::movie),
+                ),
+            )
             graph.becauseYouWatched(playlist, SHELF_LIMIT)?.let { pick ->
                 add(Shelf.Titles("because", resources.getString(R.string.home_because, pick.seed.title), pick.movies.map(::movie)))
             }
-            add(titles("top", R.string.home_top_movies, graph.topRatedMovies(playlist, SHELF_LIMIT).map(::movie)))
+            add(
+                titles(
+                    "top",
+                    R.string.home_top_movies,
+                    graph.moviesOfList(
+                        playlist,
+                        ExternalList.TOP_MOVIES,
+                        SHELF_LIMIT,
+                    ).ifEmpty { graph.topRatedMovies(playlist, SHELF_LIMIT) }
+                        .map(::movie),
+                ),
+            )
             add(titles("mine", R.string.home_my_list, graph.favoriteMovies(playlist, SHELF_LIMIT).map(::movie)))
             for (group in graph.userGroups(playlist).filter { it.movieCount > 0 }) {
                 add(Shelf.Titles("group-${group.id}", group.title, graph.moviesInUserGroup(playlist, group.id, SHELF_LIMIT).map(::movie)))
             }
         } else {
+            add(
+                titles(
+                    "trending",
+                    R.string.home_trending_series,
+                    graph.seriesOfList(playlist, ExternalList.TRENDING_SERIES, SHELF_LIMIT).map(::series),
+                ),
+            )
             add(titles("new", R.string.home_new_episodes, graph.newEpisodeSeries(playlist, SHELF_LIMIT).map(::series)))
-            add(titles("popular", R.string.home_popular_series, graph.popularSeries(playlist, SHELF_LIMIT).map(::series)))
-            add(titles("top", R.string.home_top_series, graph.topRatedSeries(playlist, SHELF_LIMIT).map(::series)))
+            add(
+                titles(
+                    "popular",
+                    R.string.home_popular_series,
+                    graph.seriesOfList(
+                        playlist,
+                        ExternalList.POPULAR_SERIES,
+                        SHELF_LIMIT,
+                    ).ifEmpty { graph.popularSeries(playlist, SHELF_LIMIT) }
+                        .map(::series),
+                ),
+            )
+            add(
+                titles(
+                    "top",
+                    R.string.home_top_series,
+                    graph.seriesOfList(
+                        playlist,
+                        ExternalList.TOP_SERIES,
+                        SHELF_LIMIT,
+                    ).ifEmpty { graph.topRatedSeries(playlist, SHELF_LIMIT) }
+                        .map(::series),
+                ),
+            )
             add(titles("mine", R.string.home_my_list, graph.favoriteSeries(playlist, SHELF_LIMIT).map(::series)))
             for (group in graph.userGroups(playlist).filter { it.seriesCount > 0 }) {
                 add(Shelf.Titles("group-${group.id}", group.title, graph.seriesInUserGroup(playlist, group.id, SHELF_LIMIT).map(::series)))

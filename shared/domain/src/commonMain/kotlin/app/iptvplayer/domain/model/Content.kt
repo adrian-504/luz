@@ -176,6 +176,9 @@ public data class Series(
     /** What the provider's series list already says about the show beyond its title (cast, director, trailer). */
     public val detail: TitleDetail? = null,
 ) {
+    /** The show itself, for matching it in outside lists (ADR-0038); built like [Movie.workKey]. */
+    public val workKey: String get() = externalIds.tmdb?.let { "tmdb:$it" } ?: TitleCleaner.workKey(title, year)
+
     init {
         require(title.isNotBlank()) { "series title must not be blank" }
     }

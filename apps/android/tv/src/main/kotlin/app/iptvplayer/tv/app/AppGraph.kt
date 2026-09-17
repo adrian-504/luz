@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.core.content.edit
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.library.ExternalList
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.CustomisationTarget
 import app.iptvplayer.domain.model.ImportStatus
@@ -17,6 +18,7 @@ import app.iptvplayer.ingestion.AddSourceFailure
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.ingestion.ShortGuideReport
 import app.iptvplayer.ingestion.SourceService
+import app.iptvplayer.ingestion.TmdbService
 import app.iptvplayer.ingestion.UnitOutcome
 import app.iptvplayer.platform.AndroidPlatformCapabilities
 import app.iptvplayer.platform.SystemClock
@@ -24,6 +26,7 @@ import app.iptvplayer.platform.net.OkHttpTransport
 import app.iptvplayer.platform.playback.PlaybackRequest
 import app.iptvplayer.platform.secrets.KeystoreSecretStore
 import app.iptvplayer.protocols.media.ResolveResult
+import app.iptvplayer.protocols.tmdb.TmdbClient
 import app.iptvplayer.storage.BundledSqliteDriver
 import app.iptvplayer.storage.ChannelRow
 import app.iptvplayer.storage.ContentStore
@@ -44,6 +47,7 @@ import app.iptvplayer.storage.SourceRecord
 import app.iptvplayer.storage.TitleDetailRow
 import app.iptvplayer.storage.UnitStateRecord
 import app.iptvplayer.storage.db.IptvDatabase
+import app.iptvplayer.tv.developer.DeveloperStreams
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -116,6 +120,17 @@ class AppGraph(context: Context) {
             AndroidPlatformCapabilities,
         )
     }
+
+    private val tmdb by lazy {
+        TmdbService(OkHttpTransport(::networkAvailable), secrets, library, SystemClock) {
+            DeveloperStreams.tmdbBase(appContext) ?: TmdbClient.BASE_URL
+        }
+    }
+
+    private val mutableListRevision = MutableStateFlow(0)
+
+    /** Increments when TMDB lists are read or removed, so the rows built from them reload (ADR-0038). */
+    val listRevision: StateFlow<Int> = mutableListRevision.asStateFlow()
 
     private val mutableRevision = MutableStateFlow(0)
     val revision: StateFlow<Int> = mutableRevision.asStateFlow()
@@ -392,6 +407,52 @@ class AppGraph(context: Context) {
      * every [ENRICHMENT_PAUSE], waiting while something plays, and stopping at the first refusal. Only one runs at a time;
      * calling it again while one runs does nothing.
      */
+    // --- TMDB (ADR-0038) ---
+
+    data class TmdbStatus(val hasKey: Boolean, val fetchedAt: Instant?, val titles: Long, val error: String?)
+
+    private val mutableTmdbError = MutableStateFlow<String?>(null)
+
+    suspend fun tmdbStatus(): TmdbStatus = io {
+        TmdbStatus(tmdb.hasKey(), library.listsFetchedAt(), library.listCounts().values.sum(), mutableTmdbError.value)
+    }
+
+    /** Checks and keeps the viewer's key, then reads the lists. Returns the error code when TMDB did not accept it. */
+    suspend fun setTmdbKey(raw: String): String? {
+        val error = io { tmdb.setKey(raw) }
+        if (error != null) {
+            Log.i(LOG_TAG, "tmdb: key not accepted (${error.code})")
+            return error.code
+        }
+        refreshTmdb(force = true)
+        return null
+    }
+
+    suspend fun removeTmdbKey() {
+        io { tmdb.removeKey() }
+        mutableTmdbError.value = null
+        mutableListRevision.update { it + 1 }
+    }
+
+    /** Reads the TMDB lists when a key is kept and they are more than a day old ([force]: now). */
+    fun refreshTmdb(force: Boolean = false) {
+        scope.launch(Dispatchers.IO) {
+            val error = runCatching { tmdb.refresh(force) }.getOrElse { e ->
+                Log.i(LOG_TAG, "tmdb: exception ${e::class.simpleName}")
+                null
+            }
+            mutableTmdbError.value = error?.code
+            if (error != null) Log.i(LOG_TAG, "tmdb: refresh failed (${error.code})")
+            mutableListRevision.update { it + 1 }
+        }
+    }
+
+    suspend fun moviesOfList(playlistId: PlaylistId, list: ExternalList, limit: Int): List<MovieRow> =
+        io { library.moviesOfList(playlistId, list.name, limit) }
+
+    suspend fun seriesOfList(playlistId: PlaylistId, list: ExternalList, limit: Int): List<SeriesRow> =
+        io { library.seriesOfList(playlistId, list.name, limit) }
+
     fun startDetailFetch(playlistId: PlaylistId) {
         if (enrichment?.isActive == true) return
         enrichment = scope.launch(Dispatchers.IO) {

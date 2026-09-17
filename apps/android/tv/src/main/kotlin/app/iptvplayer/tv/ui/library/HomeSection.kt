@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.library.ExternalList
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.storage.MovieRow
@@ -54,11 +55,13 @@ val HOME_ROW_TITLES: List<Pair<String, Int>> = listOf(
     HomeTags.CONTINUE to R.string.home_continue,
     HomeTags.CHANNELS to R.string.home_your_channels,
     HomeTags.LIVE to R.string.home_live_now,
+    HomeTags.TRENDING_MOVIES to R.string.home_trending_movies,
     HomeTags.POPULAR_MOVIES to R.string.home_popular_movies,
     HomeTags.SERIES to R.string.home_new_episodes,
     HomeTags.MOVIES to R.string.home_recent_movies,
     HomeTags.BECAUSE to R.string.home_because_setting,
     HomeTags.TOP_MOVIES to R.string.home_top_movies,
+    HomeTags.TRENDING_SERIES to R.string.home_trending_series,
     HomeTags.POPULAR_SERIES to R.string.home_popular_series,
     HomeTags.TOP_SERIES to R.string.home_top_series,
     HomeTags.MY_LIST to R.string.home_my_list,
@@ -73,6 +76,8 @@ object HomeTags {
     const val MOVIES = "movies"
     const val SERIES = "series"
     const val POPULAR_MOVIES = "popular-movies"
+    const val TRENDING_MOVIES = "trending-movies"
+    const val TRENDING_SERIES = "trending-series"
     const val TOP_MOVIES = "top-movies"
     const val POPULAR_SERIES = "popular-series"
     const val TOP_SERIES = "top-series"
@@ -147,12 +152,13 @@ fun HomeSection(
     // for it: the rows do not shuffle under the viewer each time a page arrives.
     val details by graph.detailRevision.collectAsState()
     val detailsStep = details / DETAIL_REFRESH_STEP
+    val lists by graph.listRevision.collectAsState()
     var playlist by remember { mutableStateOf<PlaylistId?>(null) }
     var rows by remember { mutableStateOf<List<HomeRow>?>(null) }
     val movieKind = stringResource(R.string.home_kind_movie)
     val seriesKind = stringResource(R.string.home_kind_series)
 
-    LaunchedEffect(revision, watched, detailsStep) {
+    LaunchedEffect(revision, watched, detailsStep, lists) {
         val source = graph.currentSource()
         playlist = source?.playlistId
         val id = source?.playlistId
@@ -209,8 +215,14 @@ fun HomeSection(
             HomeRowSpec(HomeTags.LIVE, R.string.home_live_now, landscape = true) { p ->
                 channelCards(graph, p, mine = false, onPlay = onPlayChannel)
             },
+            // Trending comes from TMDB when the viewer gave a key (ADR-0038); without one the row is empty and left out.
+            HomeRowSpec(HomeTags.TRENDING_MOVIES, R.string.home_trending_movies) { p ->
+                graph.moviesOfList(p, ExternalList.TRENDING_MOVIES, ROW_LIMIT).map { movieCard(p, it) }
+            },
+            // Popular and highest rated follow TMDB's lists when there are any, and the provider's ratings otherwise.
             HomeRowSpec(HomeTags.POPULAR_MOVIES, R.string.home_popular_movies) { p ->
-                graph.popularMovies(p, ROW_LIMIT).map { movieCard(p, it) }
+                graph.moviesOfList(p, ExternalList.POPULAR_MOVIES, ROW_LIMIT).ifEmpty { graph.popularMovies(p, ROW_LIMIT) }
+                    .map { movieCard(p, it) }
             },
             HomeRowSpec(HomeTags.SERIES, R.string.home_new_episodes) { p ->
                 graph.newEpisodeSeries(p, ROW_LIMIT).map { seriesCard(p, it) }
@@ -225,13 +237,19 @@ fun HomeSection(
                 }.orEmpty()
             },
             HomeRowSpec(HomeTags.TOP_MOVIES, R.string.home_top_movies) { p ->
-                graph.topRatedMovies(p, ROW_LIMIT).map { movieCard(p, it) }
+                graph.moviesOfList(p, ExternalList.TOP_MOVIES, ROW_LIMIT).ifEmpty { graph.topRatedMovies(p, ROW_LIMIT) }
+                    .map { movieCard(p, it) }
+            },
+            HomeRowSpec(HomeTags.TRENDING_SERIES, R.string.home_trending_series) { p ->
+                graph.seriesOfList(p, ExternalList.TRENDING_SERIES, ROW_LIMIT).map { seriesCard(p, it) }
             },
             HomeRowSpec(HomeTags.POPULAR_SERIES, R.string.home_popular_series) { p ->
-                graph.popularSeries(p, ROW_LIMIT).map { seriesCard(p, it) }
+                graph.seriesOfList(p, ExternalList.POPULAR_SERIES, ROW_LIMIT).ifEmpty { graph.popularSeries(p, ROW_LIMIT) }
+                    .map { seriesCard(p, it) }
             },
             HomeRowSpec(HomeTags.TOP_SERIES, R.string.home_top_series) { p ->
-                graph.topRatedSeries(p, ROW_LIMIT).map { seriesCard(p, it) }
+                graph.seriesOfList(p, ExternalList.TOP_SERIES, ROW_LIMIT).ifEmpty { graph.topRatedSeries(p, ROW_LIMIT) }
+                    .map { seriesCard(p, it) }
             },
             // My List: the films and shows the viewer kept, newest first.
             HomeRowSpec(HomeTags.MY_LIST, R.string.home_my_list) { p ->

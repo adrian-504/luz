@@ -48,7 +48,15 @@ object LuzPromptTags {
  * that is easier to find here than anywhere else. Back closes without changing anything.
  */
 @Composable
-fun LuzPrompt(title: String, initial: String, onConfirm: (String) -> Unit, onClear: (() -> Unit)?, onDismiss: () -> Unit) {
+fun LuzPrompt(
+    title: String,
+    initial: String,
+    onConfirm: (String) -> Unit,
+    onClear: (() -> Unit)?,
+    onDismiss: () -> Unit,
+    label: String? = null,
+    message: String? = null,
+) {
     var text by remember { mutableStateOf(initial) }
     BackHandler(enabled = true, onBack = onDismiss)
     Box(
@@ -75,8 +83,9 @@ fun LuzPrompt(title: String, initial: String, onConfirm: (String) -> Unit, onCle
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            message?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Tokens.textSecondary) }
             TvTextField(
-                label = stringResource(R.string.prompt_name_label),
+                label = label ?: stringResource(R.string.prompt_name_label),
                 value = text,
                 onValueChange = { text = it },
                 imeAction = ImeAction.Done,
