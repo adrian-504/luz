@@ -1,0 +1,8 @@
+-- Migration 11 -> 12: categories pinned to the top of Live TV. Must match Customisation.sq.
+CREATE TABLE user_pinned (
+    playlist_id TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    pinned_at INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, content_type, content_id)
+);

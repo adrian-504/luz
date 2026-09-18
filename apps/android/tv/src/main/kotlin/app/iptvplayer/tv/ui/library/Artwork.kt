@@ -16,7 +16,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -31,6 +30,7 @@ import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.theme.Tokens
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import coil3.request.transformations
 
 /** Turns stored artwork templates into loadable URLs for one source (see AppGraph.artworkResolver). */
 @Composable
@@ -60,48 +60,52 @@ fun ArtworkImage(
     fit: Boolean = false,
     /** How far a fitted logo sits in from its plate's edges; small plates need a small inset or the logo vanishes. */
     inset: Dp = LOGO_INSET,
+    /** For a logo: the channel's name, drawn as a monogram when there is no logo or it does not load (ADR-0040). */
+    name: String? = null,
 ) {
     val context = LocalContext.current
     val url = remember(template, resolver) { template?.let { resolver?.invoke(it) } }
-    // A logo sits on a plate lit faintly from its top corner, so a row of channels reads as objects rather than grey
-    // boxes; a picture needs no plate, only a dark ground to load onto.
-    val ground = if (fit) {
-        Modifier.background(
-            Brush.linearGradient(listOf(Tokens.bgSurface3, Tokens.bgSurface1)),
-        )
-    } else {
-        Modifier.background(Tokens.bgSurface2)
-    }
     // The name stands in only until the picture arrives: a logo with a transparent background let it show through.
     var loaded by remember(url) { mutableStateOf(false) }
+    // A logo is cleaned once (ADR-0040) and its plate follows it: light behind a dark logo, a trace of its colour
+    // otherwise; a picture fills the plate instead of sitting on it.
+    val look = if (fit && loaded && template != null) LogoLooks.of(template.template) else null
+    // A picture needs no plate, only a dark ground to load onto.
+    val ground = if (fit) Modifier.background(logoPlate(look)) else Modifier.background(Tokens.bgSurface2)
     Box(modifier = modifier.then(ground)) {
-        if (fallbackTitle != null && !loaded) {
-            Text(
-                fallbackTitle,
-                style = MaterialTheme.typography.titleSmall,
-                color = Tokens.textSecondary,
-                textAlign = TextAlign.Center,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.align(Alignment.Center).padding(Tokens.space3),
-            )
+        if (!loaded) {
+            when {
+                fit && (name ?: fallbackTitle) != null -> ChannelMonogram(name ?: fallbackTitle!!)
+                fallbackTitle != null -> Text(
+                    fallbackTitle,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Tokens.textSecondary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.align(Alignment.Center).padding(Tokens.space3),
+                )
+            }
         }
         if (url != null && template != null) {
-            val request = remember(url) {
+            val request = remember(url, fit) {
                 ImageRequest.Builder(context)
                     .data(url)
-                    .memoryCacheKey(template.template)
+                    // Cleaned logos are cached apart from the file as sent.
+                    .memoryCacheKey(if (fit) "${template.template}#logo" else template.template)
                     .diskCacheKey(template.template)
                     .size(widthPx, heightPx)
+                    .apply { if (fit) transformations(LogoCleanup(template.template)) }
                     .build()
             }
             // A logo is shown whole, inset on its plate; a poster or backdrop fills its shape edge to edge.
+            val picture = look?.picture == true
             AsyncImage(
                 model = request,
                 contentDescription = null,
-                contentScale = if (fit) ContentScale.Fit else ContentScale.Crop,
+                contentScale = if (fit && !picture) ContentScale.Fit else ContentScale.Crop,
                 onSuccess = { loaded = true },
-                modifier = Modifier.fillMaxSize().then(if (fit) Modifier.padding(inset) else Modifier),
+                modifier = Modifier.fillMaxSize().then(if (fit && !picture) Modifier.padding(inset) else Modifier),
             )
         }
     }

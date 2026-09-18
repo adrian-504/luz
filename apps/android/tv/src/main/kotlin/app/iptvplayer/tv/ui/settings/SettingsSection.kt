@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -48,6 +49,7 @@ import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.CustomisationTarget
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.ingestion.AddSourceResult
+import app.iptvplayer.storage.ArrangedGroup
 import app.iptvplayer.storage.DetailCoverage
 import app.iptvplayer.tv.BuildConfig
 import app.iptvplayer.tv.R
@@ -74,6 +76,9 @@ object SettingsTags {
     const val ABOUT = "settings-about"
     const val HOME = "settings-home"
     const val HIDDEN = "settings-hidden"
+    const val CATEGORIES = "settings-categories"
+
+    fun category(id: String) = "settings-category-$id"
     const val DETAILS = "settings-details"
     const val DETAILS_FETCH = "settings-details-fetch"
     const val TMDB = "settings-tmdb"
@@ -140,6 +145,16 @@ fun SettingsSection(
                 ),
             )
             add(SettingsEntry(SettingsTags.HOME, R.string.settings_home, R.string.settings_home_summary, LuzIcons.Home))
+            if (playlist != null) {
+                add(
+                    SettingsEntry(
+                        SettingsTags.CATEGORIES,
+                        R.string.settings_categories,
+                        R.string.settings_categories_summary,
+                        LuzIcons.LiveTv,
+                    ),
+                )
+            }
             if (hiddenCount > 0) {
                 add(
                     SettingsEntry(
@@ -228,6 +243,12 @@ fun SettingsSection(
                         }
                     }
                 }
+            }
+            // Hundreds of categories need a list that composes only what is on screen.
+            val categoriesOf = playlist
+            if (selected == SettingsTags.CATEGORIES && categoriesOf != null) {
+                CategoriesPane(focus, categoriesOf)
+                return@Row
             }
             Column(
                 modifier = Modifier
@@ -470,6 +491,85 @@ private fun DeveloperStreamsPane(focus: FocusMemory, onPlay: (String) -> Unit, o
                 )
             }
         }
+    }
+}
+
+/** Every Live TV category, to pin to the top or hide; pinned ones first, hidden ones marked and shown again from here. */
+@Composable
+private fun CategoriesPane(focus: FocusMemory, playlist: PlaylistId) {
+    val graph = LocalAppGraph.current
+    val revision by graph.revision.collectAsState()
+    val scope = rememberCoroutineScope()
+    var groups by remember { mutableStateOf<List<ArrangedGroup>?>(null) }
+    var menuFor by remember { mutableStateOf<ArrangedGroup?>(null) }
+    LaunchedEffect(playlist, revision) { groups = graph.groupsToArrange(playlist) }
+    val shown = groups ?: return
+    LazyColumn(
+        modifier = Modifier.padding(start = Tokens.space8).fillMaxHeight(),
+        verticalArrangement = Arrangement.spacedBy(Tokens.space1),
+        contentPadding = PaddingValues(Tokens.space2),
+    ) {
+        item(key = "heading") {
+            Column(verticalArrangement = Arrangement.spacedBy(Tokens.space3), modifier = Modifier.padding(bottom = Tokens.space3)) {
+                PaneHeading(stringResource(R.string.settings_categories))
+                Text(stringResource(R.string.categories_help), style = MaterialTheme.typography.bodyMedium, color = Tokens.textSecondary)
+            }
+        }
+        items(shown.size, key = { shown[it].id }) { index ->
+            val group = shown[index]
+            LuzRow(onClick = { menuFor = group }, modifier = Modifier.rememberedFocus(focus, SettingsTags.category(group.id))) {
+                Text(
+                    group.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (group.hidden) Tokens.textTertiary else Tokens.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                when {
+                    group.pinned -> Icon(
+                        LuzIcons.Pin,
+                        stringResource(R.string.categories_pinned),
+                        tint = Tokens.textSecondary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    group.hidden -> Icon(
+                        LuzIcons.Hidden,
+                        stringResource(R.string.categories_hidden),
+                        tint = Tokens.textTertiary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        }
+    }
+    menuFor?.let { group ->
+        LuzMenu(
+            title = group.title,
+            items = listOf(
+                LuzMenuItem("pin", stringResource(if (group.pinned) R.string.menu_unpin_category else R.string.menu_pin_category)) {
+                    scope.launch { graph.pin(playlist, CustomisationTarget.CHANNEL_GROUP, group.id, !group.pinned) }
+                },
+                LuzMenuItem("hide", stringResource(if (group.hidden) R.string.categories_show else R.string.menu_hide_category)) {
+                    scope.launch {
+                        if (group.hidden) {
+                            graph.unhide(playlist, CustomisationTarget.CHANNEL_GROUP, group.id)
+                        } else {
+                            graph.hide(playlist, CustomisationTarget.CHANNEL_GROUP, group.id)
+                        }
+                    }
+                },
+            ),
+            onDismiss = {
+                menuFor = null
+                scope.launch {
+                    repeat(20) {
+                        if (focus.requestFocus(SettingsTags.category(group.id))) return@launch
+                        delay(50)
+                    }
+                }
+            },
+        )
     }
 }
 

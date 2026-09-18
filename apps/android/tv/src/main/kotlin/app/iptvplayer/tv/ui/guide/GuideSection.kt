@@ -537,6 +537,7 @@ private fun GuideRow(
                 LOGO_PX_HEIGHT,
                 fit = true,
                 inset = Tokens.space1,
+                name = channel.name,
             )
             Text(
                 channel.name,

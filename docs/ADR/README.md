@@ -60,3 +60,4 @@ line. Product-scope decisions still go to the owner.
 | [0037](0037-guide-timeline-and-loading.md) | The guide timeline, and loading it a block at a time | Accepted |
 | [0038](0038-tmdb-lists-with-the-viewers-key.md) | TMDB trending and ratings, with the viewer's own key | Accepted |
 | [0039](0039-tmdb-artwork-for-opened-titles-and-people.md) | TMDB artwork for the titles and people the viewer opens | Accepted |
+| [0040](0040-channel-logos-and-live-tv-categories.md) | Channel logos made to sit well, and Live TV categories the viewer arranges | Accepted |

@@ -66,7 +66,12 @@ public data class GroupRow(
     /** For the viewer's own groups: how many films and shows they hold (a provider category holds none). */
     public val movieCount: Long = 0,
     public val seriesCount: Long = 0,
+    /** Pinned by the viewer to the top of Live TV. */
+    public val pinned: Boolean = false,
 )
+
+/** A category as the viewer arranges them: pinned to the top, hidden, or neither. */
+public data class ArrangedGroup(public val id: String, public val title: String, public val pinned: Boolean, public val hidden: Boolean)
 
 public data class ChannelRow(
     public val id: ChannelId,
@@ -255,7 +260,25 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
 
     public fun groups(playlistId: PlaylistId): List<GroupRow> {
         val snapshot = activeLiveSnapshot(playlistId) ?: return emptyList()
-        return queries.groupsWithCounts(playlistId.value, snapshot).executeAsList().map { GroupRow(it.id, it.title, it.channel_count) }
+        return queries.groupsWithCounts(playlistId.value, snapshot).executeAsList().map {
+            GroupRow(it.id, it.title, it.channel_count, pinned = it.pinned_at != null)
+        }
+    }
+
+    /** Every category of a source with whether it is pinned or hidden, for arranging them. */
+    public fun groupsToArrange(playlistId: PlaylistId): List<ArrangedGroup> {
+        val snapshot = activeLiveSnapshot(playlistId) ?: return emptyList()
+        return queries.groupsToArrange(playlistId.value, snapshot).executeAsList().map {
+            ArrangedGroup(it.id, it.title, pinned = it.pinned_at != null, hidden = it.hidden)
+        }
+    }
+
+    public fun pin(playlistId: PlaylistId, type: CustomisationTarget, id: String) {
+        customisationQueries.pin(playlistId.value, type.name, id, clock.now().toEpochMilliseconds())
+    }
+
+    public fun unpin(playlistId: PlaylistId, type: CustomisationTarget, id: String) {
+        customisationQueries.unpin(playlistId.value, type.name, id)
     }
 
     public fun channels(playlistId: PlaylistId, groupId: String? = null): List<ChannelRow> {

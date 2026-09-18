@@ -260,6 +260,7 @@ fun LiveTvSection(
                                 group.channelCount,
                                 scope == ChannelScope.Group(group.id),
                                 Modifier.rememberedFocus(focus, LiveTags.group(group.id)),
+                                pinned = group.pinned,
                                 onMenu = { groupMenuFor = group },
                             ) {
                                 scopeKey = ChannelScope.Group(group.id).key()
@@ -384,6 +385,9 @@ fun LiveTvSection(
             LuzMenu(
                 title = group.title,
                 items = listOf(
+                    LuzMenuItem("pin", stringResource(if (group.pinned) R.string.menu_unpin_category else R.string.menu_pin_category)) {
+                        coroutines.launch { graph.pin(current, CustomisationTarget.CHANNEL_GROUP, group.id, !group.pinned) }
+                    },
                     LuzMenuItem("rename", stringResource(R.string.menu_rename_category)) { renaming = group },
                     LuzMenuItem("hide-category", stringResource(R.string.menu_hide_category)) {
                         coroutines.launch { graph.hide(current, CustomisationTarget.CHANNEL_GROUP, group.id) }
@@ -447,6 +451,7 @@ private fun GroupItem(
     count: Long?,
     selected: Boolean,
     modifier: Modifier,
+    pinned: Boolean = false,
     onMenu: (() -> Unit)? = null,
     onSelect: () -> Unit,
 ) {
@@ -462,9 +467,12 @@ private fun GroupItem(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
+        if (pinned) Icon(LuzIcons.Pin, contentDescription = null, tint = Tokens.textTertiary, modifier = Modifier.size(PIN_SIZE))
         count?.let { Text(it.toString(), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary) }
     }
 }
+
+private val PIN_SIZE = 14.dp
 
 /** Now/next for on-screen channels missing from [known], from the provider's per-channel guide (at most 20 channels). */
 private suspend fun visibleFallback(
@@ -706,6 +714,7 @@ private fun ChannelItem(
             LOGO_PX_HEIGHT,
             fit = true,
             inset = Tokens.space1,
+            name = channel.name,
         )
         Text(
             channel.number?.toString() ?: "",

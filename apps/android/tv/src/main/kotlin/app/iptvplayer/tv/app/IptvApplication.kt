@@ -10,6 +10,7 @@ import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.svg.SvgDecoder
 import coil3.util.DebugLogger
 import okio.Path.Companion.toOkioPath
 
@@ -31,7 +32,11 @@ class IptvApplication :
     override fun newImageLoader(context: PlatformContext): ImageLoader = ImageLoader.Builder(context)
         .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.15).build() }
         .diskCache { DiskCache.Builder().directory(cacheDir.resolve("artwork").toOkioPath()).maxSizeBytes(200L * 1024 * 1024).build() }
-        .components { add(OkHttpNetworkFetcherFactory()) }
+        .components {
+            add(OkHttpNetworkFetcherFactory())
+            // About one channel logo in twenty is an SVG (Wikimedia's especially); without this they never showed.
+            add(SvgDecoder.Factory())
+        }
         // Debug builds say why a picture did not appear; release builds stay silent (artwork URLs can carry a login).
         .apply { if (BuildConfig.DEBUG) logger(DebugLogger()) }
         .build()

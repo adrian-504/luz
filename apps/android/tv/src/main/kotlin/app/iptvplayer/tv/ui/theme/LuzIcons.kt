@@ -244,6 +244,20 @@ object LuzIcons {
         lineTo(9.4f, 9f)
         close()
     }
+
+    /** A pin: a category kept at the top of its list. */
+    val Pin = icon("pin") {
+        moveTo(9f, 3.5f)
+        lineTo(15f, 3.5f)
+        moveTo(10f, 3.5f)
+        lineTo(10f, 9f)
+        lineTo(6.5f, 13.5f)
+        lineTo(17.5f, 13.5f)
+        lineTo(14f, 9f)
+        lineTo(14f, 3.5f)
+        moveTo(12f, 13.5f)
+        lineTo(12f, 20.5f)
+    }
     val Warning = icon("warning") {
         moveTo(12f, 3.5f)
         lineTo(21f, 19.5f)

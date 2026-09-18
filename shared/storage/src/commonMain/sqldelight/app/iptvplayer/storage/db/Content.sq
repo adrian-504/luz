@@ -195,16 +195,28 @@ DELETE FROM channel_group_member WHERE playlist_id = ?;
 deleteAllMediaSources:
 DELETE FROM media_source WHERE playlist_id = ?;
 
+-- Pinned categories first, in the order they were pinned, then the provider's order.
 groupsWithCounts:
-SELECT g.id, COALESCE(l.label, g.title) AS title, COUNT(m.channel_id) AS channel_count
+SELECT g.id, COALESCE(l.label, g.title) AS title, COUNT(m.channel_id) AS channel_count, p.pinned_at
 FROM channel_group g
 LEFT JOIN channel_group_member m ON m.playlist_id = g.playlist_id AND m.snapshot = g.snapshot AND m.group_id = g.id
     AND m.channel_id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = g.playlist_id AND content_type = 'CHANNEL')
 LEFT JOIN user_label l ON l.playlist_id = g.playlist_id AND l.content_type = 'CHANNEL_GROUP' AND l.content_id = g.id
+LEFT JOIN user_pinned p ON p.playlist_id = g.playlist_id AND p.content_type = 'CHANNEL_GROUP' AND p.content_id = g.id
 WHERE g.playlist_id = :playlistId AND g.snapshot = :snapshot
     AND g.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = g.playlist_id AND content_type = 'CHANNEL_GROUP')
-GROUP BY g.id, title, g.sort_order
-ORDER BY g.sort_order;
+GROUP BY g.id, title, g.sort_order, p.pinned_at
+ORDER BY p.pinned_at IS NULL, p.pinned_at, g.sort_order;
+
+-- Every category, hidden ones too, for arranging them in Settings: pinned first, then the provider's order.
+groupsToArrange:
+SELECT g.id, COALESCE(l.label, g.title) AS title, p.pinned_at, (h.content_id IS NOT NULL) AS hidden
+FROM channel_group g
+LEFT JOIN user_label l ON l.playlist_id = g.playlist_id AND l.content_type = 'CHANNEL_GROUP' AND l.content_id = g.id
+LEFT JOIN user_pinned p ON p.playlist_id = g.playlist_id AND p.content_type = 'CHANNEL_GROUP' AND p.content_id = g.id
+LEFT JOIN user_hidden h ON h.playlist_id = g.playlist_id AND h.content_type = 'CHANNEL_GROUP' AND h.content_id = g.id
+WHERE g.playlist_id = :playlistId AND g.snapshot = :snapshot
+ORDER BY p.pinned_at IS NULL, p.pinned_at, g.sort_order;
 
 channelsInGroup:
 SELECT c.id, c.name, c.number, c.logo_template, c.tvg_id, (f.content_id IS NOT NULL) AS is_favorite

@@ -361,7 +361,15 @@ fun ChannelChoiceRow(
             modifier = Modifier.width(NUMBER_WIDTH),
         )
         Box(Modifier.size(ROW_LOGO_WIDTH, ROW_LOGO_HEIGHT).clip(RoundedCornerShape(Tokens.radiusSmall)).background(Tokens.raised)) {
-            ArtworkImage(choice.logo, resolver, null, Modifier.size(ROW_LOGO_WIDTH, ROW_LOGO_HEIGHT), fit = true, inset = 2.dp)
+            ArtworkImage(
+                choice.logo,
+                resolver,
+                null,
+                Modifier.size(ROW_LOGO_WIDTH, ROW_LOGO_HEIGHT),
+                fit = true,
+                inset = 2.dp,
+                name = choice.name,
+            )
         }
         Column(Modifier.weight(1f)) {
             Text(choice.name, style = MaterialTheme.typography.titleSmall, color = primary, maxLines = 1, overflow = TextOverflow.Ellipsis)

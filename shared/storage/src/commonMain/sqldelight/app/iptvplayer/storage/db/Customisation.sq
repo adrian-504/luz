@@ -19,6 +19,15 @@ CREATE TABLE user_label (
     PRIMARY KEY (playlist_id, content_type, content_id)
 );
 
+-- Categories the viewer pinned to the top of Live TV, in the order they were pinned.
+CREATE TABLE user_pinned (
+    playlist_id TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    pinned_at INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, content_type, content_id)
+);
+
 hide:
 INSERT OR REPLACE INTO user_hidden(playlist_id, content_type, content_id, created_at) VALUES (?, ?, ?, ?);
 
@@ -33,6 +42,12 @@ ORDER BY created_at;
 hiddenCount:
 SELECT COUNT(*) FROM user_hidden WHERE playlist_id = :playlistId;
 
+pin:
+INSERT OR REPLACE INTO user_pinned(playlist_id, content_type, content_id, pinned_at) VALUES (?, ?, ?, ?);
+
+unpin:
+DELETE FROM user_pinned WHERE playlist_id = :playlistId AND content_type = :contentType AND content_id = :contentId;
+
 setLabel:
 INSERT OR REPLACE INTO user_label(playlist_id, content_type, content_id, label) VALUES (?, ?, ?, ?);
 
@@ -45,6 +60,7 @@ SELECT content_id, label FROM user_label WHERE playlist_id = :playlistId AND con
 deleteCustomisation {
     DELETE FROM user_hidden WHERE playlist_id = :playlistId;
     DELETE FROM user_label WHERE playlist_id = :playlistId;
+    DELETE FROM user_pinned WHERE playlist_id = :playlistId;
     DELETE FROM user_group_member WHERE playlist_id = :playlistId;
     DELETE FROM user_group WHERE playlist_id = :playlistId;
 }

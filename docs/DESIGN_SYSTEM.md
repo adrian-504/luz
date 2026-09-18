@@ -197,7 +197,10 @@ A screen title; categories (the chosen one white on glass); above the channels, 
 remote** — the channel's logo plate beside the programme, times, progress and what is next (the first channel's until the
 remote reaches the list) — updated without rebuilding the list; channel rows with a logo
 plate, number, name, programme, thin progress and a small heart for favourites. OK plays; holding OK opens the channel's
-menu.
+menu. **Logos** (ADR-0040) are cleaned once — the box around them cut away, margins trimmed — and sit on a plate that
+follows them (light behind a dark logo, a faint glow of the logo's colour otherwise); a channel without one shows a
+monogram on a colour of its own. Holding OK on a **category** offers Pin to the top, Rename and Hide; pinned categories
+come first with a small pin, and Settings → Live TV categories arranges them all.
 
 ## 12. Guide (ADR-0037)
 A screen title with the focused programme large, its channel, times and "On now" beneath, and two lines of its

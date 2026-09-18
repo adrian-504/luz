@@ -131,6 +131,30 @@ class CustomisationTest {
     }
 
     @Test
+    fun aPinnedCategoryComesFirstAndStaysThereAfterARefresh() {
+        addSource()
+        import()
+        content.pin(playlist, CustomisationTarget.CHANNEL_GROUP, "sport")
+        assertEquals(listOf("sport", "news"), content.groups(playlist).map { it.id })
+        assertTrue(content.groups(playlist).first().pinned)
+        import()
+        assertEquals(listOf("sport", "news"), content.groups(playlist).map { it.id }, "a refresh keeps it on top")
+
+        content.hide(playlist, CustomisationTarget.CHANNEL_GROUP, "news")
+        assertEquals(
+            listOf(
+                ArrangedGroup("sport", "Sport", pinned = true, hidden = false),
+                ArrangedGroup("news", "News", pinned = false, hidden = true),
+            ),
+            content.groupsToArrange(playlist),
+            "arranging shows hidden categories too",
+        )
+        content.unpin(playlist, CustomisationTarget.CHANNEL_GROUP, "sport")
+        content.unhide(playlist, CustomisationTarget.CHANNEL_GROUP, "news")
+        assertEquals(listOf("news", "sport"), content.groups(playlist).map { it.id })
+    }
+
+    @Test
     fun theViewersOwnGroupsHoldChannelsAndSurviveARefresh() {
         addSource()
         import()

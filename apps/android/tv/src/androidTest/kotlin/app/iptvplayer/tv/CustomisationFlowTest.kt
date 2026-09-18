@@ -268,6 +268,8 @@ class CustomisationFlowTest {
 
         longPressOk()
         awaitExists(LuzMenuTags.MENU)
+        awaitFocus(LuzMenuTags.item("pin"))
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
         awaitFocus(LuzMenuTags.item("rename"))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
 
@@ -276,5 +278,24 @@ class CustomisationFlowTest {
         // Clearing a name is covered by the storage test (CustomisationTest): what this one proves is that the remote
         // reaches the rename at all, and that the provider's own title is still there underneath it.
         assertEquals("My news", runBlocking { graph.groupNames(playlist, listOf(group.id)) }[group.id])
+    }
+
+    @Test
+    fun aCategoryPinnedFromItsMenuMovesToTheTop() {
+        rule.waitUntil(20_000) { focusedTag()?.startsWith("live-") == true }
+        val groups = runBlocking { graph.groups(playlist) }
+        val last = groups.last()
+        if (focusedTag()?.startsWith("live-channel") == true) press(KeyEvent.KEYCODE_DPAD_LEFT)
+        rule.waitUntil(5_000) { focusedTag()?.startsWith("live-channel") != true }
+        repeat(6 + groups.size) { if (focusedTag() != LiveTags.group(last.id)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitFocus(LiveTags.group(last.id))
+
+        longPressOk()
+        awaitExists(LuzMenuTags.MENU)
+        awaitFocus(LuzMenuTags.item("pin"))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.waitUntil(5_000) { runBlocking { graph.groups(playlist) }.first().id == last.id }
+        assertTrue(runBlocking { graph.groups(playlist) }.first().pinned)
+        runBlocking { graph.pin(playlist, CustomisationTarget.CHANNEL_GROUP, last.id, pinned = false) }
     }
 }

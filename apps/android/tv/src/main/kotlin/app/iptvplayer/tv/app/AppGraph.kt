@@ -29,6 +29,7 @@ import app.iptvplayer.platform.playback.PlaybackRequest
 import app.iptvplayer.platform.secrets.KeystoreSecretStore
 import app.iptvplayer.protocols.media.ResolveResult
 import app.iptvplayer.protocols.tmdb.TmdbClient
+import app.iptvplayer.storage.ArrangedGroup
 import app.iptvplayer.storage.BundledSqliteDriver
 import app.iptvplayer.storage.ChannelRow
 import app.iptvplayer.storage.ContentStore
@@ -250,6 +251,13 @@ class AppGraph(context: Context) {
         io { content.hide(playlistId, target, id) }
         changed()
     }
+
+    suspend fun pin(playlistId: PlaylistId, target: CustomisationTarget, id: String, pinned: Boolean) {
+        io { if (pinned) content.pin(playlistId, target, id) else content.unpin(playlistId, target, id) }
+        changed()
+    }
+
+    suspend fun groupsToArrange(playlistId: PlaylistId): List<ArrangedGroup> = io { content.groupsToArrange(playlistId) }
 
     suspend fun unhide(playlistId: PlaylistId, target: CustomisationTarget, id: String) {
         io { content.unhide(playlistId, target, id) }

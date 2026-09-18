@@ -345,6 +345,14 @@
     <string name="menu_hide_channel">Hide this channel</string>
     <string name="menu_rename_category">Rename this category</string>
     <string name="menu_hide_category">Hide this category</string>
+    <string name="menu_pin_category">Pin to the top</string>
+    <string name="menu_unpin_category">Unpin</string>
+    <string name="settings_categories">Live TV categories</string>
+    <string name="settings_categories_summary">Pin or hide categories</string>
+    <string name="categories_help">OK on a category pins it to the top of Live TV or hides it. Pinned categories come first, in the order you pin them. In Live TV, holding OK on a category does the same.</string>
+    <string name="categories_pinned">Pinned</string>
+    <string name="categories_hidden">Hidden</string>
+    <string name="categories_show">Show again</string>
     <string name="settings_hidden">Hidden items</string>
     <string name="hidden_empty">Nothing is hidden.</string>
     <string name="hidden_show_again">Show again</string>
