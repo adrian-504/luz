@@ -79,6 +79,9 @@ data class SearchResults(
 /** "Because you watched …": the film it started from and what shares its director, cast or genres. */
 data class Recommendation(val seed: MovieRow, val movies: List<MovieRow>)
 
+/** The shelves under a title's page: its director's other titles (named by [director]) and titles like it. */
+data class TitleShelves<T>(val director: String?, val byDirector: List<T>, val moreLikeThis: List<T>)
+
 /** A movie or episode on Home's "Continue watching" row. */
 data class ContinueCard(
     val type: ContentType,
@@ -690,22 +693,74 @@ class AppGraph(context: Context) {
         for (seedId in watched) {
             val seed = library.movie(playlistId, seedId) ?: continue
             val page = library.detail(playlistId, ContentType.MOVIE, seedId) ?: continue
-            val scores = HashMap<String, Int>()
-            val rows = HashMap<String, MovieRow>()
-            fun score(movies: List<MovieRow>, points: Int) = movies.forEach { movie ->
-                rows[movie.id] = movie
-                scores.merge(movie.id, points, Int::plus)
-            }
-            page.directors.forEach { score(library.titlesOfPerson(playlistId, it).first, DIRECTOR_POINTS) }
-            page.cast.take(LEADING_CAST).forEach { score(library.titlesOfPerson(playlistId, it).first, CAST_POINTS) }
-            page.genres.forEach { score(library.moviesOfGenre(playlistId, it, GENRE_CANDIDATES), GENRE_POINTS) }
-            val picks = scores.keys.filter { it !in watched }
-                .sortedWith(compareByDescending<String> { scores.getValue(it) }.thenByDescending { rows.getValue(it).addedAt })
-                .take(limit)
-                .map { rows.getValue(it) }
+            val picks = similarMovies(playlistId, page, watched, limit, withDirectors = true)
             if (picks.size >= MIN_RECOMMENDATIONS) return@io Recommendation(seed, picks)
         }
         null
+    }
+
+    /**
+     * What a film's page offers under it: the director's other films, newest first, and "More like this" — films sharing
+     * its leading cast and genres, most in common first — with nothing repeated between the two and neither the film
+     * nor its other versions ([exclude]). Read from the library only.
+     */
+    suspend fun movieShelves(playlistId: PlaylistId, movieId: String, exclude: Set<String>, limit: Int): TitleShelves<MovieRow> = io {
+        val page = library.detail(playlistId, ContentType.MOVIE, movieId) ?: return@io TitleShelves(null, emptyList(), emptyList())
+        val skip = exclude + movieId
+        val director = page.directors.firstOrNull()
+        val byDirector = director?.let { library.titlesOfPerson(playlistId, it).first }.orEmpty()
+            .filter { it.id !in skip }
+            .sortedByDescending { it.year ?: 0 }
+            .take(limit)
+        val similar = similarMovies(playlistId, page, skip + byDirector.map { it.id }, limit, withDirectors = false)
+        TitleShelves(director.takeIf { byDirector.isNotEmpty() }, byDirector, similar)
+    }
+
+    /** "More like this" for a show: shows sharing its leading cast and genres, most in common first. */
+    suspend fun seriesShelves(playlistId: PlaylistId, seriesId: String, limit: Int): List<SeriesRow> = io {
+        val page = library.detail(playlistId, ContentType.SERIES, seriesId) ?: return@io emptyList()
+        val scores = HashMap<String, Int>()
+        val rows = HashMap<String, SeriesRow>()
+        fun score(shows: List<SeriesRow>, points: Int) = shows.forEach { show ->
+            rows[show.id] = show
+            scores.merge(show.id, points, Int::plus)
+        }
+        page.cast.take(LEADING_CAST).forEach { score(library.titlesOfPerson(playlistId, it).second, CAST_POINTS) }
+        page.genres.forEach { score(library.seriesOfGenre(playlistId, it, GENRE_CANDIDATES), GENRE_POINTS) }
+        scores.keys.filter { it != seriesId }
+            .sortedWith(compareByDescending<String> { scores.getValue(it) }.thenByDescending { rows.getValue(it).lastModifiedAt })
+            .take(limit)
+            .map { rows.getValue(it) }
+            .takeIf { it.size >= MIN_RECOMMENDATIONS }
+            .orEmpty()
+    }
+
+    private fun similarMovies(
+        playlistId: PlaylistId,
+        page: TitleDetailRow,
+        exclude: Set<String>,
+        limit: Int,
+        withDirectors: Boolean,
+    ): List<MovieRow> {
+        val scores = HashMap<String, Int>()
+        val rows = HashMap<String, MovieRow>()
+        fun score(movies: List<MovieRow>, points: Int) = movies.forEach { movie ->
+            rows[movie.id] = movie
+            scores.merge(movie.id, points, Int::plus)
+        }
+        if (withDirectors) page.directors.forEach { score(library.titlesOfPerson(playlistId, it).first, DIRECTOR_POINTS) }
+        page.cast.take(LEADING_CAST).forEach { score(library.titlesOfPerson(playlistId, it).first, CAST_POINTS) }
+        page.genres.forEach { score(library.moviesOfGenre(playlistId, it, GENRE_CANDIDATES), GENRE_POINTS) }
+        // A film from the same years is a better neighbour than one from another era.
+        page.year?.let { year ->
+            rows.values.filter {
+                it.year != null && kotlin.math.abs(it.year!! - year) <= NEAR_YEARS
+            }.forEach { scores.merge(it.id, 1, Int::plus) }
+        }
+        return scores.keys.filter { it !in exclude }
+            .sortedWith(compareByDescending<String> { scores.getValue(it) }.thenByDescending { rows.getValue(it).addedAt })
+            .take(limit)
+            .map { rows.getValue(it) }
     }
 
     suspend fun moviesInUserGroup(playlistId: PlaylistId, groupId: String, limit: Int): List<MovieRow> =
@@ -857,6 +912,7 @@ class AppGraph(context: Context) {
         const val CAST_POINTS = 3
         const val GENRE_POINTS = 1
         const val MIN_RECOMMENDATIONS = 4
+        const val NEAR_YEARS = 8
     }
 }
 

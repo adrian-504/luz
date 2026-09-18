@@ -44,6 +44,9 @@ class TitleCleanerTest {
     @Test
     fun namesThatLookLikeTagsKeepTheirTitle() {
         check("Blade Runner 2049", "Blade Runner 2049")
+        kotlin.test.assertEquals("Blade Runner 2049", TitleCleaner.clean("Blade Runner 2049", knownYear = 2017).title)
+        kotlin.test.assertEquals("It Follows", TitleCleaner.clean("It Follows 2014", knownYear = 2014).title, "the provider's own year")
+        kotlin.test.assertEquals("2012", TitleCleaner.clean("2012", knownYear = 2012).title, "a title that is only the year keeps it")
         check("2012", "2012")
         check("Up", "Up")
         check("Dual", "Dual")

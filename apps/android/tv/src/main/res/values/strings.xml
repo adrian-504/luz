@@ -345,6 +345,8 @@
     <string name="menu_hide_channel">Hide this channel</string>
     <string name="menu_rename_category">Rename this category</string>
     <string name="menu_hide_category">Hide this category</string>
+    <string name="detail_more_like_this">More like this</string>
+    <string name="detail_from_director">More from %1$s</string>
     <string name="menu_pin_category">Pin to the top</string>
     <string name="menu_unpin_category">Unpin</string>
     <string name="settings_categories">Live TV categories</string>

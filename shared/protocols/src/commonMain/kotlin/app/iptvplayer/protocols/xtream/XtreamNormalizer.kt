@@ -120,7 +120,7 @@ internal class XtreamNormalizer(
         val streamId = obj.string("stream_id") ?: return missingId("stream_id")
         val rawName = cleanName(obj.string("name")) ?: return noName()
         if (!seenIds.add("movie|$streamId")) return duplicate()
-        val clean = TitleCleaner.clean(rawName)
+        val clean = TitleCleaner.clean(rawName, obj.string("year")?.take(4)?.toIntOrNull())
         val movieId = MovieId(StableIds.derive(DerivedIdKind.MOVIE, playlistId.value, listOf("xtream", streamId)))
         val extension = obj.string("container_extension")
         val mediaSource =
@@ -155,7 +155,7 @@ internal class XtreamNormalizer(
         val providerId = obj.string("series_id") ?: return missingId("series_id")
         val rawName = cleanName(obj.string("name")) ?: return noName()
         if (!seenIds.add("series|$providerId")) return duplicate()
-        val clean = TitleCleaner.clean(rawName)
+        val clean = TitleCleaner.clean(rawName, (obj.string("releaseDate") ?: obj.string("release_date"))?.take(4)?.toIntOrNull())
         val backdropUrl = (obj.array("backdrop_path")?.firstOrNull() as? kotlinx.serialization.json.JsonPrimitive)?.content
         val poster = artwork(obj.string("cover"), ArtworkKind.POSTER)
         val backdrop = artwork(backdropUrl, ArtworkKind.BACKDROP)

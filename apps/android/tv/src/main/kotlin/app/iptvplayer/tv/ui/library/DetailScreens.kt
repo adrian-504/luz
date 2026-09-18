@@ -21,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -50,6 +51,7 @@ import app.iptvplayer.storage.SeriesRow
 import app.iptvplayer.storage.TitleDetailRow
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.LocalAppGraph
+import app.iptvplayer.tv.app.TitleShelves
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.RestoreFocusEffect
 import app.iptvplayer.tv.ui.player.clock
@@ -87,6 +89,37 @@ object DetailTags {
     fun season(number: Int) = "detail-season-$number"
 
     fun episode(id: String) = "detail-episode-$id"
+
+    fun similar(id: String) = "detail-similar-$id"
+
+    fun byDirector(id: String) = "detail-director-$id"
+}
+
+/** One poster on a shelf under a title's page. */
+private data class ShelfTitle(val id: String, val title: String, val year: Int?, val poster: UrlTemplate?)
+
+/** A shelf of posters under a title's page: the director's other films, or titles like this one. */
+@Composable
+private fun TitlesShelf(
+    heading: String,
+    titles: List<ShelfTitle>,
+    resolver: ((UrlTemplate) -> String?)?,
+    focus: FocusMemory,
+    tag: (String) -> String,
+    onOpen: (String) -> Unit,
+) {
+    LuzShelf(heading) {
+        items(titles.size, key = { titles[it].id }) { index ->
+            val title = titles[index]
+            LuzCard(
+                title = title.title,
+                subtitle = title.year?.toString(),
+                shape = CardShape.POSTER,
+                modifier = Modifier.rememberedFocus(focus, tag(title.id)),
+                onClick = { onOpen(title.id) },
+            ) { art -> ArtworkImage(title.poster, resolver, title.title, art) }
+        }
+    }
 }
 
 /**
@@ -103,6 +136,7 @@ fun MovieDetailScreen(
     movieId: String,
     onPlay: (id: String, fromStart: Boolean) -> Unit,
     onPerson: (String) -> Unit,
+    onOpenMovie: (String) -> Unit = {},
 ) {
     val graph = LocalAppGraph.current
     val context = LocalContext.current
@@ -132,8 +166,6 @@ fun MovieDetailScreen(
     val item = movie ?: return NotFound()
     val info = detail
     val resume = item.progress?.takeIf { !it.completed && it.position.isPositive() }
-    val backdrop = info?.backdrop ?: item.backdrop ?: item.poster
-    val ambient = rememberAmbientColor(backdrop, resolver)
     val genres = info?.genres?.takeIf { it.isNotEmpty() } ?: item.genres
     val duration = info?.duration ?: item.duration
     val rating = info?.rating ?: item.rating
@@ -146,7 +178,13 @@ fun MovieDetailScreen(
         credits.map { it.name },
         ask = true,
     )
+    // The provider's wide picture; TMDB's when the provider has none or only repeats the poster (ADR-0039).
+    val backdrop = widePicture(info?.backdrop ?: item.backdrop, item.poster, tmdbArt.backdropUrl)
+    val ambient = rememberAmbientColor(backdrop, resolver)
     val play = { fromStart: Boolean -> if (versions.size > 1) choosing = fromStart else onPlay(item.id, fromStart) }
+    val shelves by produceState(TitleShelves<MovieRow>(null, emptyList(), emptyList()), item.id, info != null, versions) {
+        value = graph.movieShelves(playlistId, item.id, versions.map { it.id }.toSet(), SHELF_TITLES)
+    }
 
     val listState = rememberLazyListState()
     DetailRoom(ambient, MOVIE_HERO_FRACTION, listState) {
@@ -205,6 +243,30 @@ fun MovieDetailScreen(
         if (credits.isNotEmpty()) {
             item(key = "credits") { CreditsShelf(credits, focus, tmdbArt.portraits, onPerson) }
         }
+        shelves.director?.let { director ->
+            item(key = "by-director") {
+                TitlesShelf(
+                    stringResource(R.string.detail_from_director, director),
+                    shelves.byDirector.map { ShelfTitle(it.id, it.title, it.year, it.poster) },
+                    resolver,
+                    focus,
+                    DetailTags::byDirector,
+                    onOpenMovie,
+                )
+            }
+        }
+        if (shelves.moreLikeThis.isNotEmpty()) {
+            item(key = "similar") {
+                TitlesShelf(
+                    stringResource(R.string.detail_more_like_this),
+                    shelves.moreLikeThis.map { ShelfTitle(it.id, it.title, it.year, it.poster) },
+                    resolver,
+                    focus,
+                    DetailTags::similar,
+                    onOpenMovie,
+                )
+            }
+        }
         item(key = "about") {
             AboutPanel(
                 plot = info?.plot ?: item.plot,
@@ -242,6 +304,7 @@ fun SeriesDetailScreen(
     seriesId: String,
     onPlayEpisode: (episodeId: String, fromStart: Boolean) -> Unit,
     onPerson: (String) -> Unit,
+    onOpenSeries: (String) -> Unit = {},
 ) {
     val graph = LocalAppGraph.current
     val coroutines = rememberCoroutineScope()
@@ -277,7 +340,6 @@ fun SeriesDetailScreen(
             episode.progress?.let { if (it.completed) NextEpisode.Watch.COMPLETED else NextEpisode.Watch.IN_PROGRESS }
         }
     }
-    val ambient = rememberAmbientColor(item.backdrop ?: item.poster, resolver)
     val credits = creditsOf(detail?.directors.orEmpty(), detail?.cast.orEmpty())
     val tmdbArt = rememberTitlePageArt(
         ContentType.SERIES,
@@ -287,6 +349,12 @@ fun SeriesDetailScreen(
         credits.map { it.name },
         ask = true,
     )
+    val backdrop = widePicture(item.backdrop, item.poster, tmdbArt.backdropUrl)
+    val ambient = rememberAmbientColor(backdrop, resolver)
+
+    val similarShows by produceState(emptyList<SeriesRow>(), item.id, detail != null) {
+        value = graph.seriesShelves(playlistId, item.id, SHELF_TITLES)
+    }
 
     // The Continue button appears once episodes are known; move there unless the viewer already chose something else.
     val nextId = next?.episode?.id
@@ -313,7 +381,7 @@ fun SeriesDetailScreen(
                 titleArt = { TitleLogo(tmdbArt.logoUrl, item.title) },
                 modifier = Modifier.fillParentMaxHeight(Tokens.HERO_HEIGHT_FRACTION).revealsListTop(listState),
                 room = ambient,
-                artworkOf = item.backdrop ?: item.poster,
+                artworkOf = backdrop,
                 actions = {
                     next?.let { pick ->
                         LuzButton(
@@ -362,6 +430,18 @@ fun SeriesDetailScreen(
         val info = detail
         if (credits.isNotEmpty()) {
             item(key = "credits") { CreditsShelf(credits, focus, tmdbArt.portraits, onPerson) }
+        }
+        if (similarShows.isNotEmpty()) {
+            item(key = "similar") {
+                TitlesShelf(
+                    stringResource(R.string.detail_more_like_this),
+                    similarShows.map { ShelfTitle(it.id, it.title, it.year, it.poster) },
+                    resolver,
+                    focus,
+                    DetailTags::similar,
+                    onOpenSeries,
+                )
+            }
         }
         item(key = "about") {
             AboutPanel(
@@ -513,3 +593,9 @@ private val WATCHED_MARK = 24.dp
 private const val MOVIE_HERO_FRACTION = 0.86f
 private const val HERO_PLOT_LINES = 3
 private val WATCHED_ICON = 14.dp
+
+private const val SHELF_TITLES = 20
+
+/** The picture across a title's page: the provider's backdrop, else TMDB's, else the poster. */
+private fun widePicture(provider: UrlTemplate?, poster: UrlTemplate?, tmdb: String?): UrlTemplate? =
+    provider?.takeIf { it.template != poster?.template } ?: tmdb?.let(::UrlTemplate) ?: provider ?: poster

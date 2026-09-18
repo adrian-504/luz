@@ -189,7 +189,10 @@ shelf of round plates with initials, director first; OK opens the person's page 
 with the whole description and the facts. **Series:** the same hero at two thirds with the season count, then seasons as
 quiet capsules over a shelf of episode cards, then Cast & Crew and About. **Person:** TMDB's portrait in a tall rounded
 frame beside the name, how many titles and four lines of biography, then their films and shows as shelves. With a TMDB key
-(ADR-0039) the title is the film's **logo** once it loads, and Cast & Crew plates show **portraits** over the initials.
+(ADR-0039) the title is the film's **logo** once it loads, Cast & Crew plates show **portraits** over the initials, and a
+film whose provider sends no backdrop (or only the poster again) gets TMDB's, without words on it. Under Cast & Crew:
+**More from *director*** (their other films in the library, newest first) and **More like this** (films sharing the
+leading cast, genres and era, most in common first; shows by cast and genre), built on the television from the library.
 Detail pages open by fading and growing in from 94 %, and the backdrop drifts slowly towards the viewer (6 % over 24 s).
 
 ## 11. Live TV

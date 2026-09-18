@@ -288,7 +288,7 @@ class LibraryStoreTest {
         content = ContentStore(driver, clock)
         library = LibraryStore(content, clock)
         assertEquals(
-            12L,
+            13L,
             driver.executeQuery(null, "PRAGMA user_version", {
                 it.next()
                 app.cash.sqldelight.db.QueryResult.Value(it.getLong(0))

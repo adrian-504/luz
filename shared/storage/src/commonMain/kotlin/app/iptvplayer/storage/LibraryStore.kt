@@ -125,7 +125,12 @@ public data class ListEntry(
 )
 
 /** TMDB artwork stored for a work: its id there (null when TMDB did not know it) and its title artwork. */
-public data class StoredArt(public val tmdbId: Long?, public val logoPath: String?, public val fetchedAt: Instant)
+public data class StoredArt(
+    public val tmdbId: Long?,
+    public val logoPath: String?,
+    public val fetchedAt: Instant,
+    public val backdropPath: String? = null,
+)
 
 /** A person's portrait as learned from a title's credits on TMDB. */
 public data class Portrait(public val name: String, public val tmdbId: Long, public val profilePath: String?)
@@ -805,14 +810,21 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
 
     /** TMDB artwork stored for a work (ADR-0039); null when it was never asked about. */
     public fun artOf(type: ContentType, workKey: String): StoredArt? = tmdbQueries.artOf(type.name, workKey).executeAsOneOrNull()?.let {
-        StoredArt(it.tmdb_id, it.logo_path, Instant.fromEpochMilliseconds(it.fetched_at))
+        StoredArt(it.tmdb_id, it.logo_path, Instant.fromEpochMilliseconds(it.fetched_at), it.backdrop_path)
     }
 
     /** Stores a work's artwork and the portraits of its people. */
-    public fun saveArt(type: ContentType, workKey: String, tmdbId: Long?, logoPath: String?, portraits: List<Portrait>) {
+    public fun saveArt(
+        type: ContentType,
+        workKey: String,
+        tmdbId: Long?,
+        logoPath: String?,
+        portraits: List<Portrait>,
+        backdropPath: String? = null,
+    ) {
         val now = clock.now().toEpochMilliseconds()
         content.transaction {
-            tmdbQueries.saveArt(type.name, workKey, tmdbId, logoPath, now)
+            tmdbQueries.saveArt(type.name, workKey, tmdbId, logoPath, now, backdropPath)
             portraits.forEach { tmdbQueries.savePortrait(it.name, it.tmdbId, it.profilePath, now) }
         }
     }

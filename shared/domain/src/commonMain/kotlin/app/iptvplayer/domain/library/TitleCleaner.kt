@@ -29,7 +29,11 @@ public data class CleanTitle(
  * called `2012`, `Up` or `HD Radio` keeps its title. Never throws; an unrecognisable title comes back unchanged.
  */
 public object TitleCleaner {
-    public fun clean(raw: String): CleanTitle {
+    /**
+     * [knownYear] is the year the provider gives beside the name, when it does: a bare trailing year is taken off only
+     * when it is that one ("It Follows 2014" from 2014), so "Blade Runner 2049" (2017) keeps its name.
+     */
+    public fun clean(raw: String, knownYear: Int? = null): CleanTitle {
         var text = raw.trim()
         var language: String? = null
         val tags = linkedSetOf<String>()
@@ -100,6 +104,16 @@ public object TitleCleaner {
             if (candidate in YEARS && rest.isNotBlank()) {
                 year = year ?: candidate
                 text = rest
+            }
+        }
+
+        // 5. A bare trailing year that is the provider's own year for the title.
+        if (knownYear != null && knownYear in YEARS) {
+            val suffix = " $knownYear"
+            val rest = text.trimEnd(*TRIM)
+            if (rest.endsWith(suffix) && rest.length > suffix.length) {
+                year = year ?: knownYear
+                text = rest.dropLast(suffix.length)
             }
         }
 

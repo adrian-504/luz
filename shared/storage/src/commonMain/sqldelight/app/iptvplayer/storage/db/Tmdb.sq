@@ -99,6 +99,7 @@ CREATE TABLE tmdb_art (
     tmdb_id INTEGER,
     logo_path TEXT,
     fetched_at INTEGER NOT NULL,
+    backdrop_path TEXT,
     PRIMARY KEY (content_type, work_key)
 );
 
@@ -115,7 +116,7 @@ artOf:
 SELECT * FROM tmdb_art WHERE content_type = ? AND work_key = ?;
 
 saveArt:
-INSERT OR REPLACE INTO tmdb_art(content_type, work_key, tmdb_id, logo_path, fetched_at) VALUES (?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO tmdb_art(content_type, work_key, tmdb_id, logo_path, fetched_at, backdrop_path) VALUES (?, ?, ?, ?, ?, ?);
 
 personOf:
 SELECT * FROM tmdb_person WHERE name = ?;

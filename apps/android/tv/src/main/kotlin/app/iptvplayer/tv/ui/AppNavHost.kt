@@ -158,6 +158,7 @@ fun AppNavHost() {
                 id,
                 onPlay = { version, fromStart -> navController.navigate(Routes.content(playlist, ContentType.MOVIE, version, fromStart)) },
                 onPerson = { navController.navigate(Routes.person(playlist, it)) },
+                onOpenMovie = { navController.navigate(Routes.movie(playlist, it)) },
             )
         }
         composable(
@@ -176,6 +177,7 @@ fun AppNavHost() {
                     )
                 },
                 onPerson = { navController.navigate(Routes.person(playlist, it)) },
+                onOpenSeries = { navController.navigate(Routes.series(playlist, it)) },
             )
         }
         composable(

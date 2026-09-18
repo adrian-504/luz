@@ -23,7 +23,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 
 /** What TMDB adds to a title's page (ADR-0039): its title logo and the portraits of its people. */
-data class TitlePageArt(val logoUrl: String?, val portraits: Map<String, String>)
+data class TitlePageArt(val logoUrl: String?, val portraits: Map<String, String>, val backdropUrl: String? = null)
 
 /**
  * TMDB's artwork for a film or show, asked for once when [ask] (the viewer opened it) and read from storage otherwise.
@@ -36,10 +36,10 @@ fun rememberTitlePageArt(type: ContentType, title: String?, year: Int?, tmdbId: 
         if (title == null) return@produceState
         // Stored art first, so a page opened before shows its logo at once.
         val stored = graph.titleArt(type, title, year, tmdbId, ask = false)
-        value = TitlePageArt(stored?.logoUrl, graph.portraits(people))
+        value = TitlePageArt(stored?.logoUrl, graph.portraits(people), stored?.backdropUrl)
         if (!ask) return@produceState
         val fetched = graph.titleArt(type, title, year, tmdbId)
-        value = TitlePageArt(fetched?.logoUrl ?: stored?.logoUrl, graph.portraits(people))
+        value = TitlePageArt(fetched?.logoUrl ?: stored?.logoUrl, graph.portraits(people), fetched?.backdropUrl ?: stored?.backdropUrl)
     }
     return art
 }

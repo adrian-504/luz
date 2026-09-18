@@ -99,12 +99,24 @@ public class TmdbService(
         }
         if (id == null) {
             library.saveArt(type, work, null, null, emptyList())
-            return TitleArt(null)
+            return TitleArt(null, null)
         }
         val (art, error) = client.artwork(key, type, id)
         if (error != null) return stored?.toArt()
-        library.saveArt(type, work, id, art?.logoPath, art?.credits.orEmpty().map { Portrait(it.name, it.id, it.profilePath) })
-        return TitleArt(art?.logoPath?.let { TmdbClient.imageUrl(it, LOGO_SIZE) })
+        library.saveArt(
+            type,
+            work,
+            id,
+            art?.logoPath,
+            art?.credits.orEmpty().map { Portrait(it.name, it.id, it.profilePath) },
+            art?.backdropPath,
+        )
+        return TitleArt(
+            art?.logoPath?.let {
+                TmdbClient.imageUrl(it, LOGO_SIZE)
+            },
+            art?.backdropPath?.let { TmdbClient.imageUrl(it, BACKDROP_SIZE) },
+        )
     }
 
     /** Portraits of [names] learned from TMDB, as image addresses. Local only. */
@@ -123,7 +135,8 @@ public class TmdbService(
         return library.personOf(name)?.toArt()
     }
 
-    private fun app.iptvplayer.storage.StoredArt.toArt() = TitleArt(logoPath?.let { TmdbClient.imageUrl(it, LOGO_SIZE) })
+    private fun app.iptvplayer.storage.StoredArt.toArt() =
+        TitleArt(logoPath?.let { TmdbClient.imageUrl(it, LOGO_SIZE) }, backdropPath?.let { TmdbClient.imageUrl(it, BACKDROP_SIZE) })
 
     private fun app.iptvplayer.storage.StoredPerson.toArt() =
         PersonArt(profilePath?.let { TmdbClient.imageUrl(it, PROFILE_SIZE) }, biography?.takeIf { it.isNotBlank() })
@@ -131,6 +144,7 @@ public class TmdbService(
     public companion object {
         private val ART_KEEP = 30.days
         private const val LOGO_SIZE = "w500"
+        private const val BACKDROP_SIZE = "w1280"
         private const val PORTRAIT_SIZE = "w185"
         private const val PROFILE_SIZE = "h632"
         private val KEY = CredentialRef("tmdb-api-key")
@@ -141,8 +155,8 @@ public class TmdbService(
     }
 }
 
-/** A title's artwork from TMDB: its title logo when TMDB has one. */
-public data class TitleArt(public val logoUrl: String?)
+/** A title's artwork from TMDB: its title logo and a backdrop without words, when TMDB has them. */
+public data class TitleArt(public val logoUrl: String?, public val backdropUrl: String? = null)
 
 /** A person from TMDB: a portrait and a biography, when TMDB has them. */
 public data class PersonArt(public val photoUrl: String?, public val biography: String?)

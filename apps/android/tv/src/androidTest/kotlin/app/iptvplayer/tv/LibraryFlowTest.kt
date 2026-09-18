@@ -28,6 +28,7 @@ import app.iptvplayer.tv.ui.player.PlayerTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -189,6 +190,8 @@ class LibraryFlowTest {
         // The page is fetched on opening: director first, then the cast; the trailer button appears with it.
         val director = DetailTags.person("Jordan Sample", directed = true)
         rule.waitUntil(20_000) { rule.onAllNodes(hasTestTag(DetailTags.TRAILER)).fetchSemanticsNodes().isNotEmpty() }
+        // Under the page: the other test film shares its actor and genre, so it is "More like this".
+        assertEquals(listOf(two.id), runBlocking { graph.movieShelves(playlist, one.id, emptySet(), 10) }.moreLikeThis.map { it.id })
         press(KeyEvent.KEYCODE_DPAD_DOWN)
         awaitFocus(director)
         press(KeyEvent.KEYCODE_DPAD_RIGHT)

@@ -25,7 +25,9 @@ ADR-0038's public lists, this means telling TMDB *which* titles and people the v
    nothing is asked and nothing stored is shown.
 4. **Words until pictures.** A logo replaces the title only once it has loaded; a portrait covers the initials only once
    it has loaded. A missing or failed picture looks like before.
-5. **No new dependency.** The client uses the existing HTTP stack and Coil; image addresses are TMDB's public image
+5. **Backdrops.** The same request brings a backdrop (one without words first); it is used only where the provider has
+   none or repeats the poster (schema 13, `tmdb_art.backdrop_path`).
+6. **No new dependency.** The client uses the existing HTTP stack and Coil; image addresses are TMDB's public image
    server (`image.tmdb.org`), which needs no key.
 
 ## Consequences

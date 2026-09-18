@@ -72,7 +72,9 @@ class TmdbClientTest {
             when {
                 path == "search/movie" -> FakeTransport.ok("""{"results":[{"id":77,"title":"Example Heist"},{"id":78}]}""")
                 path == "movie/77" -> FakeTransport.ok(
-                    """{"id":77,"images":{"logos":[{"file_path":"/fr.png","iso_639_1":"fr"},{"file_path":"/en.png","iso_639_1":"en"}]},""" +
+                    """{"id":77,"backdrop_path":"/main.jpg","images":{""" +
+                        """"backdrops":[{"file_path":"/words.jpg","iso_639_1":"en"},{"file_path":"/clean.jpg","iso_639_1":null}],""" +
+                        """"logos":[{"file_path":"/fr.png","iso_639_1":"fr"},{"file_path":"/en.png","iso_639_1":"en"}]},""" +
                         """"credits":{"cast":[{"id":1,"name":"Alex Example","profile_path":"/alex.jpg"},{"id":2,"name":""}],""" +
                         """"crew":[{"id":3,"name":"Jordan Sample","job":"Director","profile_path":null},{"id":4,"name":"Pat Editor","job":"Editor"}]}}""",
                 )
@@ -85,6 +87,7 @@ class TmdbClientTest {
         val (art, error) = client.artwork(key, ContentType.MOVIE, 77)
         assertNull(error)
         assertEquals("/en.png", art?.logoPath, "English artwork first")
+        assertEquals("/clean.jpg", art?.backdropPath, "a backdrop without words, for the title to go over")
         assertEquals(
             listOf(TmdbCredit(3, "Jordan Sample", null, true), TmdbCredit(1, "Alex Example", "/alex.jpg", false)),
             art?.credits,

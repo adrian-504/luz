@@ -58,7 +58,13 @@ public data class TmdbTitle(
 public data class TmdbCredit(public val id: Long, public val name: String, public val profilePath: String?, public val director: Boolean)
 
 /** What TMDB adds to one title's page: its stylised title artwork and the portraits of the people in it. */
-public data class TmdbArtwork(public val id: Long, public val logoPath: String?, public val credits: List<TmdbCredit>)
+public data class TmdbArtwork(
+    public val id: Long,
+    public val logoPath: String?,
+    public val credits: List<TmdbCredit>,
+    /** A wide picture without words (the title is drawn over it), or TMDB's main one. */
+    public val backdropPath: String? = null,
+)
 
 /** A person's own page on TMDB. */
 public data class TmdbPerson(public val id: Long, public val name: String, public val profilePath: String?, public val biography: String?)
@@ -104,7 +110,7 @@ public class TmdbClient(
         }
     }
 
-    /** A title's logo (English, or artwork without words) and its credited people, in one request. */
+    /** A title's logo (English, or artwork without words), a backdrop and its credited people, in one request. */
     public suspend fun artwork(key: Secret<String>, type: ContentType, id: Long): Pair<TmdbArtwork?, DomainError?> {
         val path = (if (type == ContentType.SERIES) "tv/" else "movie/") + id
         val parameters = listOf("append_to_response" to "images,credits", "include_image_language" to "en,null")
@@ -115,6 +121,8 @@ public class TmdbClient(
                 val logos = root.obj("images")?.array("logos").orEmpty().mapNotNull { LenientObject.of(it) {} }
                 val logo = (logos.filter { it.string("iso_639_1") == "en" } + logos.filter { it.string("iso_639_1") == null })
                     .firstNotNullOfOrNull { it.string("file_path") }
+                val backdrop = root.obj("images")?.array("backdrops").orEmpty().mapNotNull { LenientObject.of(it) {} }
+                    .firstOrNull { it.string("iso_639_1") == null }?.string("file_path") ?: root.string("backdrop_path")
                 val credits = root.obj("credits")
                 fun people(field: String, director: Boolean) = credits?.array(field).orEmpty().mapNotNull { entry ->
                     val person = LenientObject.of(entry) {} ?: return@mapNotNull null
@@ -122,7 +130,7 @@ public class TmdbClient(
                     val name = person.string("name")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                     TmdbCredit(person.long("id") ?: return@mapNotNull null, name, person.string("profile_path"), director)
                 }
-                TmdbArtwork(id, logo, people("crew", true) + people("cast", false).take(MAX_CAST)) to null
+                TmdbArtwork(id, logo, people("crew", true) + people("cast", false).take(MAX_CAST), backdrop) to null
             }
         }
     }

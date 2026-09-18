@@ -1,0 +1,2 @@
+-- Migration 12 -> 13: a TMDB backdrop for titles the provider sends none for (ADR-0039). Must match Tmdb.sq.
+ALTER TABLE tmdb_art ADD COLUMN backdrop_path TEXT;
