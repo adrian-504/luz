@@ -309,6 +309,14 @@ class AppGraph(context: Context) {
         return id.takeIf { created }
     }
 
+    /**
+     * Makes a group and puts one title in it. Runs on Luz's own scope, not the screen's: the menu that asks for the name
+     * closes as soon as it is confirmed, and closing it used to cancel the second step, leaving an empty group.
+     */
+    fun createGroupWith(playlistId: PlaylistId, title: String, type: ContentType, contentId: String) {
+        scope.launch { createGroup(playlistId, title)?.let { addToGroup(playlistId, it, type, contentId) } }
+    }
+
     suspend fun renameGroup(playlistId: PlaylistId, id: String, title: String) {
         io { content.renameGroup(playlistId, id, title) }
         changed()
@@ -683,6 +691,9 @@ class AppGraph(context: Context) {
         io { library.moviesOfDecade(playlistId, decade, limit, offset) }
 
     suspend fun movieDecades(playlistId: PlaylistId): List<Pair<Int, Long>> = io { library.movieDecades(playlistId) }
+
+    suspend fun moviesOfLength(playlistId: PlaylistId, from: Duration, to: Duration, limit: Int): List<MovieRow> =
+        io { library.moviesOfLength(playlistId, from, to, limit) }
 
     suspend fun favoriteMovies(playlistId: PlaylistId, limit: Int): List<MovieRow> = io { library.favoriteMovies(playlistId, limit) }
 

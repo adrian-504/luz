@@ -87,7 +87,7 @@ fun TitleMenu(playlistId: PlaylistId, target: TitleTarget, onOpen: () -> Unit, o
             title = stringResource(R.string.menu_new_group),
             initial = "",
             onConfirm = { name ->
-                coroutines.launch { graph.createGroup(playlistId, name)?.let { graph.addToGroup(playlistId, it, target.type, target.id) } }
+                graph.createGroupWith(playlistId, name, target.type, target.id)
             },
             onClear = null,
             onDismiss = { closed = true },

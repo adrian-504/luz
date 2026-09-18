@@ -250,3 +250,23 @@ Not comparable with §6.2–6.3, which used the synthetic fixture with no logos 
 cost is on the UI thread (GPU 95th 11 ms): building each row that scrolls in (logo image, channel name, blocks) and the
 slide's frames when the window moves. Next steps, measured one at a time on the device: the row without its logo, to
 size the image cost; a lighter row; and pre-building the rows just below the screen. The guide gate stays open.
+
+### 6.5 Movies shelves, and a background that followed the poster (2026-09-18)
+
+Release build on the owner's Bbox with their library (about 20,000 films), Movies open, moving along the "Trending
+films" shelf: 30 presses right one every 450 ms, then 30 left one every 120 ms. Screenshots confirmed the shelf moved.
+
+| Build | Right, 450 ms | Left, 120 ms | Verdict |
+|---|---|---|---|
+| Without the resting veil on cards (as before today) | 82.5 % janky, 50th 30 ms, 95th 77 ms, 99th 89 ms | 83 % janky, 50th 28 ms, 95th 65 ms | **Not met** |
+| With the resting veil (kept) | 92.6 % janky, 50th 31 ms, 95th 69 ms, 99th 97 ms | 89.9 % janky, 50th 25 ms, 95th 57 ms | **Not met** — within noise of the row above |
+| With a soft backdrop of the focused title behind the shelves | 99.3 % janky, 50th 48 ms, 95th 65 ms, 603 frames (it redrew continuously) | 99.5 % janky, 50th 48 ms | **Rejected and removed** |
+
+Moving along a poster shelf on this television was already far from the frame budget; it had not been measured before
+(§6.2–6.4 measured lists and the guide). The owner asked for the background only if the Bbox stayed smooth, so it was
+taken out. The shelves themselves are the next performance task: sizing the cost of the card lift and shadow, the
+poster decode size and the title text, one at a time on the device, as for the guide.
+
+**Movies opening time.** Matching TMDB's lists against the library took 2.5 s, 4.1 s and 7.8 s for the three TMDB shelves
+(every film compared with every list entry); with indexed lookups the whole page is up in about 2.5 s, and reopening it
+shows the last page at once.

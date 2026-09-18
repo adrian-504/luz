@@ -340,9 +340,7 @@ fun LiveTvSection(
                 title = stringResource(R.string.menu_new_group),
                 initial = "",
                 onConfirm = { name ->
-                    coroutines.launch {
-                        graph.createGroup(current, name)?.let { graph.addToGroup(current, it, ContentType.CHANNEL, channel.id.value) }
-                    }
+                    graph.createGroupWith(current, name, ContentType.CHANNEL, channel.id.value)
                 },
                 onClear = null,
                 onDismiss = {

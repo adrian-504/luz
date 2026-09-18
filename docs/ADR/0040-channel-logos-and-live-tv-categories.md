@@ -31,3 +31,12 @@ one. The owner also asked to hide Live TV categories (possible, but hidden behin
 - A cleaned logo is cached in memory apart from the file as sent; the disk cache keeps the original.
 - Cleaning costs one pass over a logo-sized bitmap (under 100×60 dp plates), once per logo per run.
 - Matching channels to an open logo database is not done: with names only, wrong logos would be worse than a monogram.
+
+## Alternatives considered
+
+- **Logos from an open channel database (iptv-org).** Matching would be by name for almost every channel; a wrong logo is
+  worse than a monogram, and it would mean downloading a large database from a third party.
+- **Cropping every logo to fill its plate.** Logos are not pictures: cropping cuts off lettering. Only images whose edge
+  is not one colour (photos, busy tiles) fill the plate.
+- **Reordering categories by dragging.** Pinning in the order pinned covers "these first" with one press per category;
+  a full reorder mode on a remote is slow to use and can come later if asked for.

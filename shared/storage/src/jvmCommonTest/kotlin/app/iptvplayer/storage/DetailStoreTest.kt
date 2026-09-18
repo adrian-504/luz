@@ -140,6 +140,16 @@ class DetailStoreTest {
     }
 
     @Test
+    fun filmsOfALengthComeBestRatedFirst() {
+        addSource()
+        importMovies(movie("mv_1", "Short", "6.0", 3), movie("mv_2", "Long", "9.0", 2), movie("mv_3", "Ninety", "8.0", 1))
+        library.saveDetail(playlist, ContentType.MOVIE, "mv_1", TitleDetail(duration = 88.minutes))
+        library.saveDetail(playlist, ContentType.MOVIE, "mv_2", TitleDetail(duration = 170.minutes))
+        library.saveDetail(playlist, ContentType.MOVIE, "mv_3", TitleDetail(duration = 95.minutes))
+        assertEquals(listOf("Ninety", "Short"), library.moviesOfLength(playlist, 80.minutes, 100.minutes, 10).map { it.title })
+    }
+
+    @Test
     fun anEmptyAnswerIsRememberedSoItIsNotAskedForAgain() {
         addSource()
         importMovies(movie("mv_1", "Heat", null, 1))

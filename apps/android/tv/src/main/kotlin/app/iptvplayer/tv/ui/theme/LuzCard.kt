@@ -1,5 +1,6 @@
 package app.iptvplayer.tv.ui.theme
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -74,7 +76,15 @@ fun LuzCard(
                 .then(if (focused) Modifier.border(Tokens.focusRingWidth, FOCUS_EDGE, corners) else Modifier)
                 .luzClickable(onClick = onClick, onLongClick = onLongClick, onFocus = { focused = it }),
         ) {
-            artwork(Modifier.fillMaxSize())
+            // At rest the picture sits a shade back; under the remote it comes up to full brightness with the lift. Read
+            // while drawing, so the change repaints this card and rebuilds nothing.
+            val veil by animateFloatAsState(if (focused) 0f else RESTING_VEIL, luzTween(Tokens.MOTION_FOCUS_MS), label = "card-veil")
+            artwork(
+                Modifier.fillMaxSize().drawWithContent {
+                    drawContent()
+                    drawRect(Color.Black.copy(alpha = veil))
+                },
+            )
             if (progress != null && progress > 0f) ProgressBar(progress, Modifier.align(Alignment.BottomStart))
         }
         if (title != null || subtitle != null) {
@@ -127,6 +137,7 @@ fun ProgressBar(fraction: Float, modifier: Modifier = Modifier) {
 }
 
 private val PROGRESS_HEIGHT = 3.dp
+private const val RESTING_VEIL = 0.12f
 private const val PROGRESS_TRACK_ALPHA = 0.55f
 private const val RESTING_TITLE_ALPHA = 0.86f
 private val FOCUS_EDGE = Color.White.copy(alpha = 0.35f)

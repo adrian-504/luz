@@ -129,6 +129,8 @@ public object TitleCleaner {
         val simplified = title.lowercase()
             .map { FOLD[it] ?: it }
             .joinToString("")
+            // "Friend's" and "Friends" are one word, as providers spell the same film both ways.
+            .replace(APOSTROPHES, "")
             .replace(NON_WORD, " ")
             .split(' ')
             .filter { it.isNotBlank() && it !in ARTICLES }
@@ -202,6 +204,7 @@ public object TitleCleaner {
     private val SEPARATED_PREFIX = Regex("""^\s*([A-Za-z0-9+/-]{2,12})\s*([|:–—]|\s-)\s+""")
 
     private val BRACKETED = Regex("""([\[(])\s*([^\[\]()]{1,20})\s*([])])""")
+    private val APOSTROPHES = Regex("['\u2019\u02BC`]")
     private val TRAILING_YEAR = Regex("""(\s[-–—]\s*)((?:19|20)\d{2})\s*$""")
     private val RESOLUTION = Regex("""\d{3,4}[pP]""")
     private val SPACES = Regex("""\s+""")

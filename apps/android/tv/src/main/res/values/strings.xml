@@ -265,6 +265,12 @@
     <string name="home_top_series">Highest rated shows</string>
     <string name="home_new_episodes">New episodes</string>
     <string name="home_because">Because you watched %1$s</string>
+    <string name="explore_trending">Trending in your library</string>
+    <string name="explore_popular">Popular in your library</string>
+    <string name="explore_top">Highest rated films</string>
+    <string name="explore_ninety">Around 90 minutes</string>
+    <string name="explore_decade">Films from the %1$ds</string>
+    <string name="explore_top_shows">Highest rated shows</string>
     <string name="home_genre">Because you watch %1$s</string>
     <string name="home_genre_setting">Because you watch… (your favourite genre)</string>
     <string name="home_coming_up">Coming up on your channels</string>

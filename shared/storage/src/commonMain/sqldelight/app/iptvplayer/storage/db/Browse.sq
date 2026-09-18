@@ -59,6 +59,19 @@ WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND (mo.is_primar
 ORDER BY CAST(COALESCE(d.rating, mo.rating) AS REAL) DESC, mo.added_at DESC
 LIMIT :limit OFFSET :offset;
 
+-- Films of a length, best rated first: "Around 90 minutes" in Explore.
+moviesOfLength:
+SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
+FROM movie mo
+LEFT JOIN title_detail d ON d.playlist_id = mo.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = mo.id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND (mo.is_primary IS NULL OR mo.is_primary = 1)
+    AND COALESCE(d.duration_seconds, mo.duration_seconds) BETWEEN :fromSeconds AND :toSeconds
+    AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
+ORDER BY CAST(COALESCE(d.rating, mo.rating) AS REAL) DESC, mo.added_at DESC
+LIMIT :limit;
+
 movieDecades:
 SELECT (COALESCE(d.year, mo.year) / 10) * 10 AS decade, COUNT(*) AS title_count
 FROM movie mo

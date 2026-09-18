@@ -666,6 +666,19 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             }
     }
 
+    /** Films lasting between [from] and [to], best rated first. */
+    public fun moviesOfLength(playlistId: PlaylistId, from: Duration, to: Duration, limit: Int): List<MovieRow> {
+        val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return emptyList()
+        return browseQueries.moviesOfLength(playlistId.value, snapshot, from.inWholeSeconds, to.inWholeSeconds, limit.toLong())
+            .executeAsList().map {
+                movieRow(
+                    it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
+                    it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite, it.quality, it.tags, it.language,
+                    it.version_count,
+                )
+            }
+    }
+
     /** Decades with how many films, most recent first. */
     public fun movieDecades(playlistId: PlaylistId): List<Pair<Int, Long>> {
         val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return emptyList()

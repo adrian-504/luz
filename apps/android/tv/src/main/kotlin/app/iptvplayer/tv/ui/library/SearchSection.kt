@@ -118,6 +118,7 @@ fun SearchSection(
     }
     val resolver = rememberArtworkResolver(current)
     val found = results
+    val explore = rememberExplore(graph, current, revision)
 
     CalmScrolling {
         LazyColumn(
@@ -151,7 +152,18 @@ fun SearchSection(
                 }
             }
             when {
-                query.isBlank() -> item(key = "status") { StatusLine(stringResource(R.string.search_hint)) }
+                query.isBlank() -> {
+                    item(key = "status") { StatusLine(stringResource(R.string.search_hint)) }
+                    explore?.let {
+                        exploreItems(
+                            it,
+                            resolver,
+                            focus,
+                            { id -> onOpenMovie(current, id) },
+                            { id -> onOpenSeries(current, id) },
+                        )
+                    }
+                }
                 found == null -> item(key = "loading") { LuzSkeletonShelf(CardShape.POSTER, count = 5) }
                 found.channels.isEmpty() && found.movies.isEmpty() && found.series.isEmpty() && found.people.isEmpty() -> item(
                     key = "status",

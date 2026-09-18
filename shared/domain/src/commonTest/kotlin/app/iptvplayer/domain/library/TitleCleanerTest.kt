@@ -61,6 +61,8 @@ class TitleCleanerTest {
 
     @Test
     fun theWorkKeyIgnoresCaseAccentsPunctuationAndArticlesButNotTheYear() {
+        kotlin.test.assertEquals(TitleCleaner.workKey("My Best Friend's Dead", 2023), TitleCleaner.workKey("My Best Friends Dead", 2023))
+        kotlin.test.assertEquals(TitleCleaner.workKey("Ocean\u2019s Eleven", 2001), TitleCleaner.workKey("Oceans Eleven", 2001))
         assertEquals(TitleCleaner.workKey("The Batman", 2022), TitleCleaner.workKey("batman", 2022))
         assertEquals(TitleCleaner.workKey("Amélie", null), TitleCleaner.workKey("Amelie", null))
         assertEquals(TitleCleaner.workKey("Spider-Man: No Way Home", 2021), TitleCleaner.workKey("Spider Man No Way Home", 2021))

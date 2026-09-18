@@ -230,7 +230,10 @@ on a poster offers Open, My List, Add to a group…, Hide.
 The query written large with a search symbol; a **letter strip** beneath it (123/abc, space, a–z, delete) so the remote
 types without the system keyboard covering the results; a hairline; results as shelves — channels, films, series —
 updating 150 ms after each change, with a **People** shelf (round plates, "In 12 titles" / "Director · 3 titles") that
-opens a person's page. OK on the line still opens the system keyboard.
+opens a person's page. OK on the line still opens the system keyboard. Before anything is typed, **Explore** offers
+ways into the library, all built on the television from the viewer's own titles: trending (or popular) in your library,
+highest rated films, around 90 minutes, films by decade, the genres Movies does not already shelve, and the highest rated
+shows. **Cards** rest a shade dimmed and come up to full brightness with the lift under the remote.
 
 ## 15. Onboarding
 **Welcome to Luz** — "Your TV. Your providers. Your content." — with one honest sentence that Luz ships no content, and

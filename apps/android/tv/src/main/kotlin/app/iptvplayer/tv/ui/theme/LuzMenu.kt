@@ -112,15 +112,16 @@ fun LuzMenu(title: String, items: List<LuzMenuItem>, onDismiss: () -> Unit) {
     }
 }
 
-/** Whether OK is held right now, as the activity sees every key (MainActivity.dispatchKeyEvent). */
+/** Whether OK is held right now, as the root of the screen sees every key (MainActivity). */
 object OkKey {
     @Volatile
     var held: Boolean = false
         private set
 
-    fun observe(event: android.view.KeyEvent) {
-        if (event.keyCode !in CENTER_KEYS) return
-        held = event.action == android.view.KeyEvent.ACTION_DOWN
+    /** Always false: the key goes on to whatever has focus. */
+    fun observe(event: android.view.KeyEvent): Boolean {
+        if (event.keyCode in CENTER_KEYS) held = event.action == android.view.KeyEvent.ACTION_DOWN
+        return false
     }
 }
 
