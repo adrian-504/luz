@@ -8,13 +8,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import kotlinx.coroutines.launch
 
 /** A shelf's or a section's name, set where the content starts. */
 @Composable
@@ -76,3 +80,18 @@ private const val FOCUS_LINE = 0.16f
 
 /** The share of the list's height kept clear below a focused element for its captions. */
 private const val CAPTION_ROOM = 0.14f
+
+/**
+ * For the hero at the top of a list: when the remote comes into it — Up from the first shelf — the list returns to its very
+ * top, so the whole picture and title are in view. [CalmScrolling] alone leaves the list where it is when the focused button
+ * is already on screen, which stranded the top of the hero off the screen.
+ */
+@Composable
+fun Modifier.revealsListTop(state: LazyListState): Modifier {
+    val scope = rememberCoroutineScope()
+    return onFocusChanged {
+        if (it.hasFocus && (state.firstVisibleItemIndex != 0 || state.firstVisibleItemScrollOffset != 0)) {
+            scope.launch { state.animateScrollToItem(0) }
+        }
+    }
+}

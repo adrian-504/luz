@@ -32,6 +32,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlin.time.Instant
 
 /** A configured source as shown in the UI: one provider with one playlist (V1 onboarding creates them together). */
 public data class SourceRecord(
@@ -54,6 +55,8 @@ public data class UnitStateRecord(
     public val status: ImportStatus,
     public val itemCount: Long,
     public val errorCode: String?,
+    /** When the last import of this unit ended, successfully or not; null while none has. */
+    public val finishedAt: Instant? = null,
 )
 
 public data class GroupRow(
@@ -208,7 +211,14 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
 
     public fun unitState(playlistId: PlaylistId, unit: ImportUnit): UnitStateRecord? =
         queries.unitState(playlistId.value, unit.name).executeAsOneOrNull()?.let {
-            UnitStateRecord(unit, it.active_snapshot, ImportStatus.valueOf(it.status), it.item_count, it.error_code)
+            UnitStateRecord(
+                unit,
+                it.active_snapshot,
+                ImportStatus.valueOf(it.status),
+                it.item_count,
+                it.error_code,
+                it.finished_at?.let { at -> Instant.fromEpochMilliseconds(at) },
+            )
         }
 
     /**

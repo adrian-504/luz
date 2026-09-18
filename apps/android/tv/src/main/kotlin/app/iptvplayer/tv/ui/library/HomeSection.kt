@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -46,6 +48,7 @@ import app.iptvplayer.tv.ui.theme.LuzIconButton
 import app.iptvplayer.tv.ui.theme.LuzIcons
 import app.iptvplayer.tv.ui.theme.LuzShelf
 import app.iptvplayer.tv.ui.theme.Tokens
+import app.iptvplayer.tv.ui.theme.revealsListTop
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
@@ -302,6 +305,7 @@ fun HomeSection(
     val hero = featured.getOrNull(page) ?: featured.first()
     val ambient = rememberAmbientColor(hero.backdrop ?: hero.poster, resolver)
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
 
     // The carousel turns slowly on its own, but never while the viewer is reading it.
     LaunchedEffect(featured, heroFocused, page) {
@@ -319,6 +323,7 @@ fun HomeSection(
             // No content padding: the hero's height is a share of the list's viewport, and padding would shrink it.
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
+                state = listState,
                 verticalArrangement = Arrangement.spacedBy(Tokens.shelfSpacing),
             ) {
                 item(key = "hero") {
@@ -330,7 +335,7 @@ fun HomeSection(
                         // televisions report a smaller one than they draw, and the hero came out half the size.
                         modifier = Modifier.fillMaxWidth().fillParentMaxHeight(Tokens.HERO_HEIGHT_FRACTION).onFocusChanged {
                             heroFocused = it.hasFocus
-                        },
+                        }.revealsListTop(listState),
                         room = ambient,
                         page = page,
                         pages = featured.size,

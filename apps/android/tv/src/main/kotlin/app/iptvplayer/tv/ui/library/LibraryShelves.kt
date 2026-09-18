@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -57,6 +58,7 @@ import app.iptvplayer.tv.ui.theme.LuzSkeletonShelf
 import app.iptvplayer.tv.ui.theme.Tokens
 import app.iptvplayer.tv.ui.theme.luzClickable
 import app.iptvplayer.tv.ui.theme.luzLift
+import app.iptvplayer.tv.ui.theme.revealsListTop
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -367,7 +369,7 @@ fun LibraryShelves(
                                 stringResource(if (movies) R.string.home_kind_movie else R.string.home_kind_series),
                             ) + featured.facts,
                             detail = featured.plot,
-                            modifier = Modifier.fillParentMaxHeight(LIBRARY_HERO_FRACTION),
+                            modifier = Modifier.fillParentMaxHeight(LIBRARY_HERO_FRACTION).revealsListTop(listState),
                             room = ambient,
                             artworkOf = featured.backdrop,
                             actions = {

@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,8 +72,10 @@ fun ArtworkImage(
     } else {
         Modifier.background(Tokens.bgSurface2)
     }
+    // The name stands in only until the picture arrives: a logo with a transparent background let it show through.
+    var loaded by remember(url) { mutableStateOf(false) }
     Box(modifier = modifier.then(ground)) {
-        if (fallbackTitle != null) {
+        if (fallbackTitle != null && !loaded) {
             Text(
                 fallbackTitle,
                 style = MaterialTheme.typography.titleSmall,
@@ -96,6 +100,7 @@ fun ArtworkImage(
                 model = request,
                 contentDescription = null,
                 contentScale = if (fit) ContentScale.Fit else ContentScale.Crop,
+                onSuccess = { loaded = true },
                 modifier = Modifier.fillMaxSize().then(if (fit) Modifier.padding(inset) else Modifier),
             )
         }

@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -68,6 +70,7 @@ import app.iptvplayer.tv.ui.theme.LuzShelf
 import app.iptvplayer.tv.ui.theme.LuzStatusLine
 import app.iptvplayer.tv.ui.theme.Tokens
 import app.iptvplayer.tv.ui.theme.luzClickable
+import app.iptvplayer.tv.ui.theme.revealsListTop
 import kotlinx.coroutines.launch
 import kotlin.time.Duration
 
@@ -137,7 +140,8 @@ fun MovieDetailScreen(
     val credits = creditsOf(info?.directors.orEmpty(), info?.cast.orEmpty())
     val play = { fromStart: Boolean -> if (versions.size > 1) choosing = fromStart else onPlay(item.id, fromStart) }
 
-    DetailRoom(ambient, MOVIE_HERO_FRACTION) {
+    val listState = rememberLazyListState()
+    DetailRoom(ambient, MOVIE_HERO_FRACTION, listState) {
         item(key = "hero") {
             LuzHero(
                 title = item.title,
@@ -151,7 +155,7 @@ fun MovieDetailScreen(
                 badges = badgesOf(item.quality, item.tags, item.language),
                 detail = info?.plot ?: item.plot,
                 detailLines = HERO_PLOT_LINES,
-                modifier = Modifier.fillParentMaxHeight(MOVIE_HERO_FRACTION),
+                modifier = Modifier.fillParentMaxHeight(MOVIE_HERO_FRACTION).revealsListTop(listState),
                 room = ambient,
                 artworkOf = backdrop,
                 actions = {
@@ -271,7 +275,8 @@ fun SeriesDetailScreen(
         if (nextId != null && focus.lastFocusedKey in listOf(null, DetailTags.FAVORITE)) focus.requestFocus(DetailTags.PLAY)
     }
 
-    DetailRoom(ambient) {
+    val listState = rememberLazyListState()
+    DetailRoom(ambient, listState = listState) {
         item(key = "hero") {
             LuzHero(
                 title = item.title,
@@ -285,7 +290,7 @@ fun SeriesDetailScreen(
                 badges = badgesOf(item.quality, item.tags, item.language),
                 detail = item.plot ?: detail?.plot,
                 detailLines = HERO_PLOT_LINES,
-                modifier = Modifier.fillParentMaxHeight(Tokens.HERO_HEIGHT_FRACTION),
+                modifier = Modifier.fillParentMaxHeight(Tokens.HERO_HEIGHT_FRACTION).revealsListTop(listState),
                 room = ambient,
                 artworkOf = item.backdrop ?: item.poster,
                 actions = {
@@ -361,6 +366,7 @@ fun SeriesDetailScreen(
 private fun DetailRoom(
     ambient: Color = Tokens.bgBase,
     heroFraction: Float = Tokens.HERO_HEIGHT_FRACTION,
+    listState: LazyListState = rememberLazyListState(),
     content: LazyListScope.() -> Unit = {},
 ) {
     Box(
@@ -369,7 +375,11 @@ private fun DetailRoom(
             .background(Brush.verticalGradient(0f to ambient, heroFraction to ambient, 1f to Tokens.bgBase)),
     ) {
         CalmScrolling {
-            LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(Tokens.shelfSpacing)) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(Tokens.shelfSpacing),
+            ) {
                 content()
                 item(key = "end") { Spacer(Modifier.height(Tokens.space10)) }
             }

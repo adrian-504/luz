@@ -61,6 +61,7 @@ import kotlinx.coroutines.withContext
 import java.net.InetAddress
 import java.net.URI
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
@@ -453,6 +454,39 @@ class AppGraph(context: Context) {
     suspend fun seriesOfList(playlistId: PlaylistId, list: ExternalList, limit: Int): List<SeriesRow> =
         io { library.seriesOfList(playlistId, list.name, limit) }
 
+    private var freshness: kotlinx.coroutines.Job? = null
+
+    /**
+     * Keeps a source current without the viewer pressing Refresh: now, and every hour while Luz stays open (a television
+     * app can stay open for days), the guide is downloaded again when it is more than [GUIDE_MAX_AGE] old — providers'
+     * guides often cover only the next few hours — and channels, films and shows when they are more than [LIBRARY_MAX_AGE]
+     * old. Nothing starts while something plays or an import is already running.
+     */
+    fun keepFresh(playlistId: PlaylistId) {
+        if (freshness?.isActive == true) return
+        freshness = scope.launch {
+            while (true) {
+                val busy = playing || mutableActivity.value[playlistId]?.let {
+                    it.liveRunning || it.guideRunning || it.moviesRunning || it.seriesRunning
+                } == true
+                if (!busy) {
+                    val now = SystemClock.now()
+                    fun stale(unit: ImportUnit, maxAge: kotlin.time.Duration): Boolean {
+                        val finished = content.unitState(playlistId, unit)?.finishedAt ?: return true
+                        return now - finished > maxAge
+                    }
+                    val library = io { listOf(ImportUnit.LIVE, ImportUnit.MOVIES, ImportUnit.SERIES).any { stale(it, LIBRARY_MAX_AGE) } }
+                    val guide = io { stale(ImportUnit.EPG, GUIDE_MAX_AGE) }
+                    when {
+                        library -> refresh(playlistId).also { Log.i(LOG_TAG, "fresh: refreshing everything") }
+                        guide -> refreshGuide(playlistId).also { Log.i(LOG_TAG, "fresh: refreshing the guide") }
+                    }
+                }
+                kotlinx.coroutines.delay(FRESHNESS_CHECK)
+            }
+        }
+    }
+
     fun startDetailFetch(playlistId: PlaylistId) {
         if (enrichment?.isActive == true) return
         enrichment = scope.launch(Dispatchers.IO) {
@@ -781,6 +815,9 @@ class AppGraph(context: Context) {
         val ENRICHMENT_PAUSE = 400.milliseconds
         const val ENRICHMENT_CHUNK = 100_000
         const val PEOPLE_LIMIT = 12
+        val GUIDE_MAX_AGE = 6.hours
+        val LIBRARY_MAX_AGE = 24.hours
+        val FRESHNESS_CHECK = 1.hours
         const val WATCH_HISTORY = 10
         const val LEADING_CAST = 4
         const val GENRE_CANDIDATES = 60
