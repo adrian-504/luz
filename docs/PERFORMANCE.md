@@ -233,3 +233,20 @@ Two caveats, stated so the numbers are not over-read:
   programmes — each row was one "no guide information" block rather than a row of programme cells. The guide gate stays
   open and carries into interface step 5 (the guide timeline), to be measured with a fixture whose programmes cover the
   channels in view.
+
+### 6.4 The guide timeline (ADR-0037, 2026-09-17)
+
+`tooling/scripts/measure_frames.sh` on the **release build** on the owner's Bbox TV, this time with the **owner's own
+provider** (12,478 channels, real logos, the provider's XMLTV for 47 channels and its per-channel guide for the rest),
+one press every 120 ms (down) or 150 ms (right). Screenshots confirmed focus travelled the whole run.
+
+| Measurement | Result | Target | Verdict |
+|---|---|---|---|
+| Guide, down the channels, 60 presses — first version of the timeline | 95th 31 ms, 99th 57 ms, 54 slow UI-thread frames | P95 ≤ 16.7, P99 ≤ 33 | Not met |
+| Same, after each row reads its own focus state and the details line reads the focus itself | **18.6 % janky, 95th 29 ms, 99th 46 ms, 36 slow UI-thread frames** | same | **Not met** |
+| Guide, forward in time, 40 presses | 25.5 % janky, 95th 32 ms, 99th 73 ms, 20 slow UI-thread frames | same | **Not met** |
+
+Not comparable with §6.2–6.3, which used the synthetic fixture with no logos and rows with no programmes. The remaining
+cost is on the UI thread (GPU 95th 11 ms): building each row that scrolls in (logo image, channel name, blocks) and the
+slide's frames when the window moves. Next steps, measured one at a time on the device: the row without its logo, to
+size the image cost; a lighter row; and pre-building the rows just below the screen. The guide gate stays open.

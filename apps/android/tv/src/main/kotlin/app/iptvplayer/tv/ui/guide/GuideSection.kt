@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -302,7 +303,8 @@ fun GuideSection(
         Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(start = Tokens.space4)) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.space2)) {
                 Text(stringResource(R.string.section_guide), style = MaterialTheme.typography.displaySmall, color = Tokens.textPrimary)
-                ProgrammeDetails(rows.getOrNull(focusedRow), focusedProgramme, now)
+                // Read inside the details line, so a focus move rebuilds that line and not the grid beneath it.
+                ProgrammeDetails({ rows.getOrNull(focusedRow) }, { focusedProgramme }, now)
             }
             LuzButton(
                 stringResource(R.string.guide_now),
@@ -335,7 +337,10 @@ fun GuideSection(
                     val channel = rows[rowIndex]
                     val all = programmes[channel.id.value]
                     val cells = visible(channel)
-                    GuideRow(channel, focusedRow == rowIndex, resolver, slide = { slidePx }) {
+                    // Read through a derived state, so a focus move rebuilds only the row it leaves and the row it enters, not every
+                    // row on screen.
+                    val isCurrent by remember(rowIndex) { derivedStateOf { focusedRow == rowIndex } }
+                    GuideRow(channel, isCurrent, resolver, slide = { slidePx }) {
                         if (all != null && cells.isEmpty()) {
                             // One block across the window, placed where the window is on the sliding layer.
                             GuideCell(
@@ -414,7 +419,9 @@ fun GuideSection(
  * first lines of its description. A fixed height, so moving through the grid never moves the grid.
  */
 @Composable
-private fun ProgrammeDetails(channel: ChannelRow?, programme: GuideProgramme?, now: Instant) {
+private fun ProgrammeDetails(channelOf: () -> ChannelRow?, programmeOf: () -> GuideProgramme?, now: Instant) {
+    val channel = channelOf()
+    val programme = programmeOf()
     Column(
         modifier = Modifier.height(DETAILS_HEIGHT).testTag(GuideTags.DETAILS).semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(Tokens.space1),
