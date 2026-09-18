@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,6 +47,7 @@ import app.iptvplayer.tv.ui.theme.LuzEmptyState
 import app.iptvplayer.tv.ui.theme.LuzShelf
 import app.iptvplayer.tv.ui.theme.LuzSkeletonShelf
 import app.iptvplayer.tv.ui.theme.Tokens
+import app.iptvplayer.tv.ui.theme.revealsListTop
 
 object PersonTags {
     fun movie(id: String) = "person-movie-$id"
@@ -71,9 +73,11 @@ fun PersonScreen(playlistId: PlaylistId, name: String, onOpenMovie: (String) -> 
     val movies = found?.first.orEmpty().sortedByDescending { it.year ?: 0 }
     val series = found?.second.orEmpty().sortedByDescending { it.year ?: 0 }
 
+    val listState = rememberLazyListState()
     CalmScrolling {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
+            state = listState,
             verticalArrangement = Arrangement.spacedBy(Tokens.shelfSpacing),
             contentPadding = PaddingValues(top = Tokens.space10, bottom = Tokens.space10),
         ) {
@@ -95,32 +99,37 @@ fun PersonScreen(playlistId: PlaylistId, name: String, onOpenMovie: (String) -> 
                 else -> {
                     if (movies.isNotEmpty()) {
                         item(key = "movies") {
-                            LuzShelf(stringResource(R.string.search_movies)) {
-                                items(movies.size, key = { movies[it].id }) { index ->
-                                    val movie = movies[index]
-                                    LuzCard(
-                                        title = movie.title,
-                                        subtitle = movie.year?.toString(),
-                                        shape = CardShape.POSTER,
-                                        modifier = Modifier.rememberedFocus(focus, PersonTags.movie(movie.id)),
-                                        onClick = { onOpenMovie(movie.id) },
-                                    ) { art -> ArtworkImage(movie.poster, resolver, movie.title, art) }
+                            // The first shelf brings the name and biography back into view when the remote comes up to it.
+                            Box(Modifier.revealsListTop(listState)) {
+                                LuzShelf(stringResource(R.string.search_movies)) {
+                                    items(movies.size, key = { movies[it].id }) { index ->
+                                        val movie = movies[index]
+                                        LuzCard(
+                                            title = movie.title,
+                                            subtitle = movie.year?.toString(),
+                                            shape = CardShape.POSTER,
+                                            modifier = Modifier.rememberedFocus(focus, PersonTags.movie(movie.id)),
+                                            onClick = { onOpenMovie(movie.id) },
+                                        ) { art -> ArtworkImage(movie.poster, resolver, movie.title, art) }
+                                    }
                                 }
                             }
                         }
                     }
                     if (series.isNotEmpty()) {
                         item(key = "series") {
-                            LuzShelf(stringResource(R.string.search_series)) {
-                                items(series.size, key = { series[it].id }) { index ->
-                                    val show = series[index]
-                                    LuzCard(
-                                        title = show.title,
-                                        subtitle = show.year?.toString(),
-                                        shape = CardShape.POSTER,
-                                        modifier = Modifier.rememberedFocus(focus, PersonTags.series(show.id)),
-                                        onClick = { onOpenSeries(show.id) },
-                                    ) { art -> ArtworkImage(show.poster, resolver, show.title, art) }
+                            Box(if (movies.isEmpty()) Modifier.revealsListTop(listState) else Modifier) {
+                                LuzShelf(stringResource(R.string.search_series)) {
+                                    items(series.size, key = { series[it].id }) { index ->
+                                        val show = series[index]
+                                        LuzCard(
+                                            title = show.title,
+                                            subtitle = show.year?.toString(),
+                                            shape = CardShape.POSTER,
+                                            modifier = Modifier.rememberedFocus(focus, PersonTags.series(show.id)),
+                                            onClick = { onOpenSeries(show.id) },
+                                        ) { art -> ArtworkImage(show.poster, resolver, show.title, art) }
+                                    }
                                 }
                             }
                         }

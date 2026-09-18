@@ -92,6 +92,11 @@ private data class ShelfItem(
     val year: Int? = null,
 )
 
+/** The last page built for each source and kind, kept while Luz runs. */
+private object ShelfMemory {
+    val last = HashMap<Pair<PlaylistId, ImportUnit>, List<Shelf>>()
+}
+
 /** A tile that opens a full grid: a genre, a decade, a category. */
 private data class BrowseTile(val key: String, val title: String, val count: Long?)
 
@@ -132,7 +137,9 @@ fun LibraryShelves(
     val details by graph.detailRevision.collectAsState()
     val detailsStep = details / SHELF_REFRESH_STEP
     val lists by graph.listRevision.collectAsState()
-    var shelves by remember { mutableStateOf<List<Shelf>?>(null) }
+    // The page as it was last built shows at once; it is rebuilt behind it (counting genres and decades takes a second
+    // or two on a large library on a slow television).
+    var shelves by remember { mutableStateOf(ShelfMemory.last[playlist to unit]) }
     val movies = unit == ImportUnit.MOVIES
 
     LaunchedEffect(playlist, unit, revision, watched, detailsStep, lists) {
@@ -262,8 +269,9 @@ fun LibraryShelves(
                 add(Shelf.Titles("group-${group.id}", group.title, graph.seriesInUserGroup(playlist, group.id, SHELF_LIMIT).map(::series)))
             }
         }
-        // Publish what is ready before the genre shelves, which take longer on a large library.
-        shelves = built.toList()
+        // Publish what is ready before the genre shelves, which take longer on a large library — unless a whole page from
+        // before is showing, which is better than a shorter one.
+        if (shelves == null) shelves = built.toList()
 
         val genres = if (movies) graph.movieGenres(playlist, GENRE_TILES) else graph.seriesGenres(playlist, GENRE_TILES)
         for ((genre, count) in genres.take(GENRE_SHELVES)) {
@@ -314,6 +322,7 @@ fun LibraryShelves(
             ),
         )
         shelves = built.toList()
+        ShelfMemory.last[playlist to unit] = built.toList()
     }
 
     var menuFor by remember { mutableStateOf<Pair<String, ShelfItem>?>(null) }
