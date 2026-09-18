@@ -179,7 +179,13 @@ information, next. The room takes the featured picture's colour. Shelves beneath
 Your channels (favourites, then the most watched) or Live now, Popular films, New episodes, Recently added movies,
 Because you watched…, Highest rated films, Popular shows, Highest rated shows, My List. Empty shelves are left out, and
 so is a shelf that mostly repeats one above it; the viewer chooses and orders them in Settings → Home. On first opening,
-rows appear as they are read. The remote lands on the hero's Play.
+rows appear as they are read. The remote lands on the hero's Play. A quiet **greeting** ("Good evening") sits over the top
+of the hero while it is in view. **Continue watching** cards show the wide picture and what is left ("S1 E6 · 21 min
+left"). **Coming up on your channels** lists programmes starting in the next three hours, or started in the last ten
+minutes, on the viewer's favourites and most-watched channels ("In 3 min · beIN Sports 1"), from the stored guide; OK
+tunes in. **Because you watch *genre*** takes the genre of most of the films watched lately (at least two) and offers
+its best-rated films not yet seen. Rows added in an update appear in a viewer's saved choice after the row they follow.
+Holding OK opens a menu after 0.65 s; a menu opened that way ignores OK until the button has been let go.
 
 ## 10. Detail pages
 **Film:** the backdrop across most of the screen, title, facts (year, length, genres, age rating, ★ rating), badges

@@ -33,6 +33,9 @@ public data class LibraryGroupRow(public val id: String, public val title: Strin
 public data class WatchProgress(public val position: Duration, public val duration: Duration?, public val completed: Boolean) {
     /** 0.0–1.0 when the duration is known. */
     public val fraction: Float? get() = duration?.takeIf { it.isPositive() }?.let { (position / it).toFloat().coerceIn(0f, 1f) }
+
+    /** What is left to watch, when the length is known. */
+    public val remaining: Duration? get() = duration?.takeIf { it.isPositive() }?.let { (it - position).coerceAtLeast(Duration.ZERO) }
 }
 
 public data class MovieRow(

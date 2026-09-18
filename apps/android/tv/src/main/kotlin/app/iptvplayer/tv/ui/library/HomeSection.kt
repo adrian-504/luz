@@ -1,5 +1,8 @@
 package app.iptvplayer.tv.ui.library
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,23 +11,29 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.library.ExternalList
@@ -58,11 +67,13 @@ val HOME_ROW_TITLES: List<Pair<String, Int>> = listOf(
     HomeTags.CONTINUE to R.string.home_continue,
     HomeTags.CHANNELS to R.string.home_your_channels,
     HomeTags.LIVE to R.string.home_live_now,
+    HomeTags.COMING_UP to R.string.home_coming_up,
     HomeTags.TRENDING_MOVIES to R.string.home_trending_movies,
     HomeTags.POPULAR_MOVIES to R.string.home_popular_movies,
     HomeTags.SERIES to R.string.home_new_episodes,
     HomeTags.MOVIES to R.string.home_recent_movies,
     HomeTags.BECAUSE to R.string.home_because_setting,
+    HomeTags.GENRE to R.string.home_genre_setting,
     HomeTags.TOP_MOVIES to R.string.home_top_movies,
     HomeTags.TRENDING_SERIES to R.string.home_trending_series,
     HomeTags.POPULAR_SERIES to R.string.home_popular_series,
@@ -86,6 +97,9 @@ object HomeTags {
     const val TOP_SERIES = "top-series"
     const val BECAUSE = "because"
     const val MY_LIST = "my-list"
+    const val COMING_UP = "coming-up"
+    const val GENRE = "genre"
+    const val GREETING = "home-greeting"
     const val HERO_PLAY = "home-hero-play"
     const val HERO_FAVORITE = "home-hero-favorite"
     const val HERO_INFO = "home-hero-info"
@@ -107,6 +121,8 @@ private data class HomeCard(
     val facts: List<String> = emptyList(),
     val favorite: Boolean = false,
     val year: Int? = null,
+    /** For a channel's card: the name, drawn as a monogram when the logo is missing. */
+    val channelName: String? = null,
     /** Plays it (a film, an episode to resume) or, for a series, opens it. */
     val open: () -> Unit,
     /** Opens its detail page, where there is one. */
@@ -197,14 +213,20 @@ fun HomeSection(
             details = { onOpenSeries(p, series.id) },
         )
         var because: String? = null
+        var genreTitle: String? = null
+        val now = Clock.System.now()
         val specs = listOf(
             HomeRowSpec(HomeTags.CONTINUE, R.string.home_continue, landscape = true) { p ->
                 graph.continueCards(p, ROW_LIMIT).map { card ->
                     HomeCard(
                         key = card.id,
                         title = card.title,
-                        caption = card.subtitle,
+                        caption = listOfNotNull(
+                            card.subtitle,
+                            card.remaining?.let { timeLeft(resources, it) },
+                        ).joinToString(" · ").ifEmpty { null },
                         poster = card.poster,
+                        backdrop = card.backdrop,
                         fraction = card.fraction,
                         type = card.type,
                         facts = listOfNotNull(card.subtitle),
@@ -220,6 +242,22 @@ fun HomeSection(
             },
             HomeRowSpec(HomeTags.LIVE, R.string.home_live_now, landscape = true) { p ->
                 channelCards(graph, p, mine = false, onPlay = onPlayChannel)
+            },
+            // What starts soon (or just started) on the viewer's own channels, from the stored guide; OK jumps to it.
+            HomeRowSpec(HomeTags.COMING_UP, R.string.home_coming_up, landscape = true) { p ->
+                graph.comingUp(p, ROW_LIMIT, now).map { item ->
+                    HomeCard(
+                        key = "${item.channel.id.value}-${item.programme.start.toEpochMilliseconds()}",
+                        title = item.programme.title,
+                        caption = "${startsText(resources, item.programme.start, now)} · ${item.channel.name}",
+                        poster = item.channel.logo,
+                        fraction = null,
+                        channelName = item.channel.name,
+                        open = {
+                            onPlayChannel(p, if (item.channel.isFavorite) ChannelScope.Favorites else ChannelScope.All, item.channel.id)
+                        },
+                    )
+                }
             },
             // Trending comes from TMDB when the viewer gave a key (ADR-0038); without one the row is empty and left out.
             HomeRowSpec(HomeTags.TRENDING_MOVIES, R.string.home_trending_movies) { p ->
@@ -239,6 +277,12 @@ fun HomeSection(
             HomeRowSpec(HomeTags.BECAUSE, R.string.home_because_setting, titleOf = { because }) { p ->
                 graph.becauseYouWatched(p, ROW_LIMIT)?.let { pick ->
                     because = resources.getString(R.string.home_because, pick.seed.title)
+                    pick.movies.map { movieCard(p, it) }
+                }.orEmpty()
+            },
+            HomeRowSpec(HomeTags.GENRE, R.string.home_genre_setting, titleOf = { genreTitle }) { p ->
+                graph.genrePick(p, ROW_LIMIT)?.let { pick ->
+                    genreTitle = resources.getString(R.string.home_genre, pick.genre)
                     pick.movies.map { movieCard(p, it) }
                 }.orEmpty()
             },
@@ -262,7 +306,7 @@ fun HomeSection(
                 graph.favoriteMovies(p, ROW_LIMIT).map { movieCard(p, it) } + graph.favoriteSeries(p, ROW_LIMIT).map { seriesCard(p, it) }
             },
         )
-        val chosen = graph.homeRows()
+        val chosen = graph.homeRows()?.let { withNewRows(it, graph.homeRowsKnown()) }
         rows = if (id == null) {
             emptyList()
         } else {
@@ -370,7 +414,7 @@ fun HomeSection(
                     LuzShelf(title = row.title) {
                         items(row.cards.size, key = { row.cards[it].key }) { cardIndex ->
                             val card = row.cards[cardIndex]
-                            val channel = row.id == HomeTags.CHANNELS || row.id == HomeTags.LIVE
+                            val channel = card.channelName != null
                             LuzCard(
                                 title = card.title,
                                 subtitle = card.caption,
@@ -379,7 +423,14 @@ fun HomeSection(
                                 modifier = Modifier.rememberedFocus(focus, HomeTags.item(row.id, card.key)),
                                 onClick = card.open,
                             ) { modifier ->
-                                ArtworkImage(card.poster, resolver, card.title.takeIf { channel }, modifier, fit = channel)
+                                if (channel) {
+                                    ArtworkImage(card.poster, resolver, null, modifier, fit = true, name = card.channelName)
+                                } else {
+                                    // A wide card shows the wide picture: a film's backdrop in Continue watching, not its
+                                    // poster cropped to a strip.
+                                    val art = if (row.landscape) card.backdrop ?: card.poster else card.poster
+                                    ArtworkImage(art, resolver, card.title, modifier, LANDSCAPE_PX_WIDTH, LANDSCAPE_PX_HEIGHT)
+                                }
                             }
                         }
                     }
@@ -387,8 +438,84 @@ fun HomeSection(
                 item(key = "end") { Spacer(Modifier.height(Tokens.space16)) }
             }
         }
+        // "Good evening", quietly over the top of the hero while it is in view.
+        val atTop by remember {
+            derivedStateOf {
+                listState.firstVisibleItemIndex == 0 &&
+                    listState.firstVisibleItemScrollOffset < GREETING_FADE_PX
+            }
+        }
+        AnimatedVisibility(
+            visible = atTop,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopStart).padding(start = Tokens.contentStart, top = Tokens.space8),
+        ) {
+            Text(
+                greeting(resources, java.time.LocalTime.now().hour),
+                style = MaterialTheme.typography.titleLarge,
+                color = Tokens.textSecondary,
+                modifier = Modifier.testTag(HomeTags.GREETING),
+            )
+        }
     }
 }
+
+/**
+ * The viewer's saved rows with any row Luz gained since they saved them, each placed after the row it follows by
+ * default: a new row is on until they turn it off. [known] is every row there was when they saved.
+ */
+fun withNewRows(saved: List<String>, known: List<String>?): List<String> {
+    val all = HOME_ROW_TITLES.map { it.first }
+    val seen = (known ?: all - NEW_ROWS_2026_09).toSet()
+    val result = saved.toMutableList()
+    all.filter { it !in seen && it !in result }.forEach { row ->
+        val before = all.subList(0, all.indexOf(row)).lastOrNull { it in result }
+        result.add(before?.let { result.indexOf(it) + 1 } ?: 0, row)
+    }
+    return result
+}
+
+/** Rows added on 2026-09-18, before which Luz did not note which rows existed when the viewer saved theirs. */
+private val NEW_ROWS_2026_09 = setOf(HomeTags.COMING_UP, HomeTags.GENRE)
+
+/** "Good morning" until noon, "Good afternoon" until six, then "Good evening" through the night. */
+internal fun greeting(resources: android.content.res.Resources, hour: Int): String = resources.getString(
+    when (hour) {
+        in 5..11 -> R.string.home_good_morning
+        in 12..17 -> R.string.home_good_afternoon
+        else -> R.string.home_good_evening
+    },
+)
+
+/** "32 min left", "1 h 5 min left". */
+internal fun timeLeft(resources: android.content.res.Resources, left: kotlin.time.Duration): String {
+    val minutes = left.inWholeMinutes.coerceAtLeast(1)
+    return if (minutes < 60) {
+        resources.getString(R.string.home_minutes_left, minutes)
+    } else {
+        resources.getString(R.string.home_hours_left, minutes / 60, minutes % 60)
+    }
+}
+
+/** "Started 5 min ago", "In 20 min", "At 21:00". */
+private fun startsText(resources: android.content.res.Resources, start: kotlin.time.Instant, now: kotlin.time.Instant): String {
+    val minutes = (start - now).inWholeMinutes
+    return when {
+        minutes <= 0 -> resources.getString(R.string.home_started_ago, -minutes)
+        minutes < 60 -> resources.getString(R.string.home_starts_in, minutes)
+        else -> resources.getString(
+            R.string.home_starts_at,
+            java.time.format.DateTimeFormatter.ofPattern("HH:mm").format(
+                java.time.Instant.ofEpochMilli(start.toEpochMilliseconds()).atZone(java.time.ZoneId.systemDefault()),
+            ),
+        )
+    }
+}
+
+private const val GREETING_FADE_PX = 40
+private const val LANDSCAPE_PX_WIDTH = 480
+private const val LANDSCAPE_PX_HEIGHT = 270
 
 /**
  * The hero's buttons: Play (or Resume, or Episodes for a series), then favourite and more information as round buttons,
@@ -428,7 +555,7 @@ private fun RowScope.HeroActions(card: HomeCard, focus: FocusMemory, canAdvance:
  * with a picture at all. Channels never feature — a logo is not a hero.
  */
 private fun featuredFrom(rows: List<HomeRow>): List<HomeCard> {
-    val titles = rows.filter { it.id != HomeTags.CHANNELS && it.id != HomeTags.LIVE }.flatMap { it.cards }
+    val titles = rows.flatMap { it.cards }.filter { it.channelName == null }
     val ordered = titles.filter { it.fraction != null } + titles.filter { it.backdrop != null } + titles.filter { it.poster != null }
     return ordered.distinctBy { it.key }.take(FEATURED_LIMIT).ifEmpty { rows.first().cards.take(1) }
 }
@@ -457,6 +584,7 @@ private suspend fun channelCards(
             caption = guide[channel.id.value]?.current?.title,
             poster = channel.logo,
             fraction = null,
+            channelName = channel.name,
             // Zapping from a favourite stays among favourites; from any other channel, the whole list.
             open = { onPlay(playlist, if (channel.isFavorite) ChannelScope.Favorites else ChannelScope.All, channel.id) },
         )

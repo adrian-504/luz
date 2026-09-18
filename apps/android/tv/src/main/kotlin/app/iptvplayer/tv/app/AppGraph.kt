@@ -66,6 +66,7 @@ import java.net.URI
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 data class SearchResults(
@@ -90,7 +91,17 @@ data class ContinueCard(
     val subtitle: String?,
     val poster: UrlTemplate?,
     val fraction: Float?,
+    /** The wide picture, for the landscape card; the poster when there is none. */
+    val backdrop: UrlTemplate? = null,
+    /** How much is left to watch, when the length is known. */
+    val remaining: kotlin.time.Duration? = null,
 )
+
+/** A programme on Home's "Coming up" row: what, when, and the channel to jump to. */
+data class ComingUp(val channel: ChannelRow, val programme: GuideProgramme)
+
+/** "Because you watch …": the genre the viewer watches most, and films of it they have not seen. */
+data class GenrePick(val genre: String, val movies: List<MovieRow>)
 
 /** Import activity per source, for the UI. */
 data class SourceActivity(
@@ -277,8 +288,16 @@ class AppGraph(context: Context) {
         content.preference(HOME_ROWS)?.split(",")?.filter { it.isNotBlank() }
     }
 
-    suspend fun setHomeRows(rows: List<String>?) {
-        io { content.setPreference(HOME_ROWS, rows?.joinToString(",")) }
+    /** Every row Home had when the viewer saved their choice, so rows added later can be told apart from rows turned off. */
+    suspend fun homeRowsKnown(): List<String>? = io {
+        content.preference(HOME_ROWS_KNOWN)?.split(",")?.filter { it.isNotBlank() }
+    }
+
+    suspend fun setHomeRows(rows: List<String>?, known: List<String>) {
+        io {
+            content.setPreference(HOME_ROWS, rows?.joinToString(","))
+            content.setPreference(HOME_ROWS_KNOWN, known.joinToString(","))
+        }
         changed()
     }
 
@@ -773,12 +792,50 @@ class AppGraph(context: Context) {
         library.recordChannelWatch(playlistId, channelId.value)
     }
 
+    /**
+     * Programmes about to start, or just started, on the viewer's own channels (favourites, then the most watched): from
+     * ten minutes ago to three hours ahead, soonest first, at most two per channel. Stored guide only — Home asks the
+     * provider nothing for it. Empty for a viewer with no channels of their own yet.
+     */
+    suspend fun comingUp(playlistId: PlaylistId, limit: Int, now: Instant): List<ComingUp> = io {
+        val watched = content.channelsByIds(playlistId, library.mostWatchedChannelIds(playlistId, COMING_UP_CHANNELS))
+        val channels = (content.favoriteChannels(playlistId) + watched).distinctBy { it.id }.take(COMING_UP_CHANNELS)
+        if (channels.isEmpty()) return@io emptyList()
+        val byId = channels.associateBy { it.id.value }
+        val from = now - JUST_STARTED
+        epg.programmes(playlistId.value, channels.map { it.id.value }, from, now + COMING_UP_AHEAD)
+            .flatMap { (channelId, programmes) ->
+                programmes.filter { it.start >= from && it.start <= now + COMING_UP_AHEAD }.take(2).mapNotNull { programme ->
+                    byId[channelId]?.let { ComingUp(it, programme) }
+                }
+            }
+            .sortedBy { it.programme.start }
+            .take(limit)
+    }
+
+    /**
+     * The genre of most of the films the viewer watched lately (at least two of them), and the best-rated films of it
+     * they have not watched. Worked out on the television from the watch history and the films' pages.
+     */
+    suspend fun genrePick(playlistId: PlaylistId, limit: Int): GenrePick? = io {
+        val watched = library.recentlyWatchedMovieIds(playlistId, GENRE_HISTORY)
+        val genre = watched.flatMap { library.detail(playlistId, ContentType.MOVIE, it)?.genres.orEmpty() }
+            .groupingBy { it }.eachCount()
+            .filterValues { it >= MIN_GENRE_WATCHED }
+            .maxByOrNull { it.value }?.key ?: return@io null
+        val seen = watched.toSet()
+        val movies = library.moviesOfGenre(playlistId, genre, GENRE_CANDIDATES * 2)
+            .filter { it.id !in seen }
+            .sortedByDescending { it.rating?.toDoubleOrNull() ?: 0.0 }
+            .take(limit)
+        GenrePick(genre, movies).takeIf { movies.size >= MIN_RECOMMENDATIONS }
+    }
+
     /** Channels the viewer watches most, falling back to favourites when they have not watched any yet. */
     suspend fun mostWatchedChannels(playlistId: PlaylistId, limit: Int): List<ChannelRow> = io {
         val ids = library.mostWatchedChannelIds(playlistId, limit)
         if (ids.isEmpty()) return@io content.favoriteChannels(playlistId).take(limit)
-        val all = content.channels(playlistId, null).associateBy { it.id.value }
-        ids.mapNotNull { all[it] }
+        content.channelsByIds(playlistId, ids)
     }
 
     /** "Continue watching" cards with titles and artwork, most recent first (FR-HOME-001). */
@@ -786,7 +843,16 @@ class AppGraph(context: Context) {
         library.continueWatching(playlistId, limit).mapNotNull { item ->
             when (item.type) {
                 ContentType.MOVIE -> library.movie(playlistId, item.id)?.let {
-                    ContinueCard(item.type, item.id, it.title, null, it.poster, item.progress.fraction)
+                    ContinueCard(
+                        item.type,
+                        item.id,
+                        it.title,
+                        null,
+                        it.poster,
+                        item.progress.fraction,
+                        it.backdrop,
+                        item.progress.remaining,
+                    )
                 }
                 ContentType.EPISODE -> library.episode(playlistId, item.id)?.let { episode ->
                     val series = library.seriesById(playlistId, episode.seriesId)
@@ -797,6 +863,8 @@ class AppGraph(context: Context) {
                         "S${episode.seasonNumber} E${episode.episodeNumber}",
                         series?.poster,
                         item.progress.fraction,
+                        series?.backdrop,
+                        item.progress.remaining,
                     )
                 }
                 else -> null
@@ -912,6 +980,11 @@ class AppGraph(context: Context) {
         const val CAST_POINTS = 3
         const val GENRE_POINTS = 1
         const val MIN_RECOMMENDATIONS = 4
+        const val COMING_UP_CHANNELS = 40
+        val JUST_STARTED = 10.minutes
+        val COMING_UP_AHEAD = 3.hours
+        const val GENRE_HISTORY = 30
+        const val MIN_GENRE_WATCHED = 2
         const val NEAR_YEARS = 8
     }
 }
@@ -924,3 +997,4 @@ private const val RADIX = 36
 
 /** Preference key for the Home row choice. */
 private const val HOME_ROWS = "home.rows"
+private const val HOME_ROWS_KNOWN = "home.rows.known"

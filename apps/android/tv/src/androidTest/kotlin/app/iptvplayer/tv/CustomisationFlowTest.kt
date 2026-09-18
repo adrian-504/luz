@@ -78,6 +78,8 @@ class CustomisationFlowTest {
         Thread.sleep(100)
         instrumentation.sendKeySync(KeyEvent(down, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER, 0))
         rule.waitForIdle()
+        // A person lets go and looks before choosing; a menu ignores OK until the button has been quiet (LuzMenu).
+        Thread.sleep(MENU_SETTLE_MS)
     }
 
     private fun focusedTag() = rule.onAllNodes(isFocused()).fetchSemanticsNodes()
@@ -198,7 +200,7 @@ class CustomisationFlowTest {
     fun theViewerChoosesWhichRowsHomeShows() {
         awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
         // Preferences outlive a test's source, so a choice left by an earlier run is cleared first.
-        runBlocking { graph.setHomeRows(null) }
+        runBlocking { graph.setHomeRows(null, HOME_ROW_TITLES.map { it.first }) }
         assertEquals("nothing chosen to begin with", null, runBlocking { graph.homeRows() })
 
         openSettings()
@@ -298,4 +300,41 @@ class CustomisationFlowTest {
         assertTrue(runBlocking { graph.groups(playlist) }.first().pinned)
         runBlocking { graph.pin(playlist, CustomisationTarget.CHANNEL_GROUP, last.id, pinned = false) }
     }
+
+    /** OK held as a real remote holds it: repeats every 50 ms for [ms], then the release. */
+    private fun holdOk(ms: Long) {
+        val down = SystemClock.uptimeMillis()
+        instrumentation.sendKeySync(KeyEvent(down, down, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, 0))
+        var repeat = 0
+        while (SystemClock.uptimeMillis() - down < ms) {
+            Thread.sleep(50)
+            instrumentation.sendKeySync(
+                KeyEvent(down, SystemClock.uptimeMillis(), KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, ++repeat),
+            )
+        }
+        instrumentation.sendKeySync(KeyEvent(down, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER, 0))
+        rule.waitForIdle()
+    }
+
+    @Test
+    fun holdingOkOpensTheMenuWithoutChoosingAnythingInIt() {
+        rule.waitUntil(20_000) { focusedTag()?.startsWith("live-") == true }
+        val group = runBlocking { graph.groups(playlist) }.first()
+        if (focusedTag()?.startsWith("live-channel") == true) press(KeyEvent.KEYCODE_DPAD_LEFT)
+        rule.waitUntil(5_000) { focusedTag()?.startsWith("live-channel") != true }
+        repeat(6) { if (focusedTag() != LiveTags.group(group.id)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitFocus(LiveTags.group(group.id))
+
+        // Held well past the long press: the menu opens and stays open, its first item focused but not chosen.
+        holdOk(1_500)
+        awaitExists(LuzMenuTags.MENU)
+        awaitFocus(LuzMenuTags.item("pin"))
+        Thread.sleep(300)
+        rule.waitForIdle()
+        assertTrue(rule.onAllNodes(hasTestTag(LuzMenuTags.MENU)).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(runBlocking { graph.groups(playlist) }.none { it.pinned })
+        press(KeyEvent.KEYCODE_BACK)
+    }
 }
+
+private const val MENU_SETTLE_MS = 300L

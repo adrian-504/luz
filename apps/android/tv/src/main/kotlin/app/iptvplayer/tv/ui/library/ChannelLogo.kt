@@ -50,7 +50,7 @@ object LogoLooks {
  * - how dark it is and its main colour are noted in [LogoLooks] under [key].
  */
 class LogoCleanup(private val key: String) : Transformation() {
-    override val cacheKey: String = "logo-cleanup-1"
+    override val cacheKey: String = "logo-cleanup-2"
 
     override suspend fun transform(input: Bitmap, size: Size): Bitmap {
         val width = input.width
@@ -83,15 +83,22 @@ class LogoCleanup(private val key: String) : Transformation() {
         val corners = intArrayOf(pixels[0], pixels[width - 1], pixels[(height - 1) * width], pixels[height * width - 1])
         if (corners.any { alpha(it) < OPAQUE }) return false
         val ground = corners[0]
-        if (corners.any { !alike(it, ground) }) return edgeIsBusy(pixels, width, height, ground)
-        if (edgeIsBusy(pixels, width, height, ground)) return true
+        // A "transparent" checkerboard painted into the file (grey and white squares) is a box too: any light, colourless
+        // pixel belongs to it.
+        val background: (Int) -> Boolean = if (corners.all(::lightNeutral) && !edgeIsBusy(pixels, width, height, ::lightNeutral)) {
+            ::lightNeutral
+        } else {
+            if (corners.any { !alike(it, ground) }) return edgeIsBusy(pixels, width, height) { alike(it, ground) }
+            if (edgeIsBusy(pixels, width, height) { alike(it, ground) }) return true
+            { alike(it, ground) }
+        }
 
         val queue = IntArray(width * height)
         var head = 0
         var tail = 0
         fun visit(index: Int) {
             val pixel = pixels[index]
-            if (alpha(pixel) != 0 && alike(pixel, ground)) {
+            if (alpha(pixel) != 0 && background(pixel)) {
                 pixels[index] = 0
                 queue[tail++] = index
             }
@@ -115,18 +122,18 @@ class LogoCleanup(private val key: String) : Transformation() {
         return false
     }
 
-    /** True when less than [FLAT_EDGE] of the border is [ground]'s colour: a photo or a tile, not a logo in a box. */
-    private fun edgeIsBusy(pixels: IntArray, width: Int, height: Int, ground: Int): Boolean {
+    /** True when less than [FLAT_EDGE] of the border is [background]: a photo or a tile, not a logo in a box. */
+    private fun edgeIsBusy(pixels: IntArray, width: Int, height: Int, background: (Int) -> Boolean): Boolean {
         var same = 0
         var total = 0
         for (x in 0 until width) {
-            if (alike(pixels[x], ground)) same++
-            if (alike(pixels[(height - 1) * width + x], ground)) same++
+            if (background(pixels[x])) same++
+            if (background(pixels[(height - 1) * width + x])) same++
             total += 2
         }
         for (y in 0 until height) {
-            if (alike(pixels[y * width], ground)) same++
-            if (alike(pixels[y * width + width - 1], ground)) same++
+            if (background(pixels[y * width])) same++
+            if (background(pixels[y * width + width - 1])) same++
             total += 2
         }
         return same < total * FLAT_EDGE
@@ -198,8 +205,18 @@ class LogoCleanup(private val key: String) : Transformation() {
         const val TOLERANCE = 48
         const val FLAT_EDGE = 0.8
         const val DARK = 0.22
+        const val LIGHT = 185
+        const val NEUTRAL = 18
 
         fun alpha(pixel: Int) = pixel ushr 24
+
+        /** White or light grey: the squares of a painted-in checkerboard. */
+        fun lightNeutral(pixel: Int): Boolean {
+            val r = (pixel shr 16) and 0xFF
+            val g = (pixel shr 8) and 0xFF
+            val b = pixel and 0xFF
+            return alpha(pixel) >= OPAQUE && minOf(r, g, b) >= LIGHT && maxOf(r, g, b) - minOf(r, g, b) <= NEUTRAL
+        }
 
         fun alike(a: Int, b: Int): Boolean = abs(((a shr 16) and 0xFF) - ((b shr 16) and 0xFF)) +
             abs(((a shr 8) and 0xFF) - ((b shr 8) and 0xFF)) +

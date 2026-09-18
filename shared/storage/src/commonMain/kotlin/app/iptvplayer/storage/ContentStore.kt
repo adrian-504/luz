@@ -437,6 +437,16 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
         }.executeAsList()
     }
 
+    /** The channels with [ids], in that order; hidden ones and ids no longer in the source are left out. */
+    public fun channelsByIds(playlistId: PlaylistId, ids: List<String>): List<ChannelRow> {
+        val snapshot = activeLiveSnapshot(playlistId) ?: return emptyList()
+        if (ids.isEmpty()) return emptyList()
+        val found = queries.channelsByIds(playlistId.value, snapshot, ids) { id, name, number, logo, tvg, favorite ->
+            row(id, name, number, logo, tvg, favorite)
+        }.executeAsList().associateBy { it.id.value }
+        return ids.mapNotNull { found[it] }
+    }
+
     /** Names for [ids], including things the viewer has hidden — the hidden list has to name what it offers back. */
     public fun channelNames(playlistId: PlaylistId, ids: List<String>): Map<String, String> {
         val snapshot = activeLiveSnapshot(playlistId) ?: return emptyMap()

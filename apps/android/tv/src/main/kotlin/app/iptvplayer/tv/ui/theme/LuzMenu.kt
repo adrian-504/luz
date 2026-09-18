@@ -13,7 +13,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,6 +25,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,8 +54,24 @@ fun LuzMenu(title: String, items: List<LuzMenuItem>, onDismiss: () -> Unit) {
     val first = remember { FocusRequester() }
     BackHandler(enabled = true, onBack = onDismiss)
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    // A menu opened by holding OK appears while OK is still down, and what the hold sends next — repeats, then the
+    // release — must not choose the first item. Such a menu takes OK only after the release and a moment of quiet
+    // ([MENU_QUIET_MS]); a menu opened by an ordinary press takes OK at once.
+    var guarded by remember { mutableStateOf(OkKey.held) }
+    var lastOk by remember { mutableLongStateOf(android.os.SystemClock.uptimeMillis()) }
     Box(
-        modifier = Modifier.fillMaxSize().background(Tokens.scrim).testTag(LuzMenuTags.MENU),
+        modifier = Modifier.fillMaxSize().background(Tokens.scrim).testTag(LuzMenuTags.MENU).onPreviewKeyEvent { event ->
+            val key = event.nativeKeyEvent
+            if (key.keyCode !in CENTER_KEYS || !guarded) return@onPreviewKeyEvent false
+            val quiet = key.eventTime - lastOk >= MENU_QUIET_MS
+            lastOk = key.eventTime
+            if (event.type == KeyEventType.KeyDown && key.repeatCount == 0 && quiet) {
+                guarded = false
+                false
+            } else {
+                true
+            }
+        },
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -88,3 +111,18 @@ fun LuzMenu(title: String, items: List<LuzMenuItem>, onDismiss: () -> Unit) {
         }
     }
 }
+
+/** Whether OK is held right now, as the activity sees every key (MainActivity.dispatchKeyEvent). */
+object OkKey {
+    @Volatile
+    var held: Boolean = false
+        private set
+
+    fun observe(event: android.view.KeyEvent) {
+        if (event.keyCode !in CENTER_KEYS) return
+        held = event.action == android.view.KeyEvent.ACTION_DOWN
+    }
+}
+
+/** How long OK must have been quiet before a menu opened under a held OK takes a press. */
+private const val MENU_QUIET_MS = 250L

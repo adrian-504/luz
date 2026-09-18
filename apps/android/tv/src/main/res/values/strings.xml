@@ -265,6 +265,17 @@
     <string name="home_top_series">Highest rated shows</string>
     <string name="home_new_episodes">New episodes</string>
     <string name="home_because">Because you watched %1$s</string>
+    <string name="home_genre">Because you watch %1$s</string>
+    <string name="home_genre_setting">Because you watch… (your favourite genre)</string>
+    <string name="home_coming_up">Coming up on your channels</string>
+    <string name="home_good_morning">Good morning</string>
+    <string name="home_good_afternoon">Good afternoon</string>
+    <string name="home_good_evening">Good evening</string>
+    <string name="home_minutes_left">%1$d min left</string>
+    <string name="home_hours_left">%1$d h %2$d min left</string>
+    <string name="home_started_ago">Started %1$d min ago</string>
+    <string name="home_starts_in">In %1$d min</string>
+    <string name="home_starts_at">At %1$s</string>
     <string name="home_because_setting">Because you watched…</string>
     <string name="home_my_list">My List</string>
     <string name="library_recently_added">Recently added</string>

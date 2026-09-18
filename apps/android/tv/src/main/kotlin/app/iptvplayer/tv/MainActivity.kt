@@ -8,6 +8,7 @@ import app.iptvplayer.tv.app.IptvApplication
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.AppNavHost
 import app.iptvplayer.tv.ui.theme.IptvTheme
+import app.iptvplayer.tv.ui.theme.OkKey
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -20,5 +21,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /** Notes whether OK is held, for menus that open under a held OK (LuzMenu). Changes nothing about the event. */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        OkKey.observe(event)
+        return super.dispatchKeyEvent(event)
     }
 }

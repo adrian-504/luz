@@ -30,6 +30,7 @@ import org.junit.Test
 import org.junit.rules.ExternalResource
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * A custom guide link from Playlists (FR-SRC-004) — the owner's provider has an empty XMLTV guide and no short EPG. The
@@ -107,6 +108,16 @@ class GuideLinkTest {
             rule.onAllNodes(hasTestTag(SourcesTags.guide(playlist)).and(hasText("your guide link", substring = true)))
                 .fetchSemanticsNodes().isNotEmpty()
         }
+
+        // Home's "Coming up" reads that stored guide for the viewer's own channels: a favourite with a next programme.
+        val now = kotlin.time.Clock.System.now()
+        val channels = runBlocking { graph.channels(playlist, null) }
+        val guided = runBlocking { graph.storedNowNext(playlist, channels, now) }
+        val channel = channels.first { guided[it.id.value]?.next != null }
+        runBlocking { graph.setFavorite(channel.id, true) }
+        val soon = runBlocking { graph.comingUp(playlist, 10, now) }
+        assertTrue("$soon", soon.isNotEmpty() && soon.all { it.channel.id == channel.id && it.programme.start >= now - 10.minutes })
+        runBlocking { graph.setFavorite(channel.id, false) }
 
         // Reopening shows that a link is set and offers the provider's guide again.
         press(KeyEvent.KEYCODE_DPAD_CENTER)

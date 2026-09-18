@@ -54,6 +54,19 @@ class ChannelLogoTest {
     }
 
     @Test
+    fun aCheckerboardPaintedIntoTheFileIsCutAwayLikeABox() = runBlocking {
+        // Grey and white squares all round, as image sites draw "transparent", with a purple logo in the middle.
+        val logo = bitmap(80, 40, Color.WHITE) { bitmap ->
+            for (y in 0 until 40) for (x in 0 until 80) if ((x / 8 + y / 8) % 2 == 0) bitmap.setPixel(x, y, Color.rgb(204, 204, 204))
+            rect(bitmap, 20, 10, 60, 30, Color.rgb(90, 30, 140))
+        }
+        val out = LogoCleanup("test-checker").transform(logo, Size.ORIGINAL)
+        assertEquals(40, out.width)
+        assertEquals(20, out.height)
+        assertFalse(LogoLooks.of("test-checker")!!.picture)
+    }
+
+    @Test
     fun aPictureIsLeftAsItIs() = runBlocking {
         // Opaque corners of one colour, but an edge of many colours: a photo, not a logo in a box.
         val photo = bitmap(50, 50, Color.BLUE) { bitmap ->

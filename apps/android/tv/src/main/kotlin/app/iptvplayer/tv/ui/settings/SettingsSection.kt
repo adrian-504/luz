@@ -59,6 +59,7 @@ import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.library.HOME_ROW_TITLES
+import app.iptvplayer.tv.ui.library.withNewRows
 import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.shortTime
 import app.iptvplayer.tv.ui.sources.SourcesList
@@ -650,7 +651,7 @@ private fun HomeRows(focus: FocusMemory) {
     var loaded by remember { mutableStateOf(false) }
     var moving by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(revision) {
-        chosen = graph.homeRows()
+        chosen = graph.homeRows()?.let { withNewRows(it, graph.homeRowsKnown()) }
         loaded = true
     }
     if (!loaded) return
@@ -667,7 +668,7 @@ private fun HomeRows(focus: FocusMemory) {
         LuzRow(
             onClick = {
                 val next = if (visible) order.filterNot { it == id } else order + id
-                scope.launch { graph.setHomeRows(next) }
+                scope.launch { graph.setHomeRows(known = HOME_ROW_TITLES.map { it.first }, rows = next) }
             },
             modifier = Modifier.rememberedFocus(focus, SettingsTags.homeRow(id)),
             onLongClick = { moving = id },
@@ -694,19 +695,31 @@ private fun HomeRows(focus: FocusMemory) {
             items = listOfNotNull(
                 if (index > 0) {
                     LuzMenuItem("up", stringResource(R.string.home_row_up)) {
-                        scope.launch { graph.setHomeRows(order.toMutableList().apply { add(index - 1, removeAt(index)) }) }
+                        scope.launch {
+                            graph.setHomeRows(
+                                known = HOME_ROW_TITLES.map { it.first },
+                                rows = order.toMutableList().apply { add(index - 1, removeAt(index)) },
+                            )
+                        }
                     }
                 } else {
                     null
                 },
                 if (index in 0 until order.size - 1) {
                     LuzMenuItem("down", stringResource(R.string.home_row_down)) {
-                        scope.launch { graph.setHomeRows(order.toMutableList().apply { add(index + 1, removeAt(index)) }) }
+                        scope.launch {
+                            graph.setHomeRows(
+                                known = HOME_ROW_TITLES.map { it.first },
+                                rows = order.toMutableList().apply { add(index + 1, removeAt(index)) },
+                            )
+                        }
                     }
                 } else {
                     null
                 },
-                LuzMenuItem("default", stringResource(R.string.home_row_default)) { scope.launch { graph.setHomeRows(null) } },
+                LuzMenuItem("default", stringResource(R.string.home_row_default)) {
+                    scope.launch { graph.setHomeRows(known = HOME_ROW_TITLES.map { it.first }, rows = null) }
+                },
             ),
             onDismiss = { moving = null },
         )

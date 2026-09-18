@@ -72,6 +72,8 @@ class LiveTvFlowTest {
         )
         instrumentation.sendKeySync(KeyEvent(down, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER, 0))
         rule.waitForIdle()
+        // A person lets go and looks before choosing; a menu ignores OK until the button has been quiet (LuzMenu).
+        Thread.sleep(MENU_SETTLE_MS)
     }
 
     private fun focusedTags() = rule.onAllNodes(isFocused()).fetchSemanticsNodes().map { it.config.getOrNull(SemanticsProperties.TestTag) }
@@ -234,3 +236,5 @@ class LiveTvFlowTest {
 
 /** Time for the player to prepare the channels around the one it settled on (see the last-channel step). */
 private const val PREPARE_GRACE_MS = 1_500L
+
+private const val MENU_SETTLE_MS = 300L

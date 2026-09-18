@@ -23,9 +23,10 @@ import androidx.compose.ui.platform.LocalDensity
 /**
  * Makes an element pressable with the remote: OK presses it, and holding OK long-presses it when [onLongClick] is set.
  *
- * Compose's own long press listens for touch. A television reports a held key as repeats instead, and the first repeat
- * arrives at the platform's long-press threshold, so that is when the long press fires; the release that follows is
- * swallowed so it does not also count as a plain press. [onFocus] reports focus changes to the caller.
+ * Compose's own long press listens for touch. A television reports a held key as repeats instead; the long press fires
+ * once the key has been held [LONG_PRESS_MS] — longer than the first repeat, which some remotes send after a moment, so
+ * an ordinary press that lingers does not open a menu. The repeats and the release that follow are swallowed so they do
+ * not also count as a press (a menu opened this way also ignores them, see [LuzMenu]). [onFocus] reports focus changes.
  */
 @Composable
 fun Modifier.luzClickable(onClick: () -> Unit, onLongClick: (() -> Unit)? = null, onFocus: ((Boolean) -> Unit)? = null): Modifier {
@@ -33,13 +34,22 @@ fun Modifier.luzClickable(onClick: () -> Unit, onLongClick: (() -> Unit)? = null
     return this
         .onFocusChanged { onFocus?.invoke(it.isFocused) }
         .onPreviewKeyEvent { event ->
+            val key = event.nativeKeyEvent
             when {
-                onLongClick == null || event.nativeKeyEvent.keyCode !in CENTER_KEYS -> false
-                event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 1 -> {
+                onLongClick == null || key.keyCode !in CENTER_KEYS -> false
+                // A fresh press: whatever happened last time (the release may have gone to a menu) is over.
+                event.type == KeyEventType.KeyDown && key.repeatCount == 0 -> {
+                    longPressFired = false
+                    false
+                }
+                event.type == KeyEventType.KeyDown && longPressFired -> true
+                event.type == KeyEventType.KeyDown && key.eventTime - key.downTime >= LONG_PRESS_MS -> {
                     longPressFired = true
                     onLongClick()
                     true
                 }
+                // Held, but not long enough yet: not a press either.
+                event.type == KeyEventType.KeyDown -> true
                 event.type == KeyEventType.KeyUp && longPressFired -> {
                     longPressFired = false
                     true
@@ -52,7 +62,9 @@ fun Modifier.luzClickable(onClick: () -> Unit, onLongClick: (() -> Unit)? = null
             // A television has no touch ripple: focus is the feedback.
             indication = null,
             onClick = onClick,
-            onLongClick = onLongClick,
+            // Holding OK is handled above, after [LONG_PRESS_MS]: Compose's own key long press fires at the platform's
+            // 400 ms, which on the reference television opened menus under an ordinary press.
+            onLongClick = null,
         )
 }
 
@@ -83,6 +95,9 @@ fun Modifier.luzLift(focused: Boolean, shape: Shape, scale: Float = Tokens.FOCUS
         }
     }
 }
+
+/** How long OK is held before it counts as a long press. */
+internal const val LONG_PRESS_MS = 650L
 
 /** The remote keys that mean "press this": OK on a D-pad, Enter on a keyboard. */
 internal val CENTER_KEYS = setOf(
