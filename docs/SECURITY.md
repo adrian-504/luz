@@ -157,7 +157,10 @@ credentials, the host nor the stream path appear in `dumpsys media_session` (ADR
 - Apple MetricKit payloads may be read locally for development builds; not uploaded.
 - **TMDB** (ADR-0038) is the one outside service Luz contacts besides the viewer's providers, and only when the viewer
   enters their own key: it receives requests for its public lists (trending, popular, top rated) about once a day. No
-  library contents, titles, watch history or device identifiers are sent; matching happens on the television.
+  library contents, titles, watch history or device identifiers are sent with those; matching happens on the television.
+  With *Title artwork and photos* on (ADR-0039, the default once a key is entered), opening a film, show or person also
+  sends TMDB its name (and year), once per 30 days, for its logo, cast photos and biography. The switch in Settings → TMDB
+  stops it. Nothing is sent in the background or for the library as a whole.
 - Before public release (§21.2): choose crash monitoring with privacy controls (opt-in or clearly disclosed, redaction hook, no URL/title collection), documented by ADR and privacy policy.
 
 ## 10. Permissions (minimal)

@@ -310,7 +310,10 @@
     </plurals>
     <string name="settings_tmdb">TMDB</string>
     <string name="settings_tmdb_summary">Trending and ratings, with your own key</string>
-    <string name="tmdb_help">With a free key from The Movie Database (themoviedb.org → Settings → API), Luz adds what is trending this week and uses TMDB\'s popularity and ratings for the Popular and Highest rated rows. Luz reads only TMDB\'s public lists, about once a day; nothing about your library or what you watch is sent.</string>
+    <string name="tmdb_help">With a free key from The Movie Database (themoviedb.org → Settings → API), Luz adds what is trending this week and uses TMDB\'s popularity and ratings for the Popular and Highest rated rows. Luz reads TMDB\'s public lists about once a day.</string>
+    <string name="tmdb_artwork_on">Title artwork and photos: On</string>
+    <string name="tmdb_artwork_off">Title artwork and photos: Off</string>
+    <string name="tmdb_artwork_help">When on, the films, shows and people you open are looked up at TMDB, once each, for their title artwork, cast photos and biographies. Nothing else about your library or what you watch is sent.</string>
     <string name="tmdb_no_key">No key yet: rows use your provider\'s ratings.</string>
     <string name="tmdb_checking">Checking your key with TMDB…</string>
     <string name="tmdb_refused">TMDB did not accept that key. Check it and try again.</string>

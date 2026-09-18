@@ -130,6 +130,22 @@ object TestPanel {
         if (params["api_key"] != TMDB_KEY) return 401 to """{"status_code":7,"status_message":"Invalid API key"}"""
         val path = route.removePrefix("/tmdb/3/")
         if (path == "configuration") return 200 to """{"images":{}}"""
+        // Artwork for an opened title and a person (ADR-0039): Test Movie One has a logo and one portrait, Alex Example a
+        // biography. The image paths do not exist anywhere; the app shows words when a picture does not arrive.
+        when (path) {
+            "search/movie" -> return 200 to """{"results":[{"id":990001,"title":"Test Movie One","release_date":"2021-06-01"}]}"""
+            "search/tv", "search/person" ->
+                return 200 to if (path == "search/person" && params["query"] == "Alex Example") {
+                    """{"results":[{"id":7001,"name":"Alex Example","profile_path":"/test-alex.jpg"}]}"""
+                } else {
+                    """{"results":[]}"""
+                }
+            "movie/990001" ->
+                return 200 to """{"id":990001,"images":{"logos":[{"file_path":"/test-logo.png","iso_639_1":"en"}]},""" +
+                    """"credits":{"cast":[{"id":7001,"name":"Alex Example","profile_path":"/test-alex.jpg"}],"crew":[]}}"""
+            "person/7001" ->
+                return 200 to """{"id":7001,"name":"Alex Example","profile_path":"/test-alex.jpg","biography":"A synthetic actor."}"""
+        }
         if (params["page"] != "1") return 200 to """{"page":2,"results":[]}"""
         val results = if (path.contains("movie")) {
             """{"id":990002,"title":"Test Movie Two","release_date":"2020-05-01","vote_average":8.1,"vote_count":321},""" +

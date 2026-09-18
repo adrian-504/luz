@@ -1,24 +1,37 @@
 package app.iptvplayer.tv.ui.library
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.ingestion.PersonArt
 import app.iptvplayer.storage.MovieRow
 import app.iptvplayer.storage.SeriesRow
 import app.iptvplayer.tv.R
@@ -52,6 +65,7 @@ fun PersonScreen(playlistId: PlaylistId, name: String, onOpenMovie: (String) -> 
     val detailRevision by graph.detailRevision.collectAsState()
     val fetching by graph.detailFetchRunning.collectAsState()
     LaunchedEffect(playlistId, name, detailRevision) { titles = graph.titlesOfPerson(playlistId, name) }
+    val person by produceState<PersonArt?>(null, name) { value = graph.personArt(name) }
     val resolver = rememberArtworkResolver(playlistId)
     val found = titles
     val movies = found?.first.orEmpty().sortedByDescending { it.year ?: 0 }
@@ -64,22 +78,13 @@ fun PersonScreen(playlistId: PlaylistId, name: String, onOpenMovie: (String) -> 
             contentPadding = PaddingValues(top = Tokens.space10, bottom = Tokens.space10),
         ) {
             item(key = "name") {
-                Column(Modifier.padding(start = Tokens.contentStart), verticalArrangement = Arrangement.spacedBy(Tokens.space2)) {
-                    Text(name, style = MaterialTheme.typography.displayLarge, color = Tokens.textPrimary, maxLines = 1)
-                    if (found != null) {
-                        Text(
-                            pluralStringResource(R.plurals.person_titles, movies.size + series.size, movies.size + series.size),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Tokens.textSecondary,
-                        )
-                    }
-                    if (fetching) {
-                        Text(
-                            stringResource(R.string.person_still_reading),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Tokens.textTertiary,
-                        )
-                    }
+                Row(
+                    Modifier.padding(start = Tokens.contentStart, end = Tokens.space16),
+                    horizontalArrangement = Arrangement.spacedBy(Tokens.space8),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    person?.photoUrl?.let { PersonPhoto(it) }
+                    PersonHeading(name, found != null, movies.size + series.size, fetching, person?.biography)
                 }
             }
             when {
@@ -127,3 +132,50 @@ fun PersonScreen(playlistId: PlaylistId, name: String, onOpenMovie: (String) -> 
     val first = movies.firstOrNull()?.let { PersonTags.movie(it.id) } ?: series.firstOrNull()?.let { PersonTags.series(it.id) }
     if (first != null) RestoreFocusEffect(focus, first)
 }
+
+/** The person's name, how many of their titles the library has, and TMDB's biography when there is one. */
+@Composable
+private fun PersonHeading(name: String, counted: Boolean, count: Int, fetching: Boolean, biography: String?) {
+    Column(verticalArrangement = Arrangement.spacedBy(Tokens.space2)) {
+        Text(name, style = MaterialTheme.typography.displayLarge, color = Tokens.textPrimary, maxLines = 1)
+        if (counted) {
+            Text(
+                pluralStringResource(R.plurals.person_titles, count, count),
+                style = MaterialTheme.typography.bodyLarge,
+                color = Tokens.textSecondary,
+            )
+        }
+        if (fetching) {
+            Text(stringResource(R.string.person_still_reading), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary)
+        }
+        biography?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Tokens.textSecondary,
+                maxLines = BIOGRAPHY_LINES,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = BIOGRAPHY_WIDTH),
+            )
+        }
+    }
+}
+
+/** TMDB's portrait of the person, in a tall rounded frame beside their name; the frame waits invisibly until it loads. */
+@Composable
+private fun PersonPhoto(url: String) {
+    var loaded by remember(url) { mutableStateOf(false) }
+    Box(
+        Modifier
+            .size(PHOTO_WIDTH, PHOTO_HEIGHT)
+            .clip(RoundedCornerShape(Tokens.radiusLarge))
+            .background(if (loaded) Color.Transparent else Tokens.bgSurface2),
+    ) {
+        Portrait(url) { loaded = true }
+    }
+}
+
+private val PHOTO_WIDTH = 150.dp
+private val PHOTO_HEIGHT = 225.dp
+private val BIOGRAPHY_WIDTH = 900.dp
+private const val BIOGRAPHY_LINES = 4

@@ -445,7 +445,7 @@ private fun ProgrammeDetails(channelOf: () -> ChannelRow?, programmeOf: () -> Gu
             programme.description?.let {
                 Text(
                     it,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodySmall,
                     color = Tokens.textTertiary,
@@ -602,7 +602,7 @@ private fun GuideCell(title: String, x: Dp, width: Dp, textInset: Dp, airingFrac
     }
 }
 
-private val DETAILS_HEIGHT = 96.dp
+private val DETAILS_HEIGHT = 76.dp
 private val DESCRIPTION_WIDTH = 640.dp
 private val NUMBER_WIDTH = 28.dp
 private val MIN_TEXT_ROOM = 48.dp

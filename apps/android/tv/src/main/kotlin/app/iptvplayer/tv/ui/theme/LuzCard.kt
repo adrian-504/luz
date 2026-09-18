@@ -84,7 +84,10 @@ fun LuzCard(
                         it,
                         style = MaterialTheme.typography.labelLarge,
                         color = if (focused) Tokens.textPrimary else Tokens.textPrimary.copy(alpha = RESTING_TITLE_ALPHA),
-                        maxLines = 1,
+                        // A poster's name gets two lines: long titles, and Arabic ones especially, were cut after a word or
+                        // two. A landscape card is wide enough for one.
+                        maxLines = if (shape == CardShape.POSTER) 2 else 1,
+                        minLines = if (shape == CardShape.POSTER) 2 else 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }

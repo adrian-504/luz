@@ -4,6 +4,8 @@ import app.iptvplayer.domain.error.AuthFailure
 import app.iptvplayer.domain.error.DomainError
 import app.iptvplayer.domain.id.CredentialRef
 import app.iptvplayer.domain.library.ExternalList
+import app.iptvplayer.domain.library.TitleCleaner
+import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.ports.Clock
 import app.iptvplayer.domain.ports.HttpTransport
 import app.iptvplayer.domain.ports.SecretStore
@@ -14,7 +16,9 @@ import app.iptvplayer.protocols.tmdb.TmdbClient
 import app.iptvplayer.protocols.tmdb.tmdbPages
 import app.iptvplayer.storage.LibraryStore
 import app.iptvplayer.storage.ListEntry
+import app.iptvplayer.storage.Portrait
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 
 /**
@@ -77,7 +81,58 @@ public class TmdbService(
         return null
     }
 
+    /**
+     * The title artwork and cast portraits of a film or show the viewer opened (ADR-0039): from what is stored when it was
+     * asked about in the last [ART_KEEP], otherwise from TMDB — one search and one page. [providerTmdbId] is the provider's
+     * TMDB id when it gives one, which saves the search. Stored by title and year, so a row that only has those (Home's
+     * hero) finds it too. Null without a key; stored art when TMDB fails. [ask] false reads only what is stored.
+     */
+    public suspend fun artwork(type: ContentType, title: String, year: Int?, providerTmdbId: String?, ask: Boolean = true): TitleArt? {
+        val known = providerTmdbId?.toLongOrNull()
+        val work = TitleCleaner.workKey(title, year)
+        val stored = library.artOf(type, work)
+        if (!ask || (stored != null && clock.now() - stored.fetchedAt < ART_KEEP)) return stored?.toArt()
+        val key = secrets.get(KEY)?.password ?: return stored?.toArt()
+        val id = known ?: client.find(key, type, title, year).let { (id, error) ->
+            if (error != null) return stored?.toArt()
+            id
+        }
+        if (id == null) {
+            library.saveArt(type, work, null, null, emptyList())
+            return TitleArt(null)
+        }
+        val (art, error) = client.artwork(key, type, id)
+        if (error != null) return stored?.toArt()
+        library.saveArt(type, work, id, art?.logoPath, art?.credits.orEmpty().map { Portrait(it.name, it.id, it.profilePath) })
+        return TitleArt(art?.logoPath?.let { TmdbClient.imageUrl(it, LOGO_SIZE) })
+    }
+
+    /** Portraits of [names] learned from TMDB, as image addresses. Local only. */
+    public fun portraits(names: Collection<String>): Map<String, String> =
+        library.portraitsOf(names).mapValues { TmdbClient.imageUrl(it.value, PORTRAIT_SIZE) }
+
+    /** A person's portrait and biography (ADR-0039), stored after the first time; null without a key or when TMDB fails. */
+    public suspend fun person(name: String): PersonArt? {
+        val stored = library.personOf(name)
+        if (stored?.biography != null && clock.now() - stored.fetchedAt < ART_KEEP) return stored.toArt()
+        val key = secrets.get(KEY)?.password ?: return stored?.toArt()
+        val (person, error) = client.person(key, name)
+        if (error != null) return stored?.toArt()
+        // An empty biography marks a person already asked about, so a person TMDB has nothing on is not asked again.
+        library.savePerson(name, person?.id, person?.profilePath ?: stored?.profilePath, person?.biography.orEmpty())
+        return library.personOf(name)?.toArt()
+    }
+
+    private fun app.iptvplayer.storage.StoredArt.toArt() = TitleArt(logoPath?.let { TmdbClient.imageUrl(it, LOGO_SIZE) })
+
+    private fun app.iptvplayer.storage.StoredPerson.toArt() =
+        PersonArt(profilePath?.let { TmdbClient.imageUrl(it, PROFILE_SIZE) }, biography?.takeIf { it.isNotBlank() })
+
     public companion object {
+        private val ART_KEEP = 30.days
+        private const val LOGO_SIZE = "w500"
+        private const val PORTRAIT_SIZE = "w185"
+        private const val PROFILE_SIZE = "h632"
         private val KEY = CredentialRef("tmdb-api-key")
 
         /** TMDB v3 keys are 32 hexadecimal characters; a read access token is a long JWT. Anything else is a paste error. */
@@ -85,3 +140,9 @@ public class TmdbService(
         public val REFRESH_EVERY: Duration = 20.hours
     }
 }
+
+/** A title's artwork from TMDB: its title logo when TMDB has one. */
+public data class TitleArt(public val logoUrl: String?)
+
+/** A person from TMDB: a portrait and a biography, when TMDB has them. */
+public data class PersonArt(public val photoUrl: String?, public val biography: String?)

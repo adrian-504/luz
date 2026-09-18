@@ -64,3 +64,47 @@ LIMIT :limit;
 -- TMDB's rating of one work, from whichever list mentions it.
 ratingOf:
 SELECT MAX(rating) FROM tmdb_title WHERE content_type = :type AND (tmdb_key = :key OR title_key = :key OR bare_title_key = :key);
+
+-- A title's artwork from TMDB (ADR-0039), keyed by its work so every version and every refresh shares it. A title TMDB
+-- does not know is stored with no id, so it is not asked about again until [fetched_at] is old.
+CREATE TABLE tmdb_art (
+    content_type TEXT NOT NULL,
+    work_key TEXT NOT NULL,
+    tmdb_id INTEGER,
+    logo_path TEXT,
+    fetched_at INTEGER NOT NULL,
+    PRIMARY KEY (content_type, work_key)
+);
+
+-- People as TMDB knows them, keyed by the name as the provider writes it.
+CREATE TABLE tmdb_person (
+    name TEXT NOT NULL PRIMARY KEY,
+    tmdb_id INTEGER,
+    profile_path TEXT,
+    biography TEXT,
+    fetched_at INTEGER NOT NULL
+);
+
+artOf:
+SELECT * FROM tmdb_art WHERE content_type = ? AND work_key = ?;
+
+saveArt:
+INSERT OR REPLACE INTO tmdb_art(content_type, work_key, tmdb_id, logo_path, fetched_at) VALUES (?, ?, ?, ?, ?);
+
+personOf:
+SELECT * FROM tmdb_person WHERE name = ?;
+
+-- A portrait learned from a title's credits; a person's own page, read later, replaces it with the biography.
+savePortrait:
+INSERT OR IGNORE INTO tmdb_person(name, tmdb_id, profile_path, biography, fetched_at) VALUES (?, ?, ?, NULL, ?);
+
+savePerson:
+INSERT OR REPLACE INTO tmdb_person(name, tmdb_id, profile_path, biography, fetched_at) VALUES (?, ?, ?, ?, ?);
+
+portraitsOf:
+SELECT name, profile_path FROM tmdb_person WHERE name IN ? AND profile_path IS NOT NULL;
+
+deleteArt {
+    DELETE FROM tmdb_art;
+    DELETE FROM tmdb_person;
+}

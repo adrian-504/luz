@@ -443,6 +443,14 @@ Movies, Series) are done — ADR-0035 — and verified on the Bbox with the owne
 | 30–32 | Clock, quiet buffering, error screen | **Done — ADR-0036** |
 | 33–34 | Guide timeline redesign and speed, a channel's guide from its menu | **Done — ADR-0037** (emulator device tests); speed on the Bbox not yet re-measured |
 
+**Aesthetics round (2026-09-18, owner's choice of items 1–4 and 6–10):** Live TV's top panel with the channel logo;
+two-line poster titles; a shorter guide header; detail pages that grow in and a drifting backdrop; Settings symbols; TMDB
+title logos, cast photos and a person page with photo and biography (ADR-0039). **Luz on the television's home screen
+(Watch Next, channels): not built.** The Bbox's home screen is Bouygues' own launcher (`fr.bouyguestelecom.tv.bbui`),
+which lacks the permission to read other apps' Watch Next and preview channels (`ACCESS_ALL_EPG_DATA`, held on the Bbox
+only by Google's recommendation service), so rows would never appear there. Revisit for Google TV devices, with the
+`androidx.tvprovider` evaluation (ARCHITECTURE.md §14).
+
 Follow-ups found on the way: a budget for film and show import times on the reference television (88 s and 3 min 41 s
 today, ADR-0035); Home takes about two seconds to fill every row on the Bbox and now shows rows as they arrive.
 

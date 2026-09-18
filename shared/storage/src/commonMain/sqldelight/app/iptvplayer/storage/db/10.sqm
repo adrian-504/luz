@@ -1,0 +1,17 @@
+-- Migration 10 -> 11: TMDB artwork and people (ADR-0039). Must match Tmdb.sq.
+CREATE TABLE tmdb_art (
+    content_type TEXT NOT NULL,
+    work_key TEXT NOT NULL,
+    tmdb_id INTEGER,
+    logo_path TEXT,
+    fetched_at INTEGER NOT NULL,
+    PRIMARY KEY (content_type, work_key)
+);
+
+CREATE TABLE tmdb_person (
+    name TEXT NOT NULL PRIMARY KEY,
+    tmdb_id INTEGER,
+    profile_path TEXT,
+    biography TEXT,
+    fetched_at INTEGER NOT NULL
+);

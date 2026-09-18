@@ -71,11 +71,12 @@ fun openTrailer(context: Context, trailer: String): Boolean {
 }
 
 /**
- * "Cast & Crew": a shelf of people, each a round plate with their initials — providers send names, not portraits — and
- * what they did underneath. OK on one opens everything of theirs in the library.
+ * "Cast & Crew": a shelf of people, each a round plate with their portrait from TMDB when one is known ([portraits], by
+ * name; ADR-0039) or their initials — providers send names, not portraits — and what they did underneath. OK on one
+ * opens everything of theirs in the library.
  */
 @Composable
-fun CreditsShelf(credits: List<Credit>, focus: FocusMemory, onPerson: (String) -> Unit) {
+fun CreditsShelf(credits: List<Credit>, focus: FocusMemory, portraits: Map<String, String> = emptyMap(), onPerson: (String) -> Unit) {
     LuzShelf(stringResource(R.string.detail_cast_and_crew)) {
         items(credits.size, key = { "${credits[it].name}-${credits[it].directed}" }) { index ->
             val credit = credits[index]
@@ -83,6 +84,7 @@ fun CreditsShelf(credits: List<Credit>, focus: FocusMemory, onPerson: (String) -
                 credit.name,
                 stringResource(if (credit.directed) R.string.detail_director else R.string.detail_actor),
                 Modifier.rememberedFocus(focus, DetailTags.person(credit.name, credit.directed)),
+                photoUrl = portraits[credit.name],
             ) { onPerson(credit.name) }
         }
     }
@@ -90,8 +92,9 @@ fun CreditsShelf(credits: List<Credit>, focus: FocusMemory, onPerson: (String) -
 
 /** A person as a round plate with their initials, their name under it and [subtitle] — what they did — in grey. */
 @Composable
-fun PersonCard(name: String, subtitle: String, modifier: Modifier, onClick: () -> Unit) {
+fun PersonCard(name: String, subtitle: String, modifier: Modifier, photoUrl: String? = null, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
+    var photo by remember(photoUrl) { mutableStateOf(false) }
     Column(
         modifier = Modifier.width(PERSON_WIDTH),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -108,7 +111,8 @@ fun PersonCard(name: String, subtitle: String, modifier: Modifier, onClick: () -
                 .luzClickable(onClick = onClick, onFocus = { focused = it }),
             contentAlignment = Alignment.Center,
         ) {
-            Text(initials(name), style = MaterialTheme.typography.headlineMedium, color = Tokens.textSecondary)
+            if (!photo) Text(initials(name), style = MaterialTheme.typography.headlineMedium, color = Tokens.textSecondary)
+            photoUrl?.let { Portrait(it) { photo = true } }
         }
         Text(
             name,

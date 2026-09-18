@@ -2,6 +2,7 @@ package app.iptvplayer.ingestion
 
 import app.iptvplayer.domain.error.DomainError
 import app.iptvplayer.domain.id.CredentialRef
+import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.ports.ByteArraySource
 import app.iptvplayer.domain.ports.Clock
 import app.iptvplayer.domain.ports.HttpRequest
@@ -64,6 +65,13 @@ class TmdbServiceTest {
             val (status, body) = when {
                 "api_key=$GOOD_KEY" !in url -> 401 to """{"status_code":7}"""
                 path == "configuration" -> 200 to "{}"
+                path == "search/movie" -> 200 to """{"results":[{"id":77,"title":"Example Film","release_date":"2019-05-01"}]}"""
+                path == "movie/77" ->
+                    200 to
+                        """{"id":77,"images":{"logos":[{"file_path":"/logo.png","iso_639_1":"en"}]},""" +
+                        """"credits":{"cast":[{"id":5,"name":"Ada Example","profile_path":"/ada.jpg"}],"crew":[]}}"""
+                path == "search/person" -> 200 to """{"results":[{"id":5,"name":"Ada Example","profile_path":"/ada.jpg"}]}"""
+                path == "person/5" -> 200 to """{"id":5,"name":"Ada Example","profile_path":"/ada.jpg","biography":"Born somewhere."}"""
                 "page=1" in url ->
                     200 to
                         """{"page":1,"results":[{"id":42,"title":"Example $path","release_date":"2020-01-01","vote_average":7.5}]}"""
@@ -109,6 +117,28 @@ class TmdbServiceTest {
         service.removeKey()
         assertFalse(service.hasKey())
         assertTrue(library.listCounts().isEmpty())
+    }
+
+    @Test
+    fun artworkIsAskedForOnceAndThenReadFromStorage() = runTest {
+        assertNull(service.artwork(ContentType.MOVIE, "Example Film", 2019, null), "nothing without a key")
+        service.setKey(GOOD_KEY)
+        tmdb.paths.clear()
+
+        val art = service.artwork(ContentType.MOVIE, "Example Film", 2019, null)
+        assertEquals("https://image.tmdb.org/t/p/w500/logo.png", art?.logoUrl)
+        assertEquals(listOf("search/movie", "movie/77"), tmdb.paths)
+        assertEquals(mapOf("Ada Example" to "https://image.tmdb.org/t/p/w185/ada.jpg"), service.portraits(listOf("Ada Example", "Nobody")))
+
+        now += 48.hours
+        assertEquals(art, service.artwork(ContentType.MOVIE, "Example Film", 2019, null))
+        assertEquals(2, tmdb.paths.size, "stored art is not asked for again")
+
+        val person = service.person("Ada Example")
+        assertEquals("Born somewhere.", person?.biography)
+        assertEquals("https://image.tmdb.org/t/p/h632/ada.jpg", person?.photoUrl)
+        service.person("Ada Example")
+        assertEquals(4, tmdb.paths.size, "a person is asked about once")
     }
 
     private companion object {

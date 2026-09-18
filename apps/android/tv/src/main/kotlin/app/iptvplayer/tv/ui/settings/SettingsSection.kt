@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -31,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
@@ -77,6 +80,7 @@ object SettingsTags {
     const val TMDB_KEY = "settings-tmdb-key"
     const val TMDB_REFRESH = "settings-tmdb-refresh"
     const val TMDB_REMOVE = "settings-tmdb-remove"
+    const val TMDB_ARTWORK = "settings-tmdb-artwork"
 
     fun homeRow(id: String) = "settings-home-$id"
     const val DEVELOPER = "settings-developer"
@@ -91,7 +95,13 @@ object SettingsTags {
 }
 
 /** One thing the viewer can look at or change under Settings. */
-private data class SettingsEntry(val key: String, @param:StringRes val title: Int, val summary: Int, val plural: Boolean = false)
+private data class SettingsEntry(
+    val key: String,
+    @param:StringRes val title: Int,
+    val summary: Int,
+    val icon: ImageVector,
+    val plural: Boolean = false,
+)
 
 /**
  * Settings (PRODUCT_DIRECTIVE.md §3): a short list of sections on the left, the chosen one on the right.
@@ -121,17 +131,43 @@ fun SettingsSection(
     }
     val entries = remember(hasDeveloperStreams, hiddenCount, playlist) {
         buildList {
-            add(SettingsEntry(SettingsTags.PROVIDERS, R.string.settings_providers, R.string.settings_providers_summary))
-            add(SettingsEntry(SettingsTags.HOME, R.string.settings_home, R.string.settings_home_summary))
+            add(
+                SettingsEntry(
+                    SettingsTags.PROVIDERS,
+                    R.string.settings_providers,
+                    R.string.settings_providers_summary,
+                    LuzIcons.ChannelList,
+                ),
+            )
+            add(SettingsEntry(SettingsTags.HOME, R.string.settings_home, R.string.settings_home_summary, LuzIcons.Home))
             if (hiddenCount > 0) {
-                add(SettingsEntry(SettingsTags.HIDDEN, R.string.settings_hidden, R.plurals.settings_hidden_summary, plural = true))
+                add(
+                    SettingsEntry(
+                        SettingsTags.HIDDEN,
+                        R.string.settings_hidden,
+                        R.plurals.settings_hidden_summary,
+                        LuzIcons.Hidden,
+                        plural = true,
+                    ),
+                )
             }
             // Only with a provider: before one is added there is nothing it could have sent.
-            if (playlist != null) add(SettingsEntry(SettingsTags.DETAILS, R.string.settings_details, R.string.settings_details_summary))
-            add(SettingsEntry(SettingsTags.TMDB, R.string.settings_tmdb, R.string.settings_tmdb_summary))
-            add(SettingsEntry(SettingsTags.ABOUT, R.string.settings_about, R.string.settings_about_summary))
+            if (playlist !=
+                null
+            ) {
+                add(SettingsEntry(SettingsTags.DETAILS, R.string.settings_details, R.string.settings_details_summary, LuzIcons.Movies))
+            }
+            add(SettingsEntry(SettingsTags.TMDB, R.string.settings_tmdb, R.string.settings_tmdb_summary, LuzIcons.Star))
+            add(SettingsEntry(SettingsTags.ABOUT, R.string.settings_about, R.string.settings_about_summary, LuzIcons.Info))
             if (hasDeveloperStreams) {
-                add(SettingsEntry(SettingsTags.DEVELOPER, R.string.settings_developer, R.string.settings_developer_summary))
+                add(
+                    SettingsEntry(
+                        SettingsTags.DEVELOPER,
+                        R.string.settings_developer,
+                        R.string.settings_developer_summary,
+                        LuzIcons.Diagnostics,
+                    ),
+                )
             }
         }
     }
@@ -158,6 +194,18 @@ fun SettingsSection(
                         modifier = Modifier.rememberedFocus(focus, SettingsTags.entry(entry.key)),
                         selected = selected == entry.key,
                     ) {
+                        // Each section's symbol on a small round plate, so the list reads at a glance from the sofa.
+                        Box(
+                            Modifier.size(ENTRY_PLATE).clip(CircleShape).background(Tokens.raised),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                entry.icon,
+                                contentDescription = null,
+                                tint = if (selected == entry.key) Tokens.textPrimary else Tokens.textSecondary,
+                                modifier = Modifier.size(ENTRY_ICON),
+                            )
+                        }
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(
                                 stringResource(entry.title),
@@ -218,7 +266,9 @@ private fun PaneHeading(text: String) {
     Text(text, style = MaterialTheme.typography.headlineMedium, color = Tokens.textPrimary)
 }
 
-private val SECTION_LIST_WIDTH = 260.dp
+private val SECTION_LIST_WIDTH = 300.dp
+private val ENTRY_PLATE = 36.dp
+private val ENTRY_ICON = 18.dp
 private val CHECK_SIZE = 14.dp
 
 @Composable
@@ -345,6 +395,18 @@ private fun TmdbPane(focus: FocusMemory) {
                 Modifier.rememberedFocus(focus, SettingsTags.TMDB_REMOVE),
             )
         }
+    }
+    if (current.hasKey) {
+        var artwork by remember { mutableStateOf(graph.tmdbArtwork) }
+        ActionButton(
+            stringResource(if (artwork) R.string.tmdb_artwork_on else R.string.tmdb_artwork_off),
+            {
+                artwork = !artwork
+                scope.launch { graph.setTmdbArtwork(artwork) }
+            },
+            Modifier.rememberedFocus(focus, SettingsTags.TMDB_ARTWORK),
+        )
+        Text(stringResource(R.string.tmdb_artwork_help), style = MaterialTheme.typography.bodySmall, color = Tokens.textSecondary)
     }
     Text(stringResource(R.string.tmdb_attribution), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary)
     if (entering) {

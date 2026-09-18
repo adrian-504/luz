@@ -16,8 +16,10 @@ import app.iptvplayer.domain.playback.PlaybackMode
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.ingestion.AddSourceFailure
 import app.iptvplayer.ingestion.AddSourceResult
+import app.iptvplayer.ingestion.PersonArt
 import app.iptvplayer.ingestion.ShortGuideReport
 import app.iptvplayer.ingestion.SourceService
+import app.iptvplayer.ingestion.TitleArt
 import app.iptvplayer.ingestion.TmdbService
 import app.iptvplayer.ingestion.UnitOutcome
 import app.iptvplayer.platform.AndroidPlatformCapabilities
@@ -448,6 +450,27 @@ class AppGraph(context: Context) {
         }
     }
 
+    /** Whether titles and people the viewer opens may be asked about at TMDB for artwork (ADR-0039); on by default. */
+    val tmdbArtwork: Boolean get() = preferences.getBoolean(KEY_TMDB_ARTWORK, true)
+
+    suspend fun setTmdbArtwork(on: Boolean) {
+        io { preferences.edit(commit = true) { putBoolean(KEY_TMDB_ARTWORK, on) } }
+    }
+
+    /** The title logo of an opened film or show; null when switched off, without a key, or when TMDB has none. */
+    suspend fun titleArt(type: ContentType, title: String, year: Int?, tmdbId: String?, ask: Boolean = true): TitleArt? {
+        if (!tmdbArtwork) return null
+        return io { runCatching { tmdb.artwork(type, title, year, tmdbId, ask) }.getOrNull() }
+    }
+
+    /** Portraits of [names] already learned from TMDB; nothing is asked. */
+    suspend fun portraits(names: Collection<String>): Map<String, String> = if (!tmdbArtwork) emptyMap() else io { tmdb.portraits(names) }
+
+    suspend fun personArt(name: String): PersonArt? {
+        if (!tmdbArtwork) return null
+        return io { runCatching { tmdb.person(name) }.getOrNull() }
+    }
+
     suspend fun moviesOfList(playlistId: PlaylistId, list: ExternalList, limit: Int): List<MovieRow> =
         io { library.moviesOfList(playlistId, list.name, limit) }
 
@@ -810,6 +833,7 @@ class AppGraph(context: Context) {
         /** Calls for more channels than this (whole lists) use the stored guide only. */
         const val SHORT_GUIDE_MAX_CHANNELS = 20
         const val KEY_CURRENT_SOURCE = "current_source"
+        const val KEY_TMDB_ARTWORK = "tmdb_artwork"
 
         /** One film page per this pause at most, so a whole library never looks like a flood to a provider. */
         val ENRICHMENT_PAUSE = 400.milliseconds

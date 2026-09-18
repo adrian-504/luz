@@ -65,4 +65,45 @@ class TmdbClientTest {
         val (ok, _) = client { FakeTransport.ok("""{"images":{}}""") }
         assertNull(ok.check(key))
     }
+
+    @Test
+    fun aTitleIsFoundByNameAndYearAndItsArtworkAndPeopleRead() = runTest {
+        val (client, transport) = client { path ->
+            when {
+                path == "search/movie" -> FakeTransport.ok("""{"results":[{"id":77,"title":"Example Heist"},{"id":78}]}""")
+                path == "movie/77" -> FakeTransport.ok(
+                    """{"id":77,"images":{"logos":[{"file_path":"/fr.png","iso_639_1":"fr"},{"file_path":"/en.png","iso_639_1":"en"}]},""" +
+                        """"credits":{"cast":[{"id":1,"name":"Alex Example","profile_path":"/alex.jpg"},{"id":2,"name":""}],""" +
+                        """"crew":[{"id":3,"name":"Jordan Sample","job":"Director","profile_path":null},{"id":4,"name":"Pat Editor","job":"Editor"}]}}""",
+                )
+                else -> FakeTransport.status(404)
+            }
+        }
+        val (id, _) = client.find(key, ContentType.MOVIE, "Example Heist", 2024)
+        assertEquals(77, id)
+        assertTrue("year=2024" in transport.requests.first().url.unsafeRawValue(), "the year narrows the search")
+        val (art, error) = client.artwork(key, ContentType.MOVIE, 77)
+        assertNull(error)
+        assertEquals("/en.png", art?.logoPath, "English artwork first")
+        assertEquals(
+            listOf(TmdbCredit(3, "Jordan Sample", null, true), TmdbCredit(1, "Alex Example", "/alex.jpg", false)),
+            art?.credits,
+            "the director, then the cast; nameless entries and other crew left out",
+        )
+        assertEquals("https://image.tmdb.org/t/p/w500/en.png", TmdbClient.imageUrl("/en.png", "w500"))
+    }
+
+    @Test
+    fun aPersonIsFoundByNameWithTheirPortraitAndBiography() = runTest {
+        val (client, _) = client { path ->
+            when (path) {
+                "search/person" -> FakeTransport.ok("""{"results":[{"id":9,"name":"Alex Example","profile_path":"/a.jpg"}]}""")
+                "person/9" -> FakeTransport.ok("""{"id":9,"biography":"An example actor."}""")
+                else -> FakeTransport.status(404)
+            }
+        }
+        assertEquals(TmdbPerson(9, "Alex Example", "/a.jpg", "An example actor."), client.person(key, "Alex Example").first)
+        val (nobody, _) = client { FakeTransport.ok("""{"results":[]}""") }
+        assertNull(nobody.person(key, "Nobody").first)
+    }
 }

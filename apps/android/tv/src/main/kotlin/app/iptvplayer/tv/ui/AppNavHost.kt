@@ -1,9 +1,13 @@
 package app.iptvplayer.tv.ui
 
 import android.net.Uri
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -142,7 +146,11 @@ fun AppNavHost() {
                 onOpenPerson = { playlist, name -> navController.navigate(Routes.person(playlist, name)) },
             )
         }
-        composable(Routes.MOVIE) { entry ->
+        composable(
+            Routes.MOVIE,
+            enterTransition = { pageEnter() },
+            popExitTransition = { pageExit() },
+        ) { entry ->
             val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
             val id = Uri.decode(entry.arguments?.getString("id").orEmpty())
             MovieDetailScreen(
@@ -152,7 +160,11 @@ fun AppNavHost() {
                 onPerson = { navController.navigate(Routes.person(playlist, it)) },
             )
         }
-        composable(Routes.SERIES) { entry ->
+        composable(
+            Routes.SERIES,
+            enterTransition = { pageEnter() },
+            popExitTransition = { pageExit() },
+        ) { entry ->
             val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
             val id = Uri.decode(entry.arguments?.getString("id").orEmpty())
             SeriesDetailScreen(
@@ -166,7 +178,11 @@ fun AppNavHost() {
                 onPerson = { navController.navigate(Routes.person(playlist, it)) },
             )
         }
-        composable(Routes.PERSON) { entry ->
+        composable(
+            Routes.PERSON,
+            enterTransition = { pageEnter() },
+            popExitTransition = { pageExit() },
+        ) { entry ->
             val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
             PersonScreen(
                 playlist,
@@ -219,6 +235,15 @@ fun AppNavHost() {
         }
     }
 }
+
+/** A title's page grows out of where the viewer was, as the reference app's do, and settles back when they leave it. */
+private fun pageEnter(): EnterTransition =
+    fadeIn(tween(Tokens.MOTION_EMPHASIZED_MS)) + scaleIn(tween(Tokens.MOTION_EMPHASIZED_MS), initialScale = PAGE_SCALE)
+
+private fun pageExit(): ExitTransition =
+    fadeOut(tween(Tokens.MOTION_STANDARD_MS)) + scaleOut(tween(Tokens.MOTION_STANDARD_MS), targetScale = PAGE_SCALE)
+
+private const val PAGE_SCALE = 0.94f
 
 /** After a source is added: Live TV with nothing to go back to but the TV home screen. */
 private fun NavHostController.showLiveTv() {

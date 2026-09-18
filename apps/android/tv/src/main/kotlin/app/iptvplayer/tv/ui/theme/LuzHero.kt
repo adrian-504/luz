@@ -2,6 +2,12 @@ package app.iptvplayer.tv.ui.theme
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -22,8 +28,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
@@ -54,13 +62,38 @@ fun <T> LuzHero(
     room: Color = Tokens.bgBase,
     badges: List<String> = emptyList(),
     detailLines: Int = DETAIL_LINES,
+    /** A slow drift towards the viewer, as the reference app's pages do; for pages the viewer reads, not carousels. */
+    drift: Boolean = false,
+    /** The title as artwork (a TMDB logo) in place of the words; it should show [HeroTitle] until its picture arrives. */
+    titleArt: (@Composable () -> Unit)? = null,
     artworkOf: T,
     artwork: @Composable (T, Modifier) -> Unit,
 ) {
     Box(modifier = modifier.fillMaxWidth()) {
         // The fading-out layer has to keep drawing the artwork it was showing, so the picture comes from the state the
         // crossfade hands back — reading the current one here would fade the new image into itself.
-        Crossfade(targetState = artworkOf, animationSpec = luzTween(Tokens.MOTION_HERO_MS), label = "hero-art") { shown ->
+        val zoom = if (drift) {
+            rememberInfiniteTransition(label = "hero-drift").animateFloat(
+                initialValue = 1f,
+                targetValue = DRIFT_SCALE,
+                animationSpec = infiniteRepeatable(tween(DRIFT_MS, easing = LinearEasing), RepeatMode.Reverse),
+                label = "hero-drift-scale",
+            )
+        } else {
+            null
+        }
+        Crossfade(
+            targetState = artworkOf,
+            animationSpec = luzTween(Tokens.MOTION_HERO_MS),
+            label = "hero-art",
+            // Read while drawing, so the drift repaints the picture and never rebuilds the page.
+            modifier = Modifier.fillMaxSize().clipToBounds().graphicsLayer {
+                zoom?.value?.let {
+                    scaleX = it
+                    scaleY = it
+                }
+            },
+        ) { shown ->
             artwork(shown, Modifier.fillMaxSize())
         }
         HeroScrims(room)
@@ -71,13 +104,7 @@ fun <T> LuzHero(
                 .widthIn(max = TEXT_WIDTH),
             verticalArrangement = Arrangement.spacedBy(Tokens.space3),
         ) {
-            Text(
-                title,
-                style = MaterialTheme.typography.displayLarge,
-                color = Tokens.textPrimary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (titleArt != null) titleArt() else HeroTitle(title)
             if (meta.isNotEmpty() || badges.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), verticalAlignment = Alignment.CenterVertically) {
                     if (meta.isNotEmpty()) MetadataLine(meta)
@@ -148,6 +175,18 @@ fun LuzBadge(label: String, modifier: Modifier = Modifier) {
     )
 }
 
+/** A hero's title in words: large, at most two lines. */
+@Composable
+fun HeroTitle(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.displayLarge,
+        color = Tokens.textPrimary,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
 /** "Film · Thriller · 2019": the facts under a title, small and quiet. */
 @Composable
 fun MetadataLine(items: List<String>, modifier: Modifier = Modifier) {
@@ -191,6 +230,8 @@ private fun BoxScope.PageIndicator(page: Int, pages: Int) {
 }
 
 private val TEXT_WIDTH = 520.dp
+private const val DRIFT_SCALE = 1.06f
+private const val DRIFT_MS = 24_000
 private val BADGE_RADIUS = 3.dp
 private const val DETAIL_LINES = 2
 private const val TOP_ALPHA = 0.45f

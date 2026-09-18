@@ -568,7 +568,14 @@ private fun ChannelList(
                 modifier = Modifier.padding(Tokens.space4),
             )
             else -> {
-                OnNowPanel(underRemote, { id -> onScreenGuide[id] ?: storedGuide[id] }, now)
+                // Before the remote reaches a channel, the panel speaks for the first one, so it is never an empty space.
+                OnNowPanel(
+                    underRemote,
+                    rows.firstOrNull(),
+                    { id -> onScreenGuide[id] ?: storedGuide[id] },
+                    now,
+                    resolver,
+                )
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize().focusRestorer(),
@@ -595,48 +602,79 @@ private fun ChannelList(
 }
 
 /**
- * What is on the channel under the remote, above the list: the programme large, its time and how far through it is,
- * and what comes next. It is the list's context, so it changes as the remote moves and the list itself stays still.
+ * What is on the channel under the remote, above the list: the channel's logo on a plate, the programme large with its
+ * time and how far through it is, what comes next and the first line of what it is about. With no guide for the channel
+ * its name stands large instead, so the panel is never an empty space. It is the list's context: it changes as the
+ * remote moves and the list itself stays still.
  */
 @Composable
-private fun OnNowPanel(underRemote: State<ChannelRow?>, guideFor: (String) -> NowNextRow?, now: Instant) {
-    val channel = underRemote.value
+private fun OnNowPanel(
+    underRemote: State<ChannelRow?>,
+    fallback: ChannelRow?,
+    guideFor: (String) -> NowNextRow?,
+    now: Instant,
+    resolver: ((UrlTemplate) -> String?)?,
+) {
+    val channel = underRemote.value ?: fallback
     val guide = channel?.let { guideFor(it.id.value) }
     val current = guide?.current
-    Column(
+    Row(
         modifier = Modifier.fillMaxWidth().height(ON_NOW_HEIGHT).padding(start = Tokens.space4),
-        verticalArrangement = Arrangement.spacedBy(Tokens.space1, Alignment.Bottom),
+        horizontalArrangement = Arrangement.spacedBy(Tokens.space5),
+        verticalAlignment = Alignment.Bottom,
     ) {
-        Text(
-            channel?.name?.let { stringResource(R.string.live_on_now) + " · " + it }.orEmpty(),
-            style = MaterialTheme.typography.labelMedium,
-            color = Tokens.textTertiary,
-            maxLines = 1,
-        )
-        Text(
-            current?.title ?: channel?.let { stringResource(R.string.live_no_guide) }.orEmpty(),
-            style = MaterialTheme.typography.headlineMedium,
-            color = Tokens.textPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), verticalAlignment = Alignment.CenterVertically) {
-            if (current != null) {
-                Text(
-                    stringResource(R.string.live_time_range, shortTime(current.start), shortTime(current.end)),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Tokens.textSecondary,
-                )
-                Box(Modifier.width(ON_NOW_BAR)) { ProgressBar(progressOf(current, now), Modifier.padding(0.dp)) }
-            }
-            guide?.next?.let {
-                Text(
-                    stringResource(R.string.live_next_at, shortTime(it.start), it.title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Tokens.textTertiary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+        if (channel != null) {
+            ArtworkImage(
+                channel.logo,
+                resolver,
+                channel.name,
+                Modifier.width(ON_NOW_LOGO_WIDTH).height(ON_NOW_HEIGHT).clip(RoundedCornerShape(Tokens.radiusMedium)),
+                ON_NOW_LOGO_PX_WIDTH,
+                ON_NOW_LOGO_PX_HEIGHT,
+                fit = true,
+                inset = Tokens.space3,
+            )
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.space1, Alignment.Bottom)) {
+            Text(
+                if (current !=
+                    null
+                ) {
+                    channel.name.let { stringResource(R.string.live_on_now) + " · " + it }
+                } else {
+                    stringResource(R.string.live_on_now)
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = Tokens.textTertiary,
+                maxLines = 1,
+            )
+            Text(
+                current?.title ?: channel?.name.orEmpty(),
+                style = MaterialTheme.typography.headlineMedium,
+                color = Tokens.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), verticalAlignment = Alignment.CenterVertically) {
+                if (current != null) {
+                    Text(
+                        stringResource(R.string.live_time_range, shortTime(current.start), shortTime(current.end)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Tokens.textSecondary,
+                    )
+                    Box(Modifier.width(ON_NOW_BAR)) { ProgressBar(progressOf(current, now), Modifier.padding(0.dp)) }
+                } else if (channel != null) {
+                    Text(stringResource(R.string.live_no_guide), style = MaterialTheme.typography.bodyMedium, color = Tokens.textTertiary)
+                }
+                guide?.next?.let {
+                    Text(
+                        stringResource(R.string.live_next_at, shortTime(it.start), it.title),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Tokens.textTertiary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
@@ -722,6 +760,9 @@ fun EmptyState(message: String, action: String, focus: FocusMemory, actionKey: S
 
 private val CATEGORY_WIDTH = 220.dp
 private val ON_NOW_HEIGHT = 84.dp
+private val ON_NOW_LOGO_WIDTH = 150.dp
+private const val ON_NOW_LOGO_PX_WIDTH = 450
+private const val ON_NOW_LOGO_PX_HEIGHT = 252
 private val ON_NOW_BAR = 120.dp
 private val ROW_BAR = 72.dp
 private val LOGO_WIDTH = 56.dp

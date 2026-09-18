@@ -106,6 +106,7 @@ private data class HomeCard(
     val type: ContentType? = null,
     val facts: List<String> = emptyList(),
     val favorite: Boolean = false,
+    val year: Int? = null,
     /** Plays it (a film, an episode to resume) or, for a series, opens it. */
     val open: () -> Unit,
     /** Opens its detail page, where there is one. */
@@ -176,6 +177,7 @@ fun HomeSection(
             type = ContentType.MOVIE,
             facts = listOfNotNull(movieKind, movie.genres.firstOrNull(), movie.year?.toString(), movie.rating),
             favorite = movie.isFavorite,
+            year = movie.year,
             open = { onPlayContent(p, ContentType.MOVIE, movie.id) },
             details = { onOpenMovie(p, movie.id) },
         )
@@ -190,6 +192,7 @@ fun HomeSection(
             type = ContentType.SERIES,
             facts = listOfNotNull(seriesKind, series.genres.firstOrNull(), series.year?.toString(), series.rating),
             favorite = series.isFavorite,
+            year = series.year,
             open = { onOpenSeries(p, series.id) },
             details = { onOpenSeries(p, series.id) },
         )
@@ -331,6 +334,13 @@ fun HomeSection(
                         title = hero.title,
                         meta = hero.facts,
                         detail = hero.plot,
+                        // Only a logo already stored from a page the viewer opened: the carousel asks TMDB nothing.
+                        titleArt = hero.type?.let { type ->
+                            {
+                                val art = rememberTitlePageArt(type, hero.title, hero.year, null, emptyList(), ask = false)
+                                TitleLogo(art.logoUrl, hero.title)
+                            }
+                        },
                         // A share of the list's own height, not of the "screen height" the platform reports: some
                         // televisions report a smaller one than they draw, and the hero came out half the size.
                         modifier = Modifier.fillMaxWidth().fillParentMaxHeight(Tokens.HERO_HEIGHT_FRACTION).onFocusChanged {

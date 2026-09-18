@@ -187,12 +187,15 @@ rows appear as they are read. The remote lands on the hero's Play.
 (opens YouTube), favourite. Play on a film the provider lists in several versions asks which. Below: **Cast & Crew** — a
 shelf of round plates with initials, director first; OK opens the person's page — and an **About / Information** panel
 with the whole description and the facts. **Series:** the same hero at two thirds with the season count, then seasons as
-quiet capsules over a shelf of episode cards, then Cast & Crew and About. **Person:** the name large, how many titles,
-and their films and shows as shelves.
+quiet capsules over a shelf of episode cards, then Cast & Crew and About. **Person:** TMDB's portrait in a tall rounded
+frame beside the name, how many titles and four lines of biography, then their films and shows as shelves. With a TMDB key
+(ADR-0039) the title is the film's **logo** once it loads, and Cast & Crew plates show **portraits** over the initials.
+Detail pages open by fading and growing in from 94 %, and the backdrop drifts slowly towards the viewer (6 % over 24 s).
 
 ## 11. Live TV
 A screen title; categories (the chosen one white on glass); above the channels, **what is on the channel under the
-remote** — programme, times, progress, what is next — updated without rebuilding the list; channel rows with a logo
+remote** — the channel's logo plate beside the programme, times, progress and what is next (the first channel's until the
+remote reaches the list) — updated without rebuilding the list; channel rows with a logo
 plate, number, name, programme, thin progress and a small heart for favourites. OK plays; holding OK opens the channel's
 menu.
 
@@ -226,7 +229,8 @@ a card with what it needs in plain words. Forms use glass fields and one white *
 ## 16. Settings and providers
 A screen title; a short list of sections that do something (Providers, Home, Film & show details once there is a
 provider — how many pages have been fetched and what share of them has each kind of detail — Hidden items when something
-is hidden, TMDB — the viewer's key, when the lists were read, Update now and Remove — About, Developer in debug builds); the chosen one on the right under its own heading. The directive's other sections —
+is hidden, TMDB — the viewer's key, when the lists were read, Update now, Remove and the *Title artwork and photos* switch — About,
+Developer in debug builds), each with its symbol on a round plate; the chosen one on the right under its own heading. The directive's other sections —
 playback, subtitles, appearance, parental controls, storage, privacy, account, devices — arrive with the features they
 configure, never as empty pages. A **provider** is a glass card: a status dot (green working, yellow failing, grey
 updating), name, address, channel count, encryption warning, guide status, and Refresh / Guide link / Remove.

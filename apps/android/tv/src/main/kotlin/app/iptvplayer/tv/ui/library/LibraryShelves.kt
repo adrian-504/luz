@@ -89,6 +89,7 @@ private data class ShelfItem(
     val facts: List<String>,
     val progress: Float?,
     val favorite: Boolean,
+    val year: Int? = null,
 )
 
 /** A tile that opens a full grid: a genre, a decade, a category. */
@@ -145,6 +146,7 @@ fun LibraryShelves(
             listOfNotNull(row.year?.toString(), row.genres.firstOrNull(), row.rating?.let { "★ $it" }),
             row.progress?.takeIf { !it.completed }?.fraction,
             row.isFavorite,
+            row.year,
         )
         fun series(row: SeriesRow) = ShelfItem(
             row.id,
@@ -156,6 +158,7 @@ fun LibraryShelves(
             listOfNotNull(row.year?.toString(), row.genres.firstOrNull(), row.rating?.let { "★ $it" }),
             null,
             row.isFavorite,
+            row.year,
         )
         fun titles(key: String, title: Int, items: List<ShelfItem>) = Shelf.Titles(key, resources.getString(title), items)
         val built = mutableListOf<Shelf>()
@@ -369,6 +372,11 @@ fun LibraryShelves(
                                 stringResource(if (movies) R.string.home_kind_movie else R.string.home_kind_series),
                             ) + featured.facts,
                             detail = featured.plot,
+                            titleArt = {
+                                val type = if (movies) ContentType.MOVIE else ContentType.SERIES
+                                val art = rememberTitlePageArt(type, featured.title, featured.year, null, emptyList(), ask = false)
+                                TitleLogo(art.logoUrl, featured.title)
+                            },
                             modifier = Modifier.fillParentMaxHeight(LIBRARY_HERO_FRACTION).revealsListTop(listState),
                             room = ambient,
                             artworkOf = featured.backdrop,

@@ -59,3 +59,4 @@ line. Product-scope decisions still go to the owner.
 | [0036](0036-player-controls-panel-and-live-bar.md) | The player's controls, panel, live bar and remote keys | Accepted |
 | [0037](0037-guide-timeline-and-loading.md) | The guide timeline, and loading it a block at a time | Accepted |
 | [0038](0038-tmdb-lists-with-the-viewers-key.md) | TMDB trending and ratings, with the viewer's own key | Accepted |
+| [0039](0039-tmdb-artwork-for-opened-titles-and-people.md) | TMDB artwork for the titles and people the viewer opens | Accepted |

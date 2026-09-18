@@ -220,6 +220,30 @@ object LuzIcons {
         moveTo(4f, 17.5f)
         lineTo(4.1f, 17.5f)
     }
+    val Hidden = icon("hidden") {
+        moveTo(3f, 12f)
+        curveTo(5.5f, 7.5f, 8.5f, 5.5f, 12f, 5.5f)
+        curveTo(15.5f, 5.5f, 18.5f, 7.5f, 21f, 12f)
+        curveTo(18.5f, 16.5f, 15.5f, 18.5f, 12f, 18.5f)
+        curveTo(8.5f, 18.5f, 5.5f, 16.5f, 3f, 12f)
+        close()
+        circle(12f, 12f, 2.8f)
+        moveTo(4.5f, 4.5f)
+        lineTo(19.5f, 19.5f)
+    }
+    val Star = icon("star") {
+        moveTo(12f, 3.5f)
+        lineTo(14.6f, 9f)
+        lineTo(20.5f, 9.6f)
+        lineTo(16f, 13.6f)
+        lineTo(17.3f, 19.5f)
+        lineTo(12f, 16.5f)
+        lineTo(6.7f, 19.5f)
+        lineTo(8f, 13.6f)
+        lineTo(3.5f, 9.6f)
+        lineTo(9.4f, 9f)
+        close()
+    }
     val Warning = icon("warning") {
         moveTo(12f, 3.5f)
         lineTo(21f, 19.5f)

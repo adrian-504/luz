@@ -54,6 +54,15 @@ public data class TmdbTitle(
     public val workKeys: List<String> get() = listOf("tmdb:$id", TitleCleaner.workKey(title, year), TitleCleaner.workKey(title, null))
 }
 
+/** A person credited on a title, with TMDB's id for them and their portrait's path when it has one. */
+public data class TmdbCredit(public val id: Long, public val name: String, public val profilePath: String?, public val director: Boolean)
+
+/** What TMDB adds to one title's page: its stylised title artwork and the portraits of the people in it. */
+public data class TmdbArtwork(public val id: Long, public val logoPath: String?, public val credits: List<TmdbCredit>)
+
+/** A person's own page on TMDB. */
+public data class TmdbPerson(public val id: Long, public val name: String, public val profilePath: String?, public val biography: String?)
+
 /**
  * The Movie Database's v3 API, for the viewer who gives Luz their own key (ADR-0038). Only public lists are read: what is
  * trending this week, popular and top rated. The key travels as the `api_key` query parameter of a [SensitiveUrl], so it
@@ -79,6 +88,58 @@ public class TmdbClient(
                 results.orEmpty().mapNotNull { title(it, list.type) } to null
             }
         }
+
+    /**
+     * TMDB's id for a title found by name (and year when known), or null when TMDB has none. Only the name and year are sent
+     * — the question anyone searching TMDB's site asks (ADR-0039).
+     */
+    public suspend fun find(key: Secret<String>, type: ContentType, title: String, year: Int?): Pair<Long?, DomainError?> {
+        val path = if (type == ContentType.SERIES) "search/tv" else "search/movie"
+        val yearName = if (type == ContentType.SERIES) "first_air_date_year" else "year"
+        val parameters = listOf("query" to title) + listOfNotNull(year?.let { yearName to it.toString() })
+        return when (val body = fetch(key, path, parameters)) {
+            is Body.Error -> null to body.error
+            is Body.Document -> LenientObject.of(body.element) {}?.array("results")?.firstOrNull()
+                ?.let { LenientObject.of(it) {}?.long("id") } to null
+        }
+    }
+
+    /** A title's logo (English, or artwork without words) and its credited people, in one request. */
+    public suspend fun artwork(key: Secret<String>, type: ContentType, id: Long): Pair<TmdbArtwork?, DomainError?> {
+        val path = (if (type == ContentType.SERIES) "tv/" else "movie/") + id
+        val parameters = listOf("append_to_response" to "images,credits", "include_image_language" to "en,null")
+        return when (val body = fetch(key, path, parameters)) {
+            is Body.Error -> null to body.error
+            is Body.Document -> {
+                val root = LenientObject.of(body.element) {} ?: return null to null
+                val logos = root.obj("images")?.array("logos").orEmpty().mapNotNull { LenientObject.of(it) {} }
+                val logo = (logos.filter { it.string("iso_639_1") == "en" } + logos.filter { it.string("iso_639_1") == null })
+                    .firstNotNullOfOrNull { it.string("file_path") }
+                val credits = root.obj("credits")
+                fun people(field: String, director: Boolean) = credits?.array(field).orEmpty().mapNotNull { entry ->
+                    val person = LenientObject.of(entry) {} ?: return@mapNotNull null
+                    if (director && person.string("job") != "Director") return@mapNotNull null
+                    val name = person.string("name")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    TmdbCredit(person.long("id") ?: return@mapNotNull null, name, person.string("profile_path"), director)
+                }
+                TmdbArtwork(id, logo, people("crew", true) + people("cast", false).take(MAX_CAST)) to null
+            }
+        }
+    }
+
+    /** A person's page found by name: the first match, with their portrait and biography. */
+    public suspend fun person(key: Secret<String>, name: String): Pair<TmdbPerson?, DomainError?> {
+        val found = when (val body = fetch(key, "search/person", listOf("query" to name))) {
+            is Body.Error -> return null to body.error
+            is Body.Document -> LenientObject.of(body.element) {}?.array("results")?.firstOrNull()?.let { LenientObject.of(it) {} }
+        } ?: return null to null
+        val id = found.long("id") ?: return null to null
+        val biography = when (val page = fetch(key, "person/$id", emptyList())) {
+            is Body.Error -> null
+            is Body.Document -> LenientObject.of(page.element) {}?.string("biography")?.takeIf { it.isNotBlank() }
+        }
+        return TmdbPerson(id, found.string("name") ?: name, found.string("profile_path"), biography) to null
+    }
 
     private fun title(element: JsonElement, type: ContentType): TmdbTitle? {
         val obj = LenientObject.of(element) {} ?: return null
@@ -139,6 +200,10 @@ public class TmdbClient(
         public const val BASE_URL: String = "https://api.themoviedb.org/3"
         private const val DOCUMENT_LIMIT = 4 * 1024 * 1024
         private const val YEAR_DIGITS = 4
+        private const val MAX_CAST = 20
+
+        /** Where TMDB serves its images; [size] is one of its fixed widths (w185, w500, original). */
+        public fun imageUrl(path: String, size: String): String = "https://image.tmdb.org/t/p/$size$path"
         private const val MAX_RATING = 10.0
         internal const val PARSE_NOT_JSON = "TMDB_NOT_JSON"
         private const val BYTE_MASK = 0xFF

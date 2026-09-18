@@ -54,6 +54,8 @@ public data class MovieRow(
     public val language: String? = null,
     /** How many versions of this film the provider lists (1 when it is the only one). */
     public val versionCount: Int = 1,
+    /** The provider's TMDB id; read only for a single film ([LibraryStore.movie]). */
+    public val tmdbId: String? = null,
 )
 
 public data class SeriesRow(
@@ -72,6 +74,8 @@ public data class SeriesRow(
     public val language: String? = null,
     /** When the provider last changed the show — in practice, when its newest episode arrived. */
     public val lastModifiedAt: Instant? = null,
+    /** The provider's TMDB id; read only for a single show ([LibraryStore.seriesById]). */
+    public val tmdbId: String? = null,
 )
 
 public data class SeasonRow(public val id: String, public val number: Int, public val title: String?, public val poster: UrlTemplate?)
@@ -118,6 +122,20 @@ public data class ListEntry(
     public val tmdbKey: String,
     public val titleKey: String,
     public val bareTitleKey: String = titleKey,
+)
+
+/** TMDB artwork stored for a work: its id there (null when TMDB did not know it) and its title artwork. */
+public data class StoredArt(public val tmdbId: Long?, public val logoPath: String?, public val fetchedAt: Instant)
+
+/** A person's portrait as learned from a title's credits on TMDB. */
+public data class Portrait(public val name: String, public val tmdbId: Long, public val profilePath: String?)
+
+/** A person as stored from TMDB: a biography once their own page has been read. */
+public data class StoredPerson(
+    public val tmdbId: Long?,
+    public val profilePath: String?,
+    public val biography: String?,
+    public val fetchedAt: Instant,
 )
 
 /** A person found by search, with how many of the viewer's films and shows they are in. */
@@ -221,7 +239,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
                 it.id, it.title, it.year, it.duration_seconds, it.plot, it.genres, it.rating, it.poster_template,
                 it.backdrop_template, it.added_at, it.position_ms, it.watched_duration_ms, it.completed, it.is_favorite,
                 it.quality, it.tags, it.language, it.version_count,
-            )
+            ).copy(tmdbId = it.tmdb_id)
         }
     }
 
@@ -254,7 +272,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             seriesRow(
                 it.id, it.title, it.year, it.plot, it.genres, it.rating, it.poster_template, it.backdrop_template,
                 it.provider_series_id, it.is_favorite, it.quality, it.tags, it.language, it.last_modified_at,
-            )
+            ).copy(tmdbId = it.tmdb_id)
         }
     }
 
@@ -782,7 +800,34 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
 
     public fun clearLists() {
         tmdbQueries.deleteAll()
+        tmdbQueries.deleteArt()
     }
+
+    /** TMDB artwork stored for a work (ADR-0039); null when it was never asked about. */
+    public fun artOf(type: ContentType, workKey: String): StoredArt? = tmdbQueries.artOf(type.name, workKey).executeAsOneOrNull()?.let {
+        StoredArt(it.tmdb_id, it.logo_path, Instant.fromEpochMilliseconds(it.fetched_at))
+    }
+
+    /** Stores a work's artwork and the portraits of its people. */
+    public fun saveArt(type: ContentType, workKey: String, tmdbId: Long?, logoPath: String?, portraits: List<Portrait>) {
+        val now = clock.now().toEpochMilliseconds()
+        content.transaction {
+            tmdbQueries.saveArt(type.name, workKey, tmdbId, logoPath, now)
+            portraits.forEach { tmdbQueries.savePortrait(it.name, it.tmdbId, it.profilePath, now) }
+        }
+    }
+
+    public fun personOf(name: String): StoredPerson? = tmdbQueries.personOf(name).executeAsOneOrNull()?.let {
+        StoredPerson(it.tmdb_id, it.profile_path, it.biography, Instant.fromEpochMilliseconds(it.fetched_at))
+    }
+
+    public fun savePerson(name: String, tmdbId: Long?, profilePath: String?, biography: String?) {
+        tmdbQueries.savePerson(name, tmdbId, profilePath, biography, clock.now().toEpochMilliseconds())
+    }
+
+    /** Portrait paths of [names], for those TMDB has one of. */
+    public fun portraitsOf(names: Collection<String>): Map<String, String> =
+        if (names.isEmpty()) emptyMap() else tmdbQueries.portraitsOf(names).executeAsList().associate { it.name to it.profile_path }
 
     /** The films of [list] the library holds, in the list's order. */
     public fun moviesOfList(playlistId: PlaylistId, list: String, limit: Int): List<MovieRow> {

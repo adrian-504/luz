@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.iptvplayer.domain.library.ExternalList
+import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.ingestion.AddSourceResult
@@ -141,5 +142,23 @@ class TmdbFlowTest {
         awaitFocus(HomeTags.HERO_PLAY, timeout = 20_000)
         repeat(4) { if (focusedTag()?.startsWith("home-${HomeTags.TRENDING_MOVIES}-") != true) press(KeyEvent.KEYCODE_DPAD_DOWN) }
         awaitFocus(HomeTags.item(HomeTags.TRENDING_MOVIES, film.id))
+    }
+
+    /** Artwork for what the viewer opens (ADR-0039): a logo and portraits for a film, a biography for a person, and none of it when switched off. */
+    @Test
+    fun openedTitlesAndPeopleGetTheirArtworkUnlessSwitchedOff() {
+        runBlocking {
+            assertEquals(null, graph.setTmdbKey(TestPanel.TMDB_KEY))
+            graph.setTmdbArtwork(true)
+            val art = graph.titleArt(ContentType.MOVIE, "Test Movie One", 2021, null)
+            assertEquals("https://image.tmdb.org/t/p/w500/test-logo.png", art?.logoUrl)
+            assertEquals(setOf("Alex Example"), graph.portraits(listOf("Alex Example", "Sam Placeholder")).keys)
+            assertEquals("A synthetic actor.", graph.personArt("Alex Example")?.biography)
+
+            graph.setTmdbArtwork(false)
+            assertEquals(null, graph.titleArt(ContentType.MOVIE, "Test Movie One", 2021, null))
+            assertTrue(graph.portraits(listOf("Alex Example")).isEmpty())
+            graph.setTmdbArtwork(true)
+        }
     }
 }

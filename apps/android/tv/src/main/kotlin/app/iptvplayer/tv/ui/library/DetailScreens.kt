@@ -138,6 +138,14 @@ fun MovieDetailScreen(
     val duration = info?.duration ?: item.duration
     val rating = info?.rating ?: item.rating
     val credits = creditsOf(info?.directors.orEmpty(), info?.cast.orEmpty())
+    val tmdbArt = rememberTitlePageArt(
+        ContentType.MOVIE,
+        item.title,
+        item.year ?: info?.year,
+        item.tmdbId ?: info?.tmdbId,
+        credits.map { it.name },
+        ask = true,
+    )
     val play = { fromStart: Boolean -> if (versions.size > 1) choosing = fromStart else onPlay(item.id, fromStart) }
 
     val listState = rememberLazyListState()
@@ -155,6 +163,8 @@ fun MovieDetailScreen(
                 badges = badgesOf(item.quality, item.tags, item.language),
                 detail = info?.plot ?: item.plot,
                 detailLines = HERO_PLOT_LINES,
+                drift = true,
+                titleArt = { TitleLogo(tmdbArt.logoUrl, item.title) },
                 modifier = Modifier.fillParentMaxHeight(MOVIE_HERO_FRACTION).revealsListTop(listState),
                 room = ambient,
                 artworkOf = backdrop,
@@ -193,7 +203,7 @@ fun MovieDetailScreen(
             ) { art, modifier -> Backdrop(art, resolver, modifier) }
         }
         if (credits.isNotEmpty()) {
-            item(key = "credits") { CreditsShelf(credits, focus, onPerson) }
+            item(key = "credits") { CreditsShelf(credits, focus, tmdbArt.portraits, onPerson) }
         }
         item(key = "about") {
             AboutPanel(
@@ -268,6 +278,15 @@ fun SeriesDetailScreen(
         }
     }
     val ambient = rememberAmbientColor(item.backdrop ?: item.poster, resolver)
+    val credits = creditsOf(detail?.directors.orEmpty(), detail?.cast.orEmpty())
+    val tmdbArt = rememberTitlePageArt(
+        ContentType.SERIES,
+        item.title,
+        item.year ?: detail?.year,
+        item.tmdbId ?: detail?.tmdbId,
+        credits.map { it.name },
+        ask = true,
+    )
 
     // The Continue button appears once episodes are known; move there unless the viewer already chose something else.
     val nextId = next?.episode?.id
@@ -290,6 +309,8 @@ fun SeriesDetailScreen(
                 badges = badgesOf(item.quality, item.tags, item.language),
                 detail = item.plot ?: detail?.plot,
                 detailLines = HERO_PLOT_LINES,
+                drift = true,
+                titleArt = { TitleLogo(tmdbArt.logoUrl, item.title) },
                 modifier = Modifier.fillParentMaxHeight(Tokens.HERO_HEIGHT_FRACTION).revealsListTop(listState),
                 room = ambient,
                 artworkOf = item.backdrop ?: item.poster,
@@ -339,9 +360,8 @@ fun SeriesDetailScreen(
             }
         }
         val info = detail
-        val credits = creditsOf(info?.directors.orEmpty(), info?.cast.orEmpty())
         if (credits.isNotEmpty()) {
-            item(key = "credits") { CreditsShelf(credits, focus, onPerson) }
+            item(key = "credits") { CreditsShelf(credits, focus, tmdbArt.portraits, onPerson) }
         }
         item(key = "about") {
             AboutPanel(
