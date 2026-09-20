@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
@@ -360,12 +361,16 @@ fun LibraryShelves(
         onReturned()
     }
     val ambient = rememberAmbientColor(featured?.backdrop, resolver)
+    // The poster the remote is resting on, for the room behind the shelves (ideas 5 and 6). Written from focus and read
+    // only by the backdrop, so moving along a shelf rebuilds nothing else.
+    val underRemote = remember { mutableStateOf<UrlTemplate?>(null) }
 
     Box(
         Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(0f to ambient, LIBRARY_HERO_FRACTION to ambient, 1f to Tokens.bgBase)),
     ) {
+        RoomBackdrop({ underRemote.value }, resolver)
         CalmScrolling {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -426,7 +431,10 @@ fun LibraryShelves(
                                     subtitle = item.caption,
                                     shape = CardShape.POSTER,
                                     progress = item.progress,
-                                    modifier = Modifier.rememberedFocus(focus, LibraryTags.shelfItem(shelf.key, item.id)),
+                                    modifier = Modifier
+                                        .rememberedFocus(focus, LibraryTags.shelfItem(shelf.key, item.id))
+                                        // Only a wide picture: a poster stretched across the screen washes the words out.
+                                        .onFocusChanged { if (it.isFocused) underRemote.value = item.backdrop },
                                     onLongClick = { menuFor = shelf.key to item },
                                     onClick = { onOpen(item.id) },
                                 ) { art -> ArtworkImage(item.poster, resolver, item.title, art) }

@@ -251,21 +251,37 @@ cost is on the UI thread (GPU 95th 11 ms): building each row that scrolls in (lo
 slide's frames when the window moves. Next steps, measured one at a time on the device: the row without its logo, to
 size the image cost; a lighter row; and pre-building the rows just below the screen. The guide gate stays open.
 
-### 6.5 Movies shelves, and a background that followed the poster (2026-09-18)
+### 6.5 Movies shelves, and the room that follows the poster (2026-09-18, revised 2026-09-20)
 
 Release build on the owner's Bbox with their library (about 20,000 films), Movies open, moving along the "Trending
-films" shelf: 30 presses right one every 450 ms, then 30 left one every 120 ms. Screenshots confirmed the shelf moved.
+films" shelf, 25 presses each way, three runs a build, after the same navigation from a cold start.
 
-| Build | Right, 450 ms | Left, 120 ms | Verdict |
-|---|---|---|---|
-| Without the resting veil on cards (as before today) | 82.5 % janky, 50th 30 ms, 95th 77 ms, 99th 89 ms | 83 % janky, 50th 28 ms, 95th 65 ms | **Not met** |
-| With the resting veil (kept) | 92.6 % janky, 50th 31 ms, 95th 69 ms, 99th 97 ms | 89.9 % janky, 50th 25 ms, 95th 57 ms | **Not met** — within noise of the row above |
-| With a soft backdrop of the focused title behind the shelves | 99.3 % janky, 50th 48 ms, 95th 65 ms, 603 frames (it redrew continuously) | 99.5 % janky, 50th 48 ms | **Rejected and removed** |
+| Build | Frames drawn | 50th | 95th | Janky |
+|---|---|---|---|---|
+| Shelves as they were (no room picture) | ~140 | 53–61 ms | 93–129 ms | 100 % |
+| First room picture: full-screen layer faded with `graphicsLayer`, re-animated as the list scrolled | ~540 | 48 ms (in the first measurement) | 65 ms | 99 % |
+| Card shadows removed (to size their cost) | ~460 | 57–61 ms | 77–89 ms | ~99 % |
+| **Kept:** picture drawn straight into the background, only once the remote rests | ~500 | 42–44 ms | 65–77 ms | ~99 % |
 
-Moving along a poster shelf on this television was already far from the frame budget; it had not been measured before
-(§6.2–6.4 measured lists and the guide). The owner asked for the background only if the Bbox stayed smooth, so it was
-taken out. The shelves themselves are the next performance task: sizing the cost of the card lift and shadow, the
-poster decode size and the title text, one at a time on the device, as for the guide.
+**Moving along a poster shelf on this television does not meet the frame budget, with or without the room picture**, and
+had never been measured before (§6.2–6.4 measured lists and the guide). Every build above draws almost every frame late.
+
+Two cautions this exercise taught, for the next person measuring here:
+
+- **The 50th percentile is not comparable between builds that draw different numbers of frames.** A build that animates
+  between presses draws many cheap frames, which pulls its median down; a build that only draws in bursts shows just the
+  expensive frames. Compare what a press costs, not the average frame.
+- **One run proves nothing.** The first measurement of the room picture (P50 48 ms against a 30 ms baseline) led to it
+  being removed; three runs a build, from the same starting point, put both within each other's spread.
+
+What the kept version costs while the remote **moves** is nothing: it draws only after the remote has rested 400 ms, and
+a press clears it immediately. Its fade is a plain draw with its own alpha — no full-screen buffer, no `Crossfade` —
+and the picture is decoded 160 px wide, which is also what makes it soft (this Android has no blur). Nothing is drawn or
+animated when the screen is idle (measured: 0 frames in 5 s).
+
+The shelves themselves are the open task: the frames are lost issuing draw commands (275 of 556 frames), not on the UI
+thread (30), and removing the cards' shadows made it worse, so the cost is elsewhere — the next things to size, one at a
+time, are the poster decode size, the card's clip and border, and how much of the screen is redrawn per focus move.
 
 **Movies opening time.** Matching TMDB's lists against the library took 2.5 s, 4.1 s and 7.8 s for the three TMDB shelves
 (every film compared with every list entry); with indexed lookups the whole page is up in about 2.5 s, and reopening it

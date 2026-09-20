@@ -224,7 +224,9 @@ Drawn under the rail like Home: a featured title with a backdrop, then shelves L
 Recently added / New episodes, Popular, Because you watched…, Highest rated, My List, the viewer's own groups, the six
 largest genres — then glass tiles for every genre, decade and provider category ("Browse all categories"). A tile opens
 the full grid: categories on the left and a poster grid that loads a page at a time; Back returns to the tile. Holding OK
-on a poster offers Open, My List, Add to a group…, Hide.
+on a poster offers Open, My List, Add to a group…, Hide. When the remote **rests** on a title with a wide picture, the
+room behind the shelves takes it: enlarged, soft and faint, fading in after 400 ms and gone the moment the remote moves
+again, so nothing is drawn while the viewer is travelling (PERFORMANCE.md §6.5).
 
 ## 14. Search
 The query written large with a search symbol; a **letter strip** beneath it (123/abc, space, a–z, delete) so the remote
