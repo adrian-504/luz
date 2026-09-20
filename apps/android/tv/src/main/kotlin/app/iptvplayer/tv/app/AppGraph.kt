@@ -16,6 +16,7 @@ import app.iptvplayer.domain.playback.PlaybackMode
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.ingestion.AddSourceFailure
 import app.iptvplayer.ingestion.AddSourceResult
+import app.iptvplayer.ingestion.EpisodeArt
 import app.iptvplayer.ingestion.PersonArt
 import app.iptvplayer.ingestion.ShortGuideReport
 import app.iptvplayer.ingestion.SourceService
@@ -503,6 +504,12 @@ class AppGraph(context: Context) {
 
     /** Portraits of [names] already learned from TMDB; nothing is asked. */
     suspend fun portraits(names: Collection<String>): Map<String, String> = if (!tmdbArtwork) emptyMap() else io { tmdb.portraits(names) }
+
+    /** Episode names, pictures and descriptions from TMDB for one season; empty when switched off or without a key. */
+    suspend fun episodeArt(title: String, year: Int?, tmdbId: String?, season: Int): Map<Int, EpisodeArt> {
+        if (!tmdbArtwork) return emptyMap()
+        return io { runCatching { tmdb.episodes(title, year, tmdbId, season) }.getOrDefault(emptyMap()) }
+    }
 
     suspend fun personArt(name: String): PersonArt? {
         if (!tmdbArtwork) return null

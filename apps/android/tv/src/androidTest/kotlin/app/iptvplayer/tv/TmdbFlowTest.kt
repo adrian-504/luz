@@ -155,9 +155,16 @@ class TmdbFlowTest {
             assertEquals(setOf("Alex Example"), graph.portraits(listOf("Alex Example", "Sam Placeholder")).keys)
             assertEquals("A synthetic actor.", graph.personArt("Alex Example")?.biography)
 
+            // A show's episodes: the provider numbers them, TMDB names them and has a picture from each.
+            val episodes = graph.episodeArt("Test Series", 2026, null, 1)
+            assertEquals("The First One", episodes[1]?.name)
+            assertEquals("https://image.tmdb.org/t/p/w780/still2.jpg", episodes[2]?.stillUrl)
+            assertEquals("It begins.", episodes[1]?.overview)
+
             graph.setTmdbArtwork(false)
             assertEquals(null, graph.titleArt(ContentType.MOVIE, "Test Movie One", 2021, null))
             assertTrue(graph.portraits(listOf("Alex Example")).isEmpty())
+            assertTrue(graph.episodeArt("Test Series", 2026, null, 1).isEmpty())
             graph.setTmdbArtwork(true)
         }
     }

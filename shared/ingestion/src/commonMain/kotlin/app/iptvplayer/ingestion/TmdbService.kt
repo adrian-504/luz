@@ -17,6 +17,7 @@ import app.iptvplayer.protocols.tmdb.tmdbPages
 import app.iptvplayer.storage.LibraryStore
 import app.iptvplayer.storage.ListEntry
 import app.iptvplayer.storage.Portrait
+import app.iptvplayer.storage.StoredEpisode
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
@@ -119,6 +120,32 @@ public class TmdbService(
         )
     }
 
+    /**
+     * One season of a show as TMDB has it (ADR-0039): the episodes by number, with their names, stills and descriptions.
+     * Asked for once per season and kept [ART_KEEP]; empty without a key, when TMDB does not know the show, or when the
+     * season is not there. [providerTmdbId] saves the search when the provider gives one.
+     */
+    public suspend fun episodes(title: String, year: Int?, providerTmdbId: String?, season: Int): Map<Int, EpisodeArt> {
+        val known = providerTmdbId?.toLongOrNull()
+        val work = TitleCleaner.workKey(title, year)
+        val showId = known ?: library.artOf(ContentType.SERIES, work)?.tmdbId ?: run {
+            // The show has not been looked up yet: its page gives the id, and its logo and cast at the same time.
+            artwork(ContentType.SERIES, title, year, providerTmdbId)
+            library.artOf(ContentType.SERIES, work)?.tmdbId
+        } ?: return emptyMap()
+        val fetched = library.seasonFetchedAt(showId, season)
+        if (fetched != null && clock.now() - fetched < ART_KEEP) return library.episodesOf(showId, season).toArt()
+        val key = secrets.get(KEY)?.password ?: return library.episodesOf(showId, season).toArt()
+        val (episodes, error) = client.episodes(key, showId, season)
+        if (error != null) return library.episodesOf(showId, season).toArt()
+        library.saveEpisodes(showId, season, episodes.map { StoredEpisode(it.number, it.name, it.stillPath, it.overview) })
+        return library.episodesOf(showId, season).toArt()
+    }
+
+    private fun List<StoredEpisode>.toArt(): Map<Int, EpisodeArt> = associate { stored ->
+        stored.number to EpisodeArt(stored.name, stored.stillPath?.let { TmdbClient.imageUrl(it, STILL_SIZE) }, stored.overview)
+    }
+
     /** Portraits of [names] learned from TMDB, as image addresses. Local only. */
     public fun portraits(names: Collection<String>): Map<String, String> =
         library.portraitsOf(names).mapValues { TmdbClient.imageUrl(it.value, PORTRAIT_SIZE) }
@@ -147,6 +174,7 @@ public class TmdbService(
         private const val BACKDROP_SIZE = "w1280"
         private const val PORTRAIT_SIZE = "w185"
         private const val PROFILE_SIZE = "h632"
+        private const val STILL_SIZE = "w780"
         private val KEY = CredentialRef("tmdb-api-key")
 
         /** TMDB v3 keys are 32 hexadecimal characters; a read access token is a long JWT. Anything else is a paste error. */
@@ -160,3 +188,6 @@ public data class TitleArt(public val logoUrl: String?, public val backdropUrl: 
 
 /** A person from TMDB: a portrait and a biography, when TMDB has them. */
 public data class PersonArt(public val photoUrl: String?, public val biography: String?)
+
+/** One episode from TMDB: its name, a picture from it and what it is about, for a provider that sends none. */
+public data class EpisodeArt(public val name: String?, public val stillUrl: String?, public val overview: String?)

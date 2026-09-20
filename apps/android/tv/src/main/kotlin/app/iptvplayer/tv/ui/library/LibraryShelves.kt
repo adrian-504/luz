@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalResources
@@ -365,12 +366,15 @@ fun LibraryShelves(
     // only by the backdrop, so moving along a shelf rebuilds nothing else.
     val underRemote = remember { mutableStateOf<UrlTemplate?>(null) }
 
+    val wash = rememberRoomWash(ambient) { listState.firstVisibleItemIndex == 0 }
     Box(
         Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(0f to ambient, LIBRARY_HERO_FRACTION to ambient, 1f to Tokens.bgBase)),
+            .drawBehind {
+                drawRect(Brush.verticalGradient(0f to wash.value, LIBRARY_HERO_FRACTION to wash.value, 1f to Tokens.bgBase))
+            },
     ) {
-        RoomBackdrop({ underRemote.value }, resolver)
+        RoomBackdrop({ underRemote.value }, { listState.firstVisibleItemIndex > 0 }, resolver)
         CalmScrolling {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

@@ -66,6 +66,14 @@ public data class TmdbArtwork(
     public val backdropPath: String? = null,
 )
 
+/** One episode as TMDB has it: what it is called, a picture from it, and what it is about. */
+public data class TmdbEpisode(
+    public val number: Int,
+    public val name: String?,
+    public val stillPath: String?,
+    public val overview: String?,
+)
+
 /** A person's own page on TMDB. */
 public data class TmdbPerson(public val id: Long, public val name: String, public val profilePath: String?, public val biography: String?)
 
@@ -118,11 +126,18 @@ public class TmdbClient(
             is Body.Error -> null to body.error
             is Body.Document -> {
                 val root = LenientObject.of(body.element) {} ?: return null to null
+                // TMDB holds many pictures for a title, each with the votes of the people who uploaded and rated them.
+                // Logos: English first, then artwork with no words in it, best rated of those.
                 val logos = root.obj("images")?.array("logos").orEmpty().mapNotNull { LenientObject.of(it) {} }
                 val logo = (logos.filter { it.string("iso_639_1") == "en" } + logos.filter { it.string("iso_639_1") == null })
-                    .firstNotNullOfOrNull { it.string("file_path") }
-                val backdrop = root.obj("images")?.array("backdrops").orEmpty().mapNotNull { LenientObject.of(it) {} }
-                    .firstOrNull { it.string("iso_639_1") == null }?.string("file_path") ?: root.string("backdrop_path")
+                    .maxByOrNull { rank(it) }?.string("file_path")
+                // Backdrops: without words (no language) so the title can be drawn over them, wide enough for the screen,
+                // and the best rated of those; TMDB's own main picture only if there is nothing else.
+                val backdrops = root.obj("images")?.array("backdrops").orEmpty().mapNotNull { LenientObject.of(it) {} }
+                val backdrop = backdrops.filter { it.string("iso_639_1") == null && (it.int("width") ?: 0) >= MIN_BACKDROP_WIDTH }
+                    .maxByOrNull { rank(it) }?.string("file_path")
+                    ?: backdrops.filter { it.string("iso_639_1") == null }.maxByOrNull { rank(it) }?.string("file_path")
+                    ?: root.string("backdrop_path")
                 val credits = root.obj("credits")
                 fun people(field: String, director: Boolean) = credits?.array(field).orEmpty().mapNotNull { entry ->
                     val person = LenientObject.of(entry) {} ?: return@mapNotNull null
@@ -134,6 +149,25 @@ public class TmdbClient(
             }
         }
     }
+
+    /** One season of a show: each episode's name, still and description, in one request. */
+    public suspend fun episodes(key: Secret<String>, showId: Long, season: Int): Pair<List<TmdbEpisode>, DomainError?> =
+        when (val body = fetch(key, "tv/$showId/season/$season", emptyList())) {
+            is Body.Error -> emptyList<TmdbEpisode>() to body.error
+            is Body.Document -> {
+                val episodes = LenientObject.of(body.element) {}?.array("episodes").orEmpty().mapNotNull { entry ->
+                    val obj = LenientObject.of(entry) {} ?: return@mapNotNull null
+                    val number = obj.int("episode_number") ?: return@mapNotNull null
+                    TmdbEpisode(
+                        number,
+                        obj.string("name")?.trim()?.takeIf { it.isNotEmpty() },
+                        obj.string("still_path"),
+                        obj.string("overview")?.trim()?.takeIf { it.isNotEmpty() },
+                    )
+                }
+                episodes to null
+            }
+        }
 
     /** A person's page found by name: the first match, with their portrait and biography. */
     public suspend fun person(key: Secret<String>, name: String): Pair<TmdbPerson?, DomainError?> {
@@ -147,6 +181,17 @@ public class TmdbClient(
             is Body.Document -> LenientObject.of(page.element) {}?.string("biography")?.takeIf { it.isNotBlank() }
         }
         return TmdbPerson(id, found.string("name") ?: name, found.string("profile_path"), biography) to null
+    }
+
+    /**
+     * How good a picture is held to be: its average vote, with a picture nobody has rated behind any that has been, and
+     * the wider of two equals in front.
+     */
+    private fun rank(image: LenientObject): Double {
+        val votes = image.int("vote_count") ?: 0
+        val average = image.double("vote_average") ?: 0.0
+        val width = (image.int("width") ?: 0) / WIDTH_WEIGHT
+        return if (votes > 0) average * VOTE_WEIGHT + width else width
     }
 
     private fun title(element: JsonElement, type: ContentType): TmdbTitle? {
@@ -211,6 +256,10 @@ public class TmdbClient(
         private const val MAX_CAST = 20
 
         /** Where TMDB serves its images; [size] is one of its fixed widths (w185, w500, original). */
+        private const val MIN_BACKDROP_WIDTH = 1280
+        private const val VOTE_WEIGHT = 1000.0
+        private const val WIDTH_WEIGHT = 10000.0
+
         public fun imageUrl(path: String, size: String): String = "https://image.tmdb.org/t/p/$size$path"
         private const val MAX_RATING = 10.0
         internal const val PARSE_NOT_JSON = "TMDB_NOT_JSON"

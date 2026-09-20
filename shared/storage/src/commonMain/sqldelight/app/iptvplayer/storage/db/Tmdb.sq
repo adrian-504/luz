@@ -135,3 +135,39 @@ deleteArt {
     DELETE FROM tmdb_art;
     DELETE FROM tmdb_person;
 }
+
+-- One season of a show as TMDB has it (ADR-0039): episode names, stills and descriptions, for shows whose provider sends
+-- none. A season with no episodes at TMDB is still marked as asked, by its row in [tmdb_season].
+CREATE TABLE tmdb_episode (
+    tmdb_id INTEGER NOT NULL,
+    season INTEGER NOT NULL,
+    episode INTEGER NOT NULL,
+    name TEXT,
+    still_path TEXT,
+    overview TEXT,
+    PRIMARY KEY (tmdb_id, season, episode)
+);
+
+CREATE TABLE tmdb_season (
+    tmdb_id INTEGER NOT NULL,
+    season INTEGER NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    PRIMARY KEY (tmdb_id, season)
+);
+
+episodesOf:
+SELECT episode, name, still_path, overview FROM tmdb_episode WHERE tmdb_id = ? AND season = ? ORDER BY episode;
+
+seasonFetchedAt:
+SELECT fetched_at FROM tmdb_season WHERE tmdb_id = ? AND season = ?;
+
+saveEpisode:
+INSERT OR REPLACE INTO tmdb_episode(tmdb_id, season, episode, name, still_path, overview) VALUES (?, ?, ?, ?, ?, ?);
+
+markSeason:
+INSERT OR REPLACE INTO tmdb_season(tmdb_id, season, fetched_at) VALUES (?, ?, ?);
+
+deleteEpisodes {
+    DELETE FROM tmdb_episode;
+    DELETE FROM tmdb_season;
+}

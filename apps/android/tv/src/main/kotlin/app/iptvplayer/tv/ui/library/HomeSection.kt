@@ -27,6 +27,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalResources
@@ -352,7 +353,9 @@ fun HomeSection(
     val hero = featured.getOrNull(page) ?: featured.first()
     val ambient = rememberAmbientColor(hero.backdrop ?: hero.poster, resolver)
     val scope = rememberCoroutineScope()
+
     val listState = rememberLazyListState()
+    val wash = rememberRoomWash(ambient) { listState.firstVisibleItemIndex == 0 }
 
     // The carousel turns slowly on its own, but never while the viewer is reading it.
     LaunchedEffect(featured, heroFocused, page) {
@@ -364,7 +367,9 @@ fun HomeSection(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(0f to ambient, Tokens.HERO_HEIGHT_FRACTION to ambient, 1f to Tokens.bgBase)),
+            .drawBehind {
+                drawRect(Brush.verticalGradient(0f to wash.value, Tokens.HERO_HEIGHT_FRACTION to wash.value, 1f to Tokens.bgBase))
+            },
     ) {
         CalmScrolling {
             // No content padding: the hero's height is a share of the list's viewport, and padding would shrink it.

@@ -134,12 +134,18 @@ object TestPanel {
         // biography. The image paths do not exist anywhere; the app shows words when a picture does not arrive.
         when (path) {
             "search/movie" -> return 200 to """{"results":[{"id":990001,"title":"Test Movie One","release_date":"2021-06-01"}]}"""
-            "search/tv", "search/person" ->
-                return 200 to if (path == "search/person" && params["query"] == "Alex Example") {
+            "search/tv" -> return 200 to """{"results":[{"id":991001,"name":"Test Series","first_air_date":"2026-01-01"}]}"""
+            "search/person" ->
+                return 200 to if (params["query"] == "Alex Example") {
                     """{"results":[{"id":7001,"name":"Alex Example","profile_path":"/test-alex.jpg"}]}"""
                 } else {
                     """{"results":[]}"""
                 }
+            "tv/991001" -> return 200 to """{"id":991001,"images":{"logos":[]},"credits":{"cast":[],"crew":[]}}"""
+            "tv/991001/season/1" ->
+                return 200 to """{"episodes":[""" +
+                    """{"episode_number":1,"name":"The First One","still_path":"/still1.jpg","overview":"It begins."},""" +
+                    """{"episode_number":2,"name":"The Second One","still_path":"/still2.jpg","overview":"It continues."}]}"""
             "movie/990001" ->
                 return 200 to """{"id":990001,"images":{"logos":[{"file_path":"/test-logo.png","iso_639_1":"en"}]},""" +
                     """"credits":{"cast":[{"id":7001,"name":"Alex Example","profile_path":"/test-alex.jpg"}],"crew":[]}}"""

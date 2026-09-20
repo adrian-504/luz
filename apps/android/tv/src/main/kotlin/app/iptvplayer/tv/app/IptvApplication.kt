@@ -12,6 +12,7 @@ import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.svg.SvgDecoder
 import coil3.util.DebugLogger
+import okhttp3.OkHttpClient
 import okio.Path.Companion.toOkioPath
 
 class IptvApplication :
@@ -33,7 +34,7 @@ class IptvApplication :
         .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.15).build() }
         .diskCache { DiskCache.Builder().directory(cacheDir.resolve("artwork").toOkioPath()).maxSizeBytes(200L * 1024 * 1024).build() }
         .components {
-            add(OkHttpNetworkFetcherFactory())
+            add(OkHttpNetworkFetcherFactory(callFactory = { artworkHttpClient() }))
             // About one channel logo in twenty is an SVG (Wikimedia's especially); without this they never showed.
             add(SvgDecoder.Factory())
         }
@@ -41,5 +42,18 @@ class IptvApplication :
         .apply { if (BuildConfig.DEBUG) logger(DebugLogger()) }
         .build()
 }
+
+/**
+ * The client artwork is fetched with. It says who is asking: Wikimedia — where about a third of the owner's channel
+ * logos live — answers 403 to requests that carry a library's default name, so those logos never arrived. Nothing else
+ * is added to the request: an artwork address can carry a provider login, and it is sent as it is stored.
+ */
+private fun artworkHttpClient(): OkHttpClient = OkHttpClient.Builder()
+    .addInterceptor { chain ->
+        chain.proceed(chain.request().newBuilder().header("User-Agent", ARTWORK_USER_AGENT).build())
+    }
+    .build()
+
+private val ARTWORK_USER_AGENT = "Luz/${BuildConfig.VERSION_NAME} (+https://github.com/adrian-504/luz)"
 
 val LocalAppGraph = staticCompositionLocalOf<AppGraph> { error("AppGraph not provided") }

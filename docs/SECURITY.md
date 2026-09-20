@@ -160,7 +160,11 @@ credentials, the host nor the stream path appear in `dumpsys media_session` (ADR
   library contents, titles, watch history or device identifiers are sent with those; matching happens on the television.
   With *Title artwork and photos* on (ADR-0039, the default once a key is entered), opening a film, show or person also
   sends TMDB its name (and year), once per 30 days, for its logo, cast photos and biography. The switch in Settings → TMDB
-  stops it. Nothing is sent in the background or for the library as a whole.
+  stops it. Nothing is sent in the background or for the library as a whole. Opening a season of a show asks TMDB for
+  that season's episode names, stills and descriptions, once per season.
+- **Artwork requests** (ADR-0040) carry `Luz/<version> (+repository)` so image hosts that refuse unidentified requests
+  (Wikimedia) serve them. It names the app and its version, nothing about the viewer or their provider, and the address
+  itself is sent exactly as stored.
 - Before public release (§21.2): choose crash monitoring with privacy controls (opt-in or clearly disclosed, redaction hook, no URL/title collection), documented by ADR and privacy policy.
 
 ## 10. Permissions (minimal)

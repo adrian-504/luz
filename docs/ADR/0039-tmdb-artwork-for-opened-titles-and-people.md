@@ -25,9 +25,18 @@ ADR-0038's public lists, this means telling TMDB *which* titles and people the v
    nothing is asked and nothing stored is shown.
 4. **Words until pictures.** A logo replaces the title only once it has loaded; a portrait covers the initials only once
    it has loaded. A missing or failed picture looks like before.
-5. **Backdrops.** The same request brings a backdrop (one without words first); it is used only where the provider has
-   none or repeats the poster (schema 13, `tmdb_art.backdrop_path`).
-6. **No new dependency.** The client uses the existing HTTP stack and Coil; image addresses are TMDB's public image
+5. **Backdrops.** The same request brings a backdrop; it is used only where the provider has none or repeats the poster
+   (schema 13, `tmdb_art.backdrop_path`).
+6. **Which of TMDB's pictures.** A title has many, each rated by the people who use TMDB. A **backdrop** must have no
+   language on it (words burnt into the picture would fight the title drawn over it) and be at least 1280 wide; of those,
+   the best rated wins, with width as the tie-breaker and an unrated picture behind any rated one. A **logo** is English
+   first, then one with no language, best rated again. Only if a title has no suitable picture is TMDB's own main one
+   used.
+7. **Episodes** (schema 14). Most providers number episodes and send neither name nor picture. Opening a season asks
+   TMDB once for that season and keeps it [30 days]: the episode's name, a still from it and its description, used where
+   the provider gives none. A provider name that only repeats the show and its numbering ("Slow Horses-S1.E1") is
+   treated as no name.
+8. **No new dependency.** The client uses the existing HTTP stack and Coil; image addresses are TMDB's public image
    server (`image.tmdb.org`), which needs no key.
 
 ## Consequences

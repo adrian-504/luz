@@ -1,0 +1,17 @@
+-- Migration 13 -> 14: episode names, stills and descriptions from TMDB (ADR-0039). Must match Tmdb.sq.
+CREATE TABLE tmdb_episode (
+    tmdb_id INTEGER NOT NULL,
+    season INTEGER NOT NULL,
+    episode INTEGER NOT NULL,
+    name TEXT,
+    still_path TEXT,
+    overview TEXT,
+    PRIMARY KEY (tmdb_id, season, episode)
+);
+
+CREATE TABLE tmdb_season (
+    tmdb_id INTEGER NOT NULL,
+    season INTEGER NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    PRIMARY KEY (tmdb_id, season)
+);

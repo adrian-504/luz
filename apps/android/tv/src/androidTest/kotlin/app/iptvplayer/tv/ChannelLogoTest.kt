@@ -67,6 +67,21 @@ class ChannelLogoTest {
     }
 
     @Test
+    fun aFlagKeepsItsColouredBands() = runBlocking {
+        // The Lebanese channels' logo is the flag: red bands top and bottom, white between. Cutting the red would take
+        // half the flag, so a coloured ground is left alone.
+        val flag = bitmap(60, 40, Color.WHITE) {
+            rect(it, 0, 0, 60, 10, Color.rgb(237, 28, 36))
+            rect(it, 0, 30, 60, 40, Color.rgb(237, 28, 36))
+            rect(it, 25, 15, 35, 25, Color.rgb(0, 122, 61))
+        }
+        val out = LogoCleanup("test-flag").transform(flag, Size.ORIGINAL)
+        assertEquals("nothing is cut away", 60, out.width)
+        assertEquals(40, out.height)
+        assertEquals(Color.rgb(237, 28, 36), out.getPixel(5, 5))
+    }
+
+    @Test
     fun aPictureIsLeftAsItIs() = runBlocking {
         // Opaque corners of one colour, but an edge of many colours: a photo, not a logo in a box.
         val photo = bitmap(50, 50, Color.BLUE) { bitmap ->

@@ -42,8 +42,10 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.library.NextEpisode
+import app.iptvplayer.domain.library.TitleCleaner
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.security.UrlTemplate
+import app.iptvplayer.ingestion.EpisodeArt
 import app.iptvplayer.storage.EpisodeRow
 import app.iptvplayer.storage.MovieRow
 import app.iptvplayer.storage.MovieVersionRow
@@ -349,6 +351,10 @@ fun SeriesDetailScreen(
         credits.map { it.name },
         ask = true,
     )
+    // Most providers number episodes and send no pictures; TMDB names them and has a picture from each (ADR-0039).
+    val episodeArt by produceState(emptyMap<Int, EpisodeArt>(), item.id, shownSeason, tmdbArt.logoUrl) {
+        value = shownSeason?.let { graph.episodeArt(item.title, item.year ?: detail?.year, item.tmdbId ?: detail?.tmdbId, it) }.orEmpty()
+    }
     val backdrop = widePicture(item.backdrop, item.poster, tmdbArt.backdropUrl)
     val ambient = rememberAmbientColor(backdrop, resolver)
 
@@ -421,7 +427,9 @@ fun SeriesDetailScreen(
                     val title = shownSeason?.let { stringResource(R.string.series_season, it) }.orEmpty()
                     LuzShelf(title = title) {
                         items(shown.size, key = { shown[it].id }) { index ->
-                            EpisodeCard(shown[index], resolver, focus) { onPlayEpisode(shown[index].id, false) }
+                            EpisodeCard(shown[index], item.title, episodeArt[shown[index].episodeNumber], resolver, focus) {
+                                onPlayEpisode(shown[index].id, false)
+                            }
                         }
                     }
                 }
@@ -544,9 +552,21 @@ private fun SeasonTabs(seasons: List<Int>, shown: Int?, focus: FocusMemory, onCh
 
 /** An episode on the shelf: its still, "3 · The Title" under it, and how long it is — or a tick once it is watched. */
 @Composable
-private fun EpisodeCard(episode: EpisodeRow, resolver: ((UrlTemplate) -> String?)?, focus: FocusMemory, onPlay: () -> Unit) {
-    val title = episode.title?.let { stringResource(R.string.series_episode_title, episode.episodeNumber, it) }
+private fun EpisodeCard(
+    episode: EpisodeRow,
+    seriesTitle: String,
+    art: EpisodeArt?,
+    resolver: ((UrlTemplate) -> String?)?,
+    focus: FocusMemory,
+    onPlay: () -> Unit,
+) {
+    // The provider's name for the episode, once the show's name and the numbering it repeats are taken off, then TMDB's.
+    val own = remember(episode.id, seriesTitle, art) {
+        TitleCleaner.episodeTitle(episode.title, seriesTitle, episode.seasonNumber, episode.episodeNumber) ?: art?.name
+    }
+    val title = own?.let { stringResource(R.string.series_episode_title, episode.episodeNumber, it) }
         ?: stringResource(R.string.series_episode_untitled, episode.episodeNumber)
+    val still = remember(episode.still, art) { episode.still ?: art?.stillUrl?.let(::UrlTemplate) }
     LuzCard(
         title = title,
         subtitle = episode.duration?.let { durationText(it) },
@@ -556,7 +576,7 @@ private fun EpisodeCard(episode: EpisodeRow, resolver: ((UrlTemplate) -> String?
         onClick = onPlay,
     ) { modifier ->
         Box(modifier) {
-            ArtworkImage(episode.still, resolver, null, Modifier.fillMaxSize(), 640, 360)
+            ArtworkImage(still, resolver, null, Modifier.fillMaxSize(), 640, 360)
             if (episode.progress?.completed == true) {
                 Box(
                     Modifier

@@ -70,4 +70,17 @@ class TitleCleanerTest {
     }
 
     private fun check(condition: Boolean) = kotlin.test.assertTrue(condition)
+
+    @Test
+    fun anEpisodeKeepsOnlyItsOwnName() {
+        kotlin.test.assertNull(TitleCleaner.episodeTitle("Slow Horses-S1.E1", "Slow Horses", 1, 1), "only the show and its numbering")
+        kotlin.test.assertNull(TitleCleaner.episodeTitle("Slow Horses S01E01", "Slow Horses", 1, 1))
+        kotlin.test.assertNull(TitleCleaner.episodeTitle("Episode 4", "Slow Horses", 1, 4))
+        kotlin.test.assertEquals(
+            "Failure's Contagious",
+            TitleCleaner.episodeTitle("Slow Horses 1x01 - Failure's Contagious", "Slow Horses", 1, 1),
+        )
+        kotlin.test.assertEquals("Pilot", TitleCleaner.episodeTitle("Pilot", "Slow Horses", 1, 1), "a real name is kept")
+        kotlin.test.assertNull(TitleCleaner.episodeTitle(null, "Slow Horses", 1, 1))
+    }
 }

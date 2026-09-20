@@ -50,7 +50,7 @@ object LogoLooks {
  * - how dark it is and its main colour are noted in [LogoLooks] under [key].
  */
 class LogoCleanup(private val key: String) : Transformation() {
-    override val cacheKey: String = "logo-cleanup-2"
+    override val cacheKey: String = "logo-cleanup-3"
 
     override suspend fun transform(input: Bitmap, size: Size): Bitmap {
         val width = input.width
@@ -90,6 +90,9 @@ class LogoCleanup(private val key: String) : Transformation() {
         } else {
             if (corners.any { !alike(it, ground) }) return edgeIsBusy(pixels, width, height) { alike(it, ground) }
             if (edgeIsBusy(pixels, width, height) { alike(it, ground) }) return true
+            // Only the white or black box a logo was pasted into is cut away. A coloured ground is part of the picture:
+            // many channels' logos are a flag or a coloured tile, and cutting their border would take half the flag.
+            if (!plain(ground)) return false
             { alike(it, ground) }
         }
 
@@ -205,10 +208,20 @@ class LogoCleanup(private val key: String) : Transformation() {
         const val TOLERANCE = 48
         const val FLAT_EDGE = 0.8
         const val DARK = 0.22
+        const val PLAIN_WHITE = 200
+        const val PLAIN_BLACK = 45
         const val LIGHT = 185
         const val NEUTRAL = 18
 
         fun alpha(pixel: Int) = pixel ushr 24
+
+        /** Near-white or near-black: the box a logo is pasted into, never a colour of its own. */
+        fun plain(pixel: Int): Boolean {
+            val r = (pixel shr 16) and 0xFF
+            val g = (pixel shr 8) and 0xFF
+            val b = pixel and 0xFF
+            return minOf(r, g, b) >= PLAIN_WHITE || maxOf(r, g, b) <= PLAIN_BLACK
+        }
 
         /** White or light grey: the squares of a painted-in checkerboard. */
         fun lightNeutral(pixel: Int): Boolean {

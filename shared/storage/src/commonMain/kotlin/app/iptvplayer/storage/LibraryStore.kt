@@ -135,6 +135,14 @@ public data class StoredArt(
     public val backdropPath: String? = null,
 )
 
+/** One episode as stored from TMDB. */
+public data class StoredEpisode(
+    public val number: Int,
+    public val name: String?,
+    public val stillPath: String?,
+    public val overview: String?,
+)
+
 /** A person's portrait as learned from a title's credits on TMDB. */
 public data class Portrait(public val name: String, public val tmdbId: Long, public val profilePath: String?)
 
@@ -822,6 +830,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
     public fun clearLists() {
         tmdbQueries.deleteAll()
         tmdbQueries.deleteArt()
+        tmdbQueries.deleteEpisodes()
     }
 
     /** TMDB artwork stored for a work (ADR-0039); null when it was never asked about. */
@@ -842,6 +851,22 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
         content.transaction {
             tmdbQueries.saveArt(type.name, workKey, tmdbId, logoPath, now, backdropPath)
             portraits.forEach { tmdbQueries.savePortrait(it.name, it.tmdbId, it.profilePath, now) }
+        }
+    }
+
+    /** When this season was last read from TMDB, or null when it never was. */
+    public fun seasonFetchedAt(tmdbId: Long, season: Int): Instant? =
+        tmdbQueries.seasonFetchedAt(tmdbId, season.toLong()).executeAsOneOrNull()?.let { Instant.fromEpochMilliseconds(it) }
+
+    public fun episodesOf(tmdbId: Long, season: Int): List<StoredEpisode> =
+        tmdbQueries.episodesOf(tmdbId, season.toLong()).executeAsList().map {
+            StoredEpisode(it.episode.toInt(), it.name, it.still_path, it.overview)
+        }
+
+    public fun saveEpisodes(tmdbId: Long, season: Int, episodes: List<StoredEpisode>) {
+        content.transaction {
+            episodes.forEach { tmdbQueries.saveEpisode(tmdbId, season.toLong(), it.number.toLong(), it.name, it.stillPath, it.overview) }
+            tmdbQueries.markSeason(tmdbId, season.toLong(), clock.now().toEpochMilliseconds())
         }
     }
 

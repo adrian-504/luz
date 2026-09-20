@@ -193,7 +193,8 @@ Holding OK opens a menu after 0.65 s; a menu opened that way ignores OK until th
 (opens YouTube), favourite. Play on a film the provider lists in several versions asks which. Below: **Cast & Crew** — a
 shelf of round plates with initials, director first; OK opens the person's page — and an **About / Information** panel
 with the whole description and the facts. **Series:** the same hero at two thirds with the season count, then seasons as
-quiet capsules over a shelf of episode cards, then Cast & Crew and About. **Person:** TMDB's portrait in a tall rounded
+quiet capsules over a shelf of episode cards — each with its own name and a picture from it, TMDB's where the provider
+sends none (ADR-0039) — then Cast & Crew and About. **Person:** TMDB's portrait in a tall rounded
 frame beside the name, how many titles and four lines of biography, then their films and shows as shelves. With a TMDB key
 (ADR-0039) the title is the film's **logo** once it loads, Cast & Crew plates show **portraits** over the initials, and a
 film whose provider sends no backdrop (or only the poster again) gets TMDB's, without words on it. Under Cast & Crew:
@@ -225,8 +226,10 @@ Recently added / New episodes, Popular, Because you watched…, Highest rated, M
 largest genres — then glass tiles for every genre, decade and provider category ("Browse all categories"). A tile opens
 the full grid: categories on the left and a poster grid that loads a page at a time; Back returns to the tile. Holding OK
 on a poster offers Open, My List, Add to a group…, Hide. When the remote **rests** on a title with a wide picture, the
-room behind the shelves takes it: enlarged, soft and faint, fading in after 400 ms and gone the moment the remote moves
-again, so nothing is drawn while the viewer is travelling (PERFORMANCE.md §6.5).
+room behind the shelves takes it: enlarged, lightly blurred and visible behind the shelves, fading in after 400 ms and
+gone the moment the remote moves again, so nothing is drawn while the viewer is travelling (PERFORMANCE.md §6.5). The
+**colour wash** a hero lends the room lasts only while that hero is on screen; scrolled past it the room returns to plain
+dark, so one film's colour does not sit under shelves of others.
 
 ## 14. Search
 The query written large with a search symbol; a **letter strip** beneath it (123/abc, space, a–z, delete) so the remote

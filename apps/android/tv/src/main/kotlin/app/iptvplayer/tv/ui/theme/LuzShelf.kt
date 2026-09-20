@@ -18,6 +18,7 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** A shelf's or a section's name, set where the content starts. */
@@ -78,6 +79,9 @@ private object CalmBringIntoView : BringIntoViewSpec {
 /** Where a newly focused shelf settles, as a share of the list's height from its top — room for its name above. */
 private const val FOCUS_LINE = 0.16f
 
+private const val TOP_ATTEMPTS = 3
+private const val TOP_RETRY_MS = 80L
+
 /** The share of the list's height kept clear below a focused element for its captions. */
 private const val CAPTION_ROOM = 0.14f
 
@@ -91,7 +95,15 @@ fun Modifier.revealsListTop(state: LazyListState): Modifier {
     val scope = rememberCoroutineScope()
     return onFocusChanged {
         if (it.hasFocus && (state.firstVisibleItemIndex != 0 || state.firstVisibleItemScrollOffset != 0)) {
-            scope.launch { state.animateScrollToItem(0) }
+            scope.launch {
+                // The list also brings the focused button into view by itself, a moment later, which used to leave the
+                // hero's top edge off the screen. Going back to the top again after it settles wins that argument.
+                repeat(TOP_ATTEMPTS) {
+                    state.animateScrollToItem(0)
+                    if (state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset == 0) return@launch
+                    delay(TOP_RETRY_MS)
+                }
+            }
         }
     }
 }

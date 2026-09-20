@@ -122,6 +122,26 @@ public object TitleCleaner {
     }
 
     /**
+     * An episode's own name, from what the provider called it: without the show's name and without the season and episode
+     * numbering it repeats ("Slow Horses-S1.E1", "Slow Horses 1x01 - Failure's Contagious"). Null when nothing is left,
+     * which is the honest answer for a provider that only numbers its episodes.
+     */
+    public fun episodeTitle(raw: String?, seriesTitle: String, season: Int, number: Int): String? {
+        var text = raw?.trim().orEmpty()
+        if (text.isEmpty()) return null
+        // The show's name, however it is punctuated: compared on letters and digits alone.
+        val showWords = seriesTitle.lowercase().filter { it.isLetterOrDigit() || it == ' ' }.split(' ').filter { it.isNotBlank() }
+        if (showWords.isNotEmpty()) {
+            val prefix =
+                Regex("^\\s*" + showWords.joinToString("[^A-Za-z0-9]*") { Regex.escape(it) } + "[^A-Za-z0-9]*", RegexOption.IGNORE_CASE)
+            text = text.replace(prefix, "")
+        }
+        text = text.replace(NUMBERING, " ")
+        text = collapse(text).trim(*TRIM).trim()
+        return text.takeIf { it.isNotEmpty() && !it.equals(seriesTitle, ignoreCase = true) && it.any { c -> c.isLetter() } }
+    }
+
+    /**
      * The work behind a title, for grouping versions: case, accents, punctuation and articles do not count, and the year
      * does when there is one ("Dune (1984)" and "Dune (2021)" stay apart).
      */
@@ -204,6 +224,11 @@ public object TitleCleaner {
     private val SEPARATED_PREFIX = Regex("""^\s*([A-Za-z0-9+/-]{2,12})\s*([|:–—]|\s-)\s+""")
 
     private val BRACKETED = Regex("""([\[(])\s*([^\[\]()]{1,20})\s*([])])""")
+
+    /** "S1.E1", "S01E01", "1x01", "Episode 3", "EP 3", and a bare number where the name should be. */
+    private val NUMBERING = Regex(
+        """(?i)\bS\s*\d{1,3}\s*[.\-_ ]?\s*E(?:P|PISODE)?\s*\d{1,4}\b|\b\d{1,3}\s*x\s*\d{1,4}\b|\bE(?:P|PISODE)?\s*\d{1,4}\b|\bS(?:EASON)?\s*\d{1,3}\b""",
+    )
     private val APOSTROPHES = Regex("['\u2019\u02BC`]")
     private val TRAILING_YEAR = Regex("""(\s[-–—]\s*)((?:19|20)\d{2})\s*$""")
     private val RESOLUTION = Regex("""\d{3,4}[pP]""")
