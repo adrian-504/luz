@@ -451,6 +451,13 @@ which lacks the permission to read other apps' Watch Next and preview channels (
 only by Google's recommendation service), so rows would never appear there. Revisit for Google TV devices, with the
 `androidx.tvprovider` evaluation (ARCHITECTURE.md §14).
 
+**Giving a build to someone else (2026-09-20).** Until there is a store listing, Luz is shared as a file: build with
+`./gradlew :apps:android:tv:assembleRelease -PluzKeystore=<path> -PluzKeystorePassword=<password>`, publish the APK
+where it can be downloaded directly, and shorten that address so it can be typed on a remote. The other television
+installs it with the *Downloader* app (Play Store) — no computer, no cable. Every chip Google TV uses is in the one file
+(arm64, arm32, x86, x86_64), and Android 8 or newer. Builds for the owner's own television keep the debug key, so a
+build signed with the sharing key cannot replace them without uninstalling first.
+
 Follow-ups found on the way: a budget for film and show import times on the reference television (88 s and 3 min 41 s
 today, ADR-0035); Home takes about two seconds to fill every row on the Bbox and now shows rows as they arrive.
 

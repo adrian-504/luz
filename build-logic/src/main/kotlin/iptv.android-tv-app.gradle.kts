@@ -23,13 +23,25 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // A build meant for someone else's television is signed with the sharing key, which lives outside the repository and
+    // is named on the command line (`-PluzKeystore=… -PluzKeystorePassword=…`). Without those, a release build is signed
+    // with the local debug key, as it has been: it only has to be installable for the performance runs.
+    val keystore = (findProperty("luzKeystore") as String?)?.let { file(it) }?.takeIf { it.exists() }
+    if (keystore != null) {
+        signingConfigs.create("sharing") {
+            storeFile = keystore
+            storePassword = findProperty("luzKeystorePassword") as String?
+            keyAlias = (findProperty("luzKeyAlias") as String?) ?: "luz"
+            keyPassword = (findProperty("luzKeyPassword") as String?) ?: (findProperty("luzKeystorePassword") as String?)
+        }
+    }
+
     buildTypes {
         // The performance targets of docs/PERFORMANCE.md apply to the release build, so it has to be installable to be
-        // measured. It is signed with the local debug key — generated on this machine, never committed — until release
-        // hardening (Phase 15) provides a real one. Code shrinking stays off until it is enabled deliberately, with the
-        // rules the reflective libraries need and a device-test run against the shrunk build.
+        // measured. Code shrinking stays off until it is enabled deliberately, with the rules the reflective libraries
+        // need and a device-test run against the shrunk build.
         getByName("release") {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (keystore != null) signingConfigs.getByName("sharing") else signingConfigs.getByName("debug")
         }
     }
 

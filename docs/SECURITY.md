@@ -148,6 +148,10 @@ Exceeding a limit stops the unit with `Limit(which)` and an actionable message; 
 - Test harness captures all log output, diagnostics exports, persisted DB contents and crash-report payload builders during import and playback tests and asserts the canary strings (raw and URL-encoded) never appear. **Implemented for Android playback (Phase 6):** Media3's logger is replaced by `RedactingMedia3Logger` (URLs reduced to origin, no stack traces); `Media3PlaybackControllerTest` plays canary-credential URLs (path and query) that fail, reads the app's logcat and asserts neither canary appears. Removing the redacting logger makes the test fail — Media3 does log stream URLs. **Media session (Phase 7):**
 `PlaybackMediaSessionTest` publishes a canary-credential Xtream stream to the system media session and asserts neither the
 credentials, the host nor the stream path appear in `dumpsys media_session` (ADR-0027).
+- The **app signing key** for builds given to someone else lives outside the repository (its path and password are passed
+  to Gradle as `-PluzKeystore` / `-PluzKeystorePassword`, never committed and never in `gradle.properties` in the repo).
+  Without them a release build is signed with the machine's debug key, as before. Losing the key means no one can update
+  an installed Luz without uninstalling it first, so it is backed up with the owner's passwords.
 - `tooling/scripts/scan_secrets.py` runs in `verify.sh` (and later CI/pre-commit) to block committed credentials.
 
 ## 9. Privacy-conscious telemetry — ADR-0020
