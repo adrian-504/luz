@@ -1,6 +1,7 @@
 # ADR-0002: Native playback per platform
 
-- **Status:** Accepted (specification baseline)
+- **Status:** Accepted (specification baseline); on Apple platforms amended by ADR-0041 (a second engine for the
+  containers AVPlayer does not play)
 - **Date:** 2026-09-14
 - **Spec:** §1.3, §7.1, §7.2, §24
 

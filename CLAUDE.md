@@ -12,11 +12,13 @@ diagnostics and low perceived latency — not feature count.
 
 ## Current phase
 
-**Phase 8 (Android VOD/Series) complete 2026-09-16.** **Phase 9 (Android QA) in progress:** storage queries, launch,
-list scrolling and memory meet their gates on the owner's Bbox TV (docs/PERFORMANCE.md §6); guide frame timing and the
-8-hour playback soak remain. **Interface phase** (owner's review, before Phase 10): the design system is built across all
-screens (ADR-0034, docs/DESIGN_SYSTEM.md); provider diagnostics and the guide timeline remain. Open items are tracked in
-[docs/ROADMAP.md](docs/ROADMAP.md). Work strictly phase by phase.
+**Phase 8 (Android VOD/Series) complete 2026-09-16.** **Phase 9 (Android QA) paused 2026-09-21 by the owner:** storage
+queries, launch, list scrolling and memory meet their gates on the owner's Bbox TV (docs/PERFORMANCE.md §6); guide and
+poster-shelf frame timing and the 8-hour playback soak remain. The interface phase (owner's review) is done: design system
+across all screens (ADR-0034, docs/DESIGN_SYSTEM.md). **Phase 10 (Apple shared core) is next, iPhone before Apple TV**
+(owner's order, 2026-09-21); Apple playback is AVPlayer plus MobileVLCKit for what AVPlayer cannot play (ADR-0041). It
+needs full Xcode on the Mac first. Open items are tracked in [docs/ROADMAP.md](docs/ROADMAP.md). Work strictly phase by
+phase.
 
 ## Non-negotiable rules
 

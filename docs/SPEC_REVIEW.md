@@ -10,7 +10,8 @@ Severity: **Critical** (could invalidate a platform or the security model) · **
 
 ### 1.1 Apple native playback versus real-world IPTV formats
 
-- **Severity:** Critical (for tvOS/iOS) · **Owner decision:** Yes, before Phase 10.
+- **Severity:** Critical (for tvOS/iOS) · **Owner decision:** **Decided 2026-09-21 — ADR-0041**: AVPlayer for
+  what it plays, MobileVLCKit for the rest (about 27 % of the owner's films are MKV/AVI).
 - **Spec:** §1.3, §7.2, ADR-001/002 — AVFoundation/AVPlayer on Apple platforms.
 - **Issue:** AVPlayer plays HLS and MP4/MOV well but does not play several formats that are common in IPTV
   sources: continuous MPEG-TS over plain HTTP (the default Xtream live output `.ts`), Matroska (`.mkv`, very

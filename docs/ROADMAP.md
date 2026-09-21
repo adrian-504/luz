@@ -16,10 +16,10 @@ a test plan and a review step (§18.1). A phase is closed only by review against
 | **6** | Android playback | Live/VOD playback stable | **Verified on the Google TV emulator and the owner's Bbox TV (Android TV 11) 2026-09-15 with synthetic streams** |
 | **7** | Android Live TV | Channel browsing/zapping/EPG complete | **Complete 2026-09-15 on the Google TV emulator and the owner's Bbox TV (device tests + the owner's own Xtream provider). The owner's provider supplies no guide; a guide from a real provider or a user guide link is NOT YET VERIFIED on a device — parked by the owner** |
 | **8** | Android VOD/Series | Library experience complete | **Complete 2026-09-16 — verified by the owner on the Bbox TV with their own provider (20,023 movies, 10,171 series)** |
-| 9 | Android QA | Stress/device matrix passes | **In progress 2026-09-16** — storage query gate passes on the reference device; launch, frames, memory and device matrix remain |
-| 10 | Apple shared/core | Domain parity achieved | XCFramework, Swift bridging, Keychain, URLSession transport, AVPlayer controller + vectors |
-| 11 | tvOS | Native TV experience complete | |
-| 12 | iOS | Touch/mobile experience complete | |
+| 9 | Android QA | Stress/device matrix passes | **Paused 2026-09-21 by the owner** (Apple work first) — storage, launch, list scrolling and memory gates met; guide frames, poster-shelf frames and the 8-hour soak remain |
+| 10 | Apple shared/core | Domain parity achieved | **Next — started 2026-09-21.** XCFramework, Swift bridging, Keychain, URLSession transport, AVPlayer + MobileVLCKit controller (ADR-0041) + vectors |
+| 11 | iOS | Touch/mobile experience complete | **Moved before tvOS by the owner, 2026-09-21** |
+| 12 | tvOS | Native TV experience complete | |
 | 13 | Cross-device sync | Account + sync security review passes | Separate security design review before any code |
 | 14 | Advanced features | Prioritized feature set implemented | PiP, AirPlay/Chromecast, parental controls, profiles, multiview, recording — each needs ADR |
 | 15 | Release hardening | Performance/security/store readiness | Public release gate §21.2 |
@@ -329,7 +329,35 @@ Scope and order (stated at the start of the phase, 2026-09-15):
 Not in Phase 8: third-party metadata enrichment (FR-VOD-002 keeps the library usable without it), catch-up playback,
 downloads, unified multi-source library, parental controls.
 
-## Phase 9 — Android QA (in progress)
+## Change of order (owner decision, 2026-09-21)
+
+The owner asked to start the iPhone app now: **Phase 9 is paused** with its remaining items open (guide frame timing,
+poster-shelf frame timing — PERFORMANCE.md §6.4–6.5 — and the 8-hour playback soak) and resumes after the first Apple
+milestones; **iOS moves ahead of tvOS** (Phases 11 and 12 swap). The owner's review that had to come before Phase 10
+happened as the interface phase. The Apple playback decision of SPEC_REVIEW §1.1 is taken: ADR-0041.
+
+## Phase 10 — Apple shared core (next)
+
+**Needs first:** full Xcode on the development Mac, installed by the owner (the Mac has only the command-line tools, so
+every Apple target so far is NOT YET VERIFIED).
+
+Scope and order:
+
+1. **The shared core on Apple.** Build the Kotlin/Native targets that were configured since Phase 1 and run their tests
+   on the iOS simulator — the first time any of Phases 1–4 is verified on Apple. System SQLite with FTS5 on iOS measured
+   against the storage budget.
+2. **Swift bridge.** An XCFramework of the shared core for the app, with the smallest Swift-facing API the screens need.
+3. **Platform services.** Keychain secret store (`CredentialRef`, as Android's Keystore), URLSession transport
+   (`HttpTransport`), with the same redaction rules — no login or credential-bearing URL in any log.
+4. **Playback.** One controller over AVPlayer and MobileVLCKit (ADR-0041), chosen per item before playback; the shared
+   playback vectors run against both.
+5. **An iPhone app shell** that adds the owner's provider, lists its channels and plays one — the end-to-end proof the
+   phase exits on, on the simulator and on the owner's iPhone.
+
+**Exit criterion:** domain parity with Android — the shared tests pass on the iOS simulator, and a live channel, an MP4
+film and an MKV film from the owner's provider play on the owner's iPhone.
+
+## Phase 9 — Android QA (paused 2026-09-21)
 
 **Primary objective:** the performance gates of PERFORMANCE.md §1 and §4 met on real hardware, plus stress and soak
 (exit criterion: stress and device matrix pass).
