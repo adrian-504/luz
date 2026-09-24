@@ -67,4 +67,5 @@ val xcodeFound: Boolean = appleSetting == "true" || (
     )
 if (xcodeFound) {
     include(":apps:apple:platform")
+    include(":apps:apple:core")
 }
