@@ -16,8 +16,9 @@ diagnostics and low perceived latency — not feature count.
 queries, launch, list scrolling and memory meet their gates on the owner's Bbox TV (docs/PERFORMANCE.md §6); guide and
 poster-shelf frame timing and the 8-hour playback soak remain. The interface phase (owner's review) is done: design system
 across all screens (ADR-0034, docs/DESIGN_SYSTEM.md). **Phase 10 (Apple shared core) is next, iPhone before Apple TV**
-(owner's order, 2026-09-21); Apple playback is AVPlayer plus MobileVLCKit for what AVPlayer cannot play (ADR-0041). It
-needs full Xcode on the Mac first. Open items are tracked in [docs/ROADMAP.md](docs/ROADMAP.md). Work strictly phase by
+(owner's order, 2026-09-21); Apple playback is AVPlayer plus MobileVLCKit for what AVPlayer cannot play (ADR-0041).
+Xcode 27 is installed (2026-09-24); the shared modules' common tests pass on the iOS simulator. Put toolchains, caches
+and build output on the SSD (`/Volumes/DevSSD`), not the Mac's small internal disk. Open items are tracked in [docs/ROADMAP.md](docs/ROADMAP.md). Work strictly phase by
 phase.
 
 ## Non-negotiable rules

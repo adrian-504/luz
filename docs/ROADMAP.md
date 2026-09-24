@@ -338,8 +338,18 @@ happened as the interface phase. The Apple playback decision of SPEC_REVIEW §1.
 
 ## Phase 10 — Apple shared core (next)
 
-**Needs first:** full Xcode on the development Mac, installed by the owner (the Mac has only the command-line tools, so
-every Apple target so far is NOT YET VERIFIED).
+**Xcode 27.0** is installed (2026-09-24, iOS 27 simulator runtime). Kotlin/Native's toolchain lives on the SSD
+(`~/.konan` → `/Volumes/DevSSD/konan`) and Xcode's build files too (`/Volumes/DevSSD/xcode-derived-data`); the
+internal disk has little room left.
+
+**Step 1 result (2026-09-24, iOS 27 simulator, arm64):** the shared modules compile for iOS and their common tests pass
+there — domain 75 tests, epg 6, protocols 92; 0 failures. First real finding: `EpgMatcher` used `putIfAbsent`, a
+JVM-only call, which compiled on Android and not on Apple; fixed. storage and ingestion have only JVM tests so far
+(they need a SQLite driver on Apple, step 3), so they report no Apple tests rather than failing. The Kotlin/Native
+toolchain and the Apple variants of already-approved libraries (kotlinx, SQLDelight and its native driver) were added
+to `gradle/verification-metadata.xml`. tvOS targets compile; their tests are skipped (with the reason printed) until a
+tvOS simulator runtime is installed — not before Apple TV's turn, to spare the internal disk. `verify.sh` now builds the
+Apple targets and runs the iOS simulator tests on every run.
 
 Scope and order:
 

@@ -216,6 +216,10 @@ kotlinx-io, SQLDelight or Room KMP, OkHttp, Media3, Coil) are **not yet approved
 when first introduced.
 
 **Current dependency set (Phase 8):** adds Coil 3.6.2 (`coil-compose`, `coil-network-okhttp`) for artwork (ADR-0028).
+**Phase 10 (2026-09-24):** no new library; the Kotlin/Native toolchain and the Apple variants of the libraries already
+approved (kotlinx coroutines/serialization, SQLDelight with its native driver, which brings Touchlab's SQLiter and
+Stately) enter the verification metadata the first time Apple targets are built. MobileVLCKit is approved by ADR-0041
+and is added with the iPhone app, not before.
 **Interface phase (2026-09-18):** adds Coil's own `coil-svg` 3.6.2 (Apache-2.0, same project and release as the Coil
 already approved; brings AndroidSVG, Apache-2.0) because about 4 % of the owner's channel logos are SVG files that
 could not be shown at all; no network, permission or data change (ADR-0040). **Phase 7:** adds Media3 `media3-session` 1.11.1 for the system media session (ADR-0027), OkHttp 5.5.0 (with Okio) for the Android transport (ADR-0026) and AndroidX

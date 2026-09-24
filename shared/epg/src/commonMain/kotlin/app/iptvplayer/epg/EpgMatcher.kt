@@ -41,7 +41,9 @@ public object EpgMatcher {
         val byExactName = HashMap<String, MutableSet<EpgChannelKey>>()
         val byNormalizedName = HashMap<String, MutableSet<EpgChannelKey>>()
         for (epg in epgChannels) {
-            byId.putIfAbsent(epg.key.channelId.trim().lowercase(), epg.key)
+            // The first guide channel with an id keeps it (putIfAbsent is JVM-only; this is the same on every platform).
+            val id = epg.key.channelId.trim().lowercase()
+            if (id !in byId) byId[id] = epg.key
             for (name in epg.displayNames) {
                 byExactName.getOrPut(TextNormalization.normKey(name.text)) { LinkedHashSet() }.add(epg.key)
                 val normalized = TextNormalization.matchNormalize(name.text)

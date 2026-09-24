@@ -90,3 +90,22 @@ kotlin {
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
 }
+
+// A module whose tests are all JVM-only (storage and ingestion: they need a SQLite driver, which Apple gets in Phase 10)
+// has no tests to run on an Apple simulator. That is reported as "no tests", not as a failure; the modules that do have
+// common tests still fail on any failing one. Remove this once every module has Apple tests.
+tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeSimulatorTest>().configureEach {
+    failOnNoDiscoveredTests.set(false)
+}
+
+// Apple TV comes after the iPhone (ROADMAP, 2026-09-21), and its simulator is a separate multi-gigabyte download not
+// installed yet. Without it the tvOS tests are skipped, saying why, rather than failing; the tvOS code still compiles on
+// every run, and the tests run by themselves once `xcodebuild -downloadPlatform tvOS` has been done.
+if (appleTargetsEnabled) {
+    val simulatorRuntimes = providers.exec { commandLine("xcrun", "simctl", "list", "runtimes") }.standardOutput.asText
+    tasks.matching { it.name == "tvosSimulatorArm64Test" }.configureEach {
+        onlyIf("a tvOS simulator runtime is installed (xcodebuild -downloadPlatform tvOS)") {
+            simulatorRuntimes.getOrElse("").contains("tvOS")
+        }
+    }
+}
