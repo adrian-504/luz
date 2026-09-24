@@ -53,3 +53,18 @@ if (androidAppsSetting == "true" || (androidAppsSetting == "auto" && androidSdkF
     include(":apps:android:testing")
     include(":apps:android:tv")
 }
+
+// The Apple platform adapters need a full Xcode (the iOS simulator SDK); same "auto" rule as the shared modules'
+// Apple targets (iptv.appleTargets in gradle.properties).
+val appleSetting = providers.gradleProperty("iptv.appleTargets").getOrElse("auto")
+val xcodeFound: Boolean = appleSetting == "true" || (
+    appleSetting == "auto" && runCatching {
+        providers.exec {
+            commandLine("xcrun", "--sdk", "iphonesimulator", "--show-sdk-path")
+            isIgnoreExitValue = true
+        }.result.get().exitValue == 0
+    }.getOrDefault(false)
+    )
+if (xcodeFound) {
+    include(":apps:apple:platform")
+}

@@ -360,6 +360,14 @@ a statement that returns rows, so the WAL checkpoint (ADR-0029) now runs as a qu
 a second for the native driver's reader connection on every import (5,000 shows: 36 s → 8 s once fixed), so Apple uses
 PASSIVE and Android keeps TRUNCATE, which is where it was measured. Binaries containing storage link `libsqlite3`.
 
+**Step 3b (2026-09-24): Apple platform adapters** in `apps/apple/platform` (Kotlin/Native, iOS and tvOS, the counterpart
+of `apps/android/platform`). `UrlSessionTransport` keeps Android's rules — redirects returned, never followed; timeouts
+and body cap enforced; streamed body; no cookies, no cache, nothing logged — and its tests pass on the iOS simulator
+against a small HTTP server inside the test (status/body/redirect/cap, headers and user agent, DNS/refused/timeout
+classification). `KeychainSecretStore` stores each login as one generic-password item, accessible after first unlock and
+**this device only**; it compiles, but the Keychain is not available to a bare simulator test binary
+(`errSecNotAvailable`), so its tests wait for the app-hosted test target of step 5 — **NOT YET VERIFIED**.
+
 Scope and order:
 
 1. **The shared core on Apple.** Build the Kotlin/Native targets that were configured since Phase 1 and run their tests

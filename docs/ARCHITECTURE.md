@@ -216,7 +216,8 @@ kotlinx-io, SQLDelight or Room KMP, OkHttp, Media3, Coil) are **not yet approved
 when first introduced.
 
 **Current dependency set (Phase 8):** adds Coil 3.6.2 (`coil-compose`, `coil-network-okhttp`) for artwork (ADR-0028).
-**Phase 10 (2026-09-24):** no new library; the Kotlin/Native toolchain and the Apple variants of the libraries already
+**Phase 10 (2026-09-24):** module `apps/apple/platform` (Apple-only Kotlin/Native adapters: Keychain, URLSession),
+included only when Xcode is present; no new library; the Kotlin/Native toolchain and the Apple variants of the libraries already
 approved (kotlinx coroutines/serialization, SQLDelight with its native driver, which brings Touchlab's SQLiter and
 Stately) enter the verification metadata the first time Apple targets are built. MobileVLCKit is approved by ADR-0041
 and is added with the iPhone app, not before.
