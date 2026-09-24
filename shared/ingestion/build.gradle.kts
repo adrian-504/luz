@@ -1,4 +1,5 @@
 import iptv.EmbedFixtureBytes
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
     id("iptv.kmp-library")
@@ -45,4 +46,10 @@ kotlin {
             }
         }
     }
+}
+
+// Storage on Apple uses the system SQLite (ADR-0013): every binary that contains it links libsqlite3. The storage module
+// gets this from the SQLDelight plugin; this module does not apply that plugin, so its test binaries ask for it here.
+kotlin.targets.withType<KotlinNativeTarget>().configureEach {
+    binaries.all { linkerOpts("-lsqlite3") }
 }

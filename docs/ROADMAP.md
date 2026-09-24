@@ -351,6 +351,15 @@ to `gradle/verification-metadata.xml`. tvOS targets compile; their tests are ski
 tvOS simulator runtime is installed — not before Apple TV's turn, to spare the internal disk. `verify.sh` now builds the
 Apple targets and runs the iOS simulator tests on every run.
 
+**Step 3a result (2026-09-24): storage and ingestion on Apple.** `openIptvDatabase(path)` opens the same schema everywhere:
+the bundled SQLite on Android and the JVM, the system SQLite through SQLDelight's native driver on Apple. Their tests moved
+to `commonTest` and now run on the JVM, the Android device and the iOS simulator — storage 25 and ingestion 16 on iOS,
+0 failures (the driver-specific test and the device timing test stay JVM/Android). **The iOS system SQLite has FTS5**
+(search ranking tests pass), which SPEC_REVIEW had left unverified. Two Apple findings: SQLite on Apple refuses to *execute*
+a statement that returns rows, so the WAL checkpoint (ADR-0029) now runs as a query; and TRUNCATE checkpoints waited about
+a second for the native driver's reader connection on every import (5,000 shows: 36 s → 8 s once fixed), so Apple uses
+PASSIVE and Android keeps TRUNCATE, which is where it was measured. Binaries containing storage link `libsqlite3`.
+
 Scope and order:
 
 1. **The shared core on Apple.** Build the Kotlin/Native targets that were configured since Phase 1 and run their tests

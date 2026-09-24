@@ -23,7 +23,6 @@ import app.iptvplayer.domain.model.XtreamStreamKind
 import app.iptvplayer.domain.ports.Clock
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.storage.db.IptvDatabase
-import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,8 +34,8 @@ import kotlin.time.Instant
  * imported row, and never change what the provider sent.
  */
 class CustomisationTest {
-    private val file: File = File.createTempFile("customisation", ".db").also { it.delete() }
-    private val driver = BundledSqliteDriver.open(file.path, IptvDatabase.Schema)
+    private val file = TestDatabaseFile("customisation")
+    private val driver = openIptvDatabase(file.path)
     private val clock = object : Clock {
         override fun now(): Instant = Instant.parse("2026-09-16T12:00:00Z")
 
@@ -48,7 +47,7 @@ class CustomisationTest {
     @AfterTest
     fun cleanUp() {
         driver.close()
-        listOf("", "-wal", "-shm").forEach { File(file.path + it).delete() }
+        file.delete()
     }
 
     private fun import() {

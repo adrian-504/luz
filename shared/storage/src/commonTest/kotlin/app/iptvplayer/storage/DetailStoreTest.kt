@@ -28,7 +28,6 @@ import app.iptvplayer.domain.model.XtreamStreamKind
 import app.iptvplayer.domain.ports.Clock
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.storage.db.IptvDatabase
-import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -38,14 +37,15 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
+import kotlin.time.TimeSource
 
 /** Film and show details, versions, people and the shelves built from them (ADR-0035). */
 private const val SHOWS = 5_000
 private const val NAMES = 2_000
 
 class DetailStoreTest {
-    private val file: File = File.createTempFile("detail-store", ".db").also { it.delete() }
-    private val driver = BundledSqliteDriver.open(file.path, IptvDatabase.Schema)
+    private val file = TestDatabaseFile("detail-store")
+    private val driver = openIptvDatabase(file.path)
     private var now = Instant.parse("2026-09-17T10:00:00Z")
     private val clock = object : Clock {
         override fun now(): Instant = now
@@ -59,7 +59,7 @@ class DetailStoreTest {
     @AfterTest
     fun cleanUp() {
         driver.close()
-        listOf("", "-wal", "-shm").forEach { File(file.path + it).delete() }
+        file.delete()
     }
 
     private fun addSource() = content.addSource(
@@ -236,7 +236,7 @@ class DetailStoreTest {
     @Test
     fun peopleForThousandsOfTitlesAreWrittenWithoutScanningEveryone() {
         addSource()
-        val started = System.nanoTime()
+        val started = TimeSource.Monotonic.markNow()
         val writer = library.beginSnapshot(playlist, ImportUnit.SERIES)
         writer.group(ChannelGroup(GroupId("sg_all"), playlist, ContentKind.SERIES, "All", 0, null))
         repeat(SHOWS) { index ->
@@ -250,7 +250,7 @@ class DetailStoreTest {
             )
         }
         writer.publish()
-        val elapsed = (System.nanoTime() - started) / 1_000_000
+        val elapsed = started.elapsedNow().inWholeMilliseconds
         assertTrue(elapsed < 20_000, "5,000 shows with cast imported in $elapsed ms")
         val hit = library.searchPeople(playlist, "Person 42", 50).first { it.name == "Person 42" }
         assertEquals(library.titlesOfPerson(playlist, "Person 42").second.size, hit.titles)

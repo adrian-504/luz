@@ -11,12 +11,11 @@ import app.iptvplayer.domain.ports.HttpTimings
 import app.iptvplayer.domain.ports.HttpTransport
 import app.iptvplayer.domain.ports.SecretStore
 import app.iptvplayer.domain.security.SecretBundle
-import app.iptvplayer.storage.BundledSqliteDriver
 import app.iptvplayer.storage.ContentStore
 import app.iptvplayer.storage.LibraryStore
 import app.iptvplayer.storage.db.IptvDatabase
+import app.iptvplayer.storage.openIptvDatabase
 import kotlinx.coroutines.test.runTest
-import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -29,8 +28,8 @@ import kotlin.time.Instant
 
 /** TMDB with the viewer's own key (ADR-0038): kept only once TMDB accepts it, lists read at most daily, forgotten on removal. */
 class TmdbServiceTest {
-    private val file: File = File.createTempFile("tmdb-service", ".db").also { it.delete() }
-    private val driver = BundledSqliteDriver.open(file.path, IptvDatabase.Schema)
+    private val file = TestDatabaseFile("tmdb-service")
+    private val driver = openIptvDatabase(file.path)
     private var now = Instant.parse("2026-09-17T10:00:00Z")
     private val clock = object : Clock {
         override fun now(): Instant = now
@@ -86,7 +85,7 @@ class TmdbServiceTest {
     @AfterTest
     fun cleanUp() {
         driver.close()
-        listOf("", "-wal", "-shm").forEach { File(file.path + it).delete() }
+        file.delete()
     }
 
     @Test

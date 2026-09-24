@@ -211,7 +211,7 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
      * (PERFORMANCE.md §6). Callers run this off the main thread after publishing. Busy readers only postpone it.
      */
     public fun checkpoint() {
-        driver.execute(null, "PRAGMA wal_checkpoint(TRUNCATE)", 0)
+        driver.checkpoint()
     }
 
     public fun unitState(playlistId: PlaylistId, unit: ImportUnit): UnitStateRecord? =

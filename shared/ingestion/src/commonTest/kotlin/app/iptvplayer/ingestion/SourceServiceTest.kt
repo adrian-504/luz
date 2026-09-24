@@ -20,12 +20,11 @@ import app.iptvplayer.domain.ports.TransportException
 import app.iptvplayer.domain.security.SecretBundle
 import app.iptvplayer.ingestion.fixtures.Fixtures
 import app.iptvplayer.protocols.media.ResolveResult
-import app.iptvplayer.storage.BundledSqliteDriver
 import app.iptvplayer.storage.ContentStore
 import app.iptvplayer.storage.EpgStore
 import app.iptvplayer.storage.db.IptvDatabase
+import app.iptvplayer.storage.openIptvDatabase
 import kotlinx.coroutines.test.runTest
-import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -102,8 +101,8 @@ private class ProviderSimulation : HttpTransport {
 }
 
 class SourceServiceTest {
-    private val file: File = File.createTempFile("ingestion", ".db").also { it.delete() }
-    private val driver = BundledSqliteDriver.open(file.path, IptvDatabase.Schema)
+    private val file = TestDatabaseFile("ingestion")
+    private val driver = openIptvDatabase(file.path)
     private val clock = object : Clock {
         override fun now(): Instant = Instant.parse("2026-09-14T11:30:00Z")
 
@@ -125,14 +124,12 @@ class SourceServiceTest {
     @AfterTest
     fun cleanUp() {
         driver.close()
-        listOf("", "-wal", "-shm").forEach { File(file.path + it).delete() }
+        file.delete()
     }
 
     /** Every byte the database wrote to disk must be free of the canary credentials (ADR-0015). */
     private fun assertDatabaseHasNoSecrets() {
-        val bytes = listOf("", "-wal").map {
-            File(file.path + it)
-        }.filter { it.exists() }.joinToString("") { String(it.readBytes(), Charsets.ISO_8859_1) }
+        val bytes = file.contents()
         assertFalse(ProviderSimulation.CANARY_PASSWORD in bytes, "password stored in the database")
         assertFalse("canary-user" in bytes, "username stored in the database")
     }
@@ -259,8 +256,7 @@ class SourceServiceTest {
         assertTrue(custom.itemCount > 0, "$custom")
         assertTrue(transport.requests.last().startsWith("https://guide.example.org/"))
         assertDatabaseHasNoSecrets()
-        val stored = listOf("", "-wal").map { File(file.path + it) }.filter { it.exists() }
-            .joinToString("") { String(it.readBytes(), Charsets.ISO_8859_1) }
+        val stored = file.contents()
         assertFalse("guide.example.org" in stored, "the guide link is a secret")
 
         service.refreshLive(playlist)

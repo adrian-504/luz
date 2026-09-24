@@ -24,7 +24,6 @@ import app.iptvplayer.domain.model.XtreamStreamKind
 import app.iptvplayer.domain.ports.Clock
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.storage.db.IptvDatabase
-import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -34,8 +33,8 @@ import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 class ContentStoreTest {
-    private val file: File = File.createTempFile("content-store", ".db").also { it.delete() }
-    private val driver = BundledSqliteDriver.open(file.path, IptvDatabase.Schema)
+    private val file = TestDatabaseFile("content-store")
+    private val driver = openIptvDatabase(file.path)
     private var now = Instant.parse("2026-09-15T10:00:00Z")
     private val clock = object : Clock {
         override fun now(): Instant = now
@@ -48,7 +47,7 @@ class ContentStoreTest {
     @AfterTest
     fun cleanUp() {
         driver.close()
-        listOf("", "-wal", "-shm").forEach { File(file.path + it).delete() }
+        file.delete()
     }
 
     private fun addSource() = store.addSource(

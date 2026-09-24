@@ -3,7 +3,6 @@ package app.iptvplayer.storage
 import app.iptvplayer.domain.id.EpgSourceId
 import app.iptvplayer.domain.id.ProgramId
 import app.iptvplayer.storage.db.IptvDatabase
-import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,8 +14,8 @@ import kotlin.time.Instant
  * abort the import (UNIQUE constraint) and take the app down. Duplicates are now ignored and the import completes.
  */
 class EpgDuplicateProgrammeTest {
-    private val file: File = File.createTempFile("epg-duplicates", ".db").also { it.delete() }
-    private val driver = BundledSqliteDriver.open(file.path, IptvDatabase.Schema)
+    private val file = TestDatabaseFile("epg-duplicates")
+    private val driver = openIptvDatabase(file.path)
     private val store = EpgStore(driver)
     private val source = EpgSourceId("src-1")
     private val start = Instant.parse("2026-09-16T10:00:00Z")
@@ -24,7 +23,7 @@ class EpgDuplicateProgrammeTest {
     @AfterTest
     fun cleanUp() {
         driver.close()
-        listOf("", "-wal", "-shm").forEach { File(file.path + it).delete() }
+        file.delete()
     }
 
     private fun programme(id: String, minutes: Int) = ProgramRow(
