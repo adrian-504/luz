@@ -44,6 +44,7 @@ import app.iptvplayer.storage.MovieRow
 import app.iptvplayer.storage.SeriesRow
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.AppGraph
+import app.iptvplayer.tv.app.ContinueCard
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.live.ChannelScope
@@ -128,6 +129,8 @@ private data class HomeCard(
     val open: () -> Unit,
     /** Opens its detail page, where there is one. */
     val details: (() -> Unit)? = null,
+    /** On "Continue watching": what a long press can mark as watched or take off the row. */
+    val continuing: ContinueCard? = null,
 )
 
 private data class HomeRow(val id: String, val title: String, val cards: List<HomeCard>, val landscape: Boolean = false)
@@ -220,19 +223,29 @@ fun HomeSection(
             HomeRowSpec(HomeTags.CONTINUE, R.string.home_continue, landscape = true) { p ->
                 graph.continueCards(p, ROW_LIMIT).map { card ->
                     HomeCard(
-                        key = card.id,
+                        // The film or the series, not the file: the card stays where it is as a series moves on.
+                        key = card.pageId,
                         title = card.title,
                         caption = listOfNotNull(
                             card.subtitle,
-                            card.remaining?.let { timeLeft(resources, it) },
+                            if (card.next) {
+                                resources.getString(
+                                    R.string.home_next_episode,
+                                )
+                            } else {
+                                card.remaining?.let { timeLeft(resources, it) }
+                            },
                         ).joinToString(" · ").ifEmpty { null },
                         poster = card.poster,
                         backdrop = card.backdrop,
                         fraction = card.fraction,
                         type = card.type,
                         facts = listOfNotNull(card.subtitle),
-                        open = { onPlayContent(p, card.type, card.id) },
-                        details = if (card.type == ContentType.MOVIE) ({ onOpenMovie(p, card.id) }) else null,
+                        favorite = card.favorite,
+                        // Until the episodes are read again after a refresh, the series' page is the way in.
+                        open = { if (card.needsEpisodes) onOpenSeries(p, card.pageId) else onPlayContent(p, card.type, card.id) },
+                        details = { if (card.type == ContentType.MOVIE) onOpenMovie(p, card.pageId) else onOpenSeries(p, card.pageId) },
+                        continuing = card,
                     )
                 }
             },
@@ -353,6 +366,7 @@ fun HomeSection(
     val hero = featured.getOrNull(page) ?: featured.first()
     val ambient = rememberAmbientColor(hero.backdrop ?: hero.poster, resolver)
     val scope = rememberCoroutineScope()
+    var menuFor by remember { mutableStateOf<Pair<String, HomeCard>?>(null) }
 
     val listState = rememberLazyListState()
     val wash = rememberRoomWash(ambient) { listState.firstVisibleItemIndex == 0 }
@@ -426,6 +440,7 @@ fun HomeSection(
                                 shape = if (row.landscape) CardShape.LANDSCAPE else CardShape.POSTER,
                                 progress = card.fraction,
                                 modifier = Modifier.rememberedFocus(focus, HomeTags.item(row.id, card.key)),
+                                onLongClick = card.continuing?.let { { menuFor = row.id to card } },
                                 onClick = card.open,
                             ) { modifier ->
                                 if (channel) {
@@ -441,6 +456,30 @@ fun HomeSection(
                     }
                 }
                 item(key = "end") { Spacer(Modifier.height(Tokens.space16)) }
+            }
+        }
+        val menuPlaylist = playlist
+        val menu = menuFor
+        if (menu != null && menuPlaylist != null) {
+            val (rowId, card) = menu
+            card.continuing?.let { continuing ->
+                ContinueMenu(
+                    playlistId = menuPlaylist,
+                    card = continuing,
+                    onOpen = { card.details?.invoke() },
+                    onDismiss = {
+                        menuFor = null
+                        // Back to the card — or, when it has just left the row, to the one now first in it.
+                        scope.launch {
+                            repeat(MENU_RETURN_ATTEMPTS) {
+                                if (focus.requestFocus(HomeTags.item(rowId, card.key))) return@launch
+                                val first = rows?.firstOrNull { it.id == rowId }?.cards?.firstOrNull()
+                                if (first != null && focus.requestFocus(HomeTags.item(rowId, first.key))) return@launch
+                                delay(MENU_RETURN_INTERVAL_MS)
+                            }
+                        }
+                    },
+                )
             }
         }
         // "Good evening", quietly over the top of the hero while it is in view.
@@ -519,6 +558,8 @@ private fun startsText(resources: android.content.res.Resources, start: kotlin.t
 }
 
 private const val GREETING_FADE_PX = 40
+private const val MENU_RETURN_ATTEMPTS = 10
+private const val MENU_RETURN_INTERVAL_MS = 50L
 private const val LANDSCAPE_PX_WIDTH = 480
 private const val LANDSCAPE_PX_HEIGHT = 270
 

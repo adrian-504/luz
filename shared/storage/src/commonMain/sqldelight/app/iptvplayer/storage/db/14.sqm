@@ -1,0 +1,47 @@
+-- Migration 14 -> 15: what was watched and what was kept follow the film and the series, not one file (ADR-0042).
+-- Must match Library.sq and Content.sq.
+ALTER TABLE watch_state ADD COLUMN work TEXT;
+ALTER TABLE watch_state ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE watch_state ADD COLUMN season_number INTEGER;
+ALTER TABLE watch_state ADD COLUMN episode_number INTEGER;
+ALTER TABLE favorite ADD COLUMN work TEXT;
+
+-- Films imported before works existed (schema 7) each count as their own work, so every film has one.
+UPDATE movie SET work_key = 'id:' || id, is_primary = 1, version_count = 1 WHERE work_key IS NULL;
+
+UPDATE watch_state SET work = (
+    SELECT m.work_key FROM movie m WHERE m.playlist_id = watch_state.playlist_id AND m.id = watch_state.content_id
+    ORDER BY m.snapshot DESC LIMIT 1
+) WHERE content_type = 'MOVIE';
+UPDATE watch_state SET work = 'id:' || content_id WHERE content_type = 'MOVIE' AND work IS NULL;
+
+UPDATE favorite SET work = (
+    SELECT m.work_key FROM movie m WHERE m.id = favorite.content_id ORDER BY m.snapshot DESC LIMIT 1
+) WHERE content_type = 'MOVIE';
+UPDATE favorite SET work = 'id:' || content_id WHERE content_type = 'MOVIE' AND work IS NULL;
+
+-- One row per film: where two versions were watched, the one played last stays; where two were kept, the first.
+DELETE FROM watch_state WHERE content_type = 'MOVIE' AND EXISTS (
+    SELECT 1 FROM watch_state o
+    WHERE o.content_type = 'MOVIE' AND o.playlist_id = watch_state.playlist_id AND o.work = watch_state.work
+        AND (o.last_played_at > watch_state.last_played_at
+            OR (o.last_played_at = watch_state.last_played_at AND o.content_id > watch_state.content_id))
+);
+DELETE FROM favorite WHERE content_type = 'MOVIE' AND EXISTS (
+    SELECT 1 FROM favorite o
+    WHERE o.content_type = 'MOVIE' AND o.work = favorite.work
+        AND (o.created_at < favorite.created_at
+            OR (o.created_at = favorite.created_at AND o.content_id < favorite.content_id))
+);
+
+-- Where an episode sits in its series, for the episodes still loaded.
+UPDATE watch_state SET
+    season_number = (SELECT e.season_number FROM episode e
+        WHERE e.playlist_id = watch_state.playlist_id AND e.id = watch_state.content_id ORDER BY e.snapshot DESC LIMIT 1),
+    episode_number = (SELECT e.episode_number FROM episode e
+        WHERE e.playlist_id = watch_state.playlist_id AND e.id = watch_state.content_id ORDER BY e.snapshot DESC LIMIT 1)
+WHERE content_type = 'EPISODE';
+
+CREATE INDEX watch_work ON watch_state(content_type, work);
+CREATE INDEX watch_parent ON watch_state(content_type, parent_id, last_played_at);
+CREATE INDEX favorite_work ON favorite(content_type, work);

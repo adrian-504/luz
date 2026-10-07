@@ -516,6 +516,27 @@ build signed with the sharing key cannot replace them without uninstalling first
 Follow-ups found on the way: a budget for film and show import times on the reference television (88 s and 3 min 41 s
 today, ADR-0035); Home takes about two seconds to fill every row on the Bbox and now shows rows as they arrive.
 
+## Luz redesign programme (owner's go, 2026-10-07)
+
+The owner chose to build the whole concept (<https://claude.ai/artifact/JPE6U3iksdZXV8B2ZbyFZD>) into the Android TV app,
+in ten stages of about 9 to 11 working days, each ending in a build the owner can use. Phase 9 and the iPhone app stay
+paused. Smoothness on the Bbox decides what stays: every animation and the stage layout are measured there.
+
+| # | Stage | Status |
+|---|---|---|
+| 1 | Watching and keeping rebuilt per film and series (ADR-0042) | **Built 2026-10-07** — storage tests (38 on the host, upgrade of schema 14 included) and the library flow tests on the emulator; not yet on the owner's TV |
+| 2 | The stage layout on Home, Movies, Series; cleaned names, badges | Not started |
+| 3 | My Luz, the menu, Guide empty state, Settings, search keyboard | Not started |
+| 4 | Title page and motion | Not started |
+| 5 | Player: pause screen, replay with subtitles, Up next picture, speed, subtitle size | Not started |
+| 6 | Live TV: last-channels strip, channel numbers, cleaned names | Not started |
+| 7 | Smart rows: Jump back in, Top 10, franchises, networks, Play something | Not started |
+| 8 | Speed: optimised release build, startup profile, preloading | Not started |
+| 9 | Backup and restore, update notice, crash record | Not started |
+| 10 | Final checks and release | Not started |
+
+Skip intro and credits (TheIntroDB) is not in the plan until its terms are read.
+
 ## Proposed interim gate: Android TV personal alpha
 
 The spec's private-beta gate (§21.1) requires all three primary platforms, so the first beta would come only

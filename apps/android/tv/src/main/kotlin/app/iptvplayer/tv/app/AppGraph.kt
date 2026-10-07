@@ -84,9 +84,10 @@ data class Recommendation(val seed: MovieRow, val movies: List<MovieRow>)
 /** The shelves under a title's page: its director's other titles (named by [director]) and titles like it. */
 data class TitleShelves<T>(val director: String?, val byDirector: List<T>, val moreLikeThis: List<T>)
 
-/** A movie or episode on Home's "Continue watching" row. */
+/** A film or a series on "Continue watching" (ADR-0042): one card for the film, one for the series. */
 data class ContinueCard(
     val type: ContentType,
+    /** What OK plays: the version of the film that was being watched, or the episode the series has reached. */
     val id: String,
     val title: String,
     val subtitle: String?,
@@ -96,6 +97,14 @@ data class ContinueCard(
     val backdrop: UrlTemplate? = null,
     /** How much is left to watch, when the length is known. */
     val remaining: kotlin.time.Duration? = null,
+    /** The page behind the card: the film as its shelves show it, or the series. */
+    val pageId: String = id,
+    /** An episode that has not been started: the one after the episode finished last. */
+    val next: Boolean = false,
+    /** The series' episodes are still to be read from the provider; until then OK opens the series, not an episode. */
+    val needsEpisodes: Boolean = false,
+    /** Whether the film is in My List. */
+    val favorite: Boolean = false,
 )
 
 /** A programme on Home's "Coming up" row: what, when, and the channel to jump to. */
@@ -858,37 +867,76 @@ class AppGraph(context: Context) {
 
     /** "Continue watching" cards with titles and artwork, most recent first (FR-HOME-001). */
     suspend fun continueCards(playlistId: PlaylistId, limit: Int): List<ContinueCard> = io {
-        library.continueWatching(playlistId, limit).mapNotNull { item ->
+        val items = library.continueWatching(playlistId, limit)
+        loadEpisodesFor(playlistId, items.filter { it.needsEpisodes }.mapNotNull { it.parentId })
+        items.mapNotNull { item ->
             when (item.type) {
-                ContentType.MOVIE -> library.movie(playlistId, item.id)?.let {
-                    ContinueCard(
-                        item.type,
-                        item.id,
-                        it.title,
-                        null,
-                        it.poster,
-                        item.progress.fraction,
-                        it.backdrop,
-                        item.progress.remaining,
-                    )
+                ContentType.MOVIE -> {
+                    // The film as its shelves show it — the title without a version's "CAM" or "4K" — and OK plays the
+                    // version that was being watched.
+                    val pageId = library.primaryVersion(playlistId, item.id)
+                    (library.movie(playlistId, pageId) ?: library.movie(playlistId, item.id))?.let {
+                        ContinueCard(
+                            item.type, item.id, it.title, null, it.poster, item.progress?.fraction, it.backdrop,
+                            item.progress?.remaining, pageId = pageId, favorite = it.isFavorite,
+                        )
+                    }
                 }
-                ContentType.EPISODE -> library.episode(playlistId, item.id)?.let { episode ->
-                    val series = library.seriesById(playlistId, episode.seriesId)
-                    ContinueCard(
-                        item.type,
-                        item.id,
-                        series?.title ?: episode.title.orEmpty(),
-                        "S${episode.seasonNumber} E${episode.episodeNumber}",
-                        series?.poster,
-                        item.progress.fraction,
-                        series?.backdrop,
-                        item.progress.remaining,
-                    )
+                ContentType.EPISODE -> item.parentId?.let { seriesId ->
+                    library.seriesById(playlistId, seriesId)?.let { series ->
+                        val place = if (item.season != null && item.episode != null) "S${item.season} E${item.episode}" else null
+                        ContinueCard(
+                            item.type, item.id, series.title, place.takeUnless { item.needsEpisodes }, series.poster,
+                            item.progress?.fraction, series.backdrop, item.progress?.remaining,
+                            pageId = seriesId, next = item.next, needsEpisodes = item.needsEpisodes,
+                        )
+                    }
                 }
                 else -> null
             }
         }
     }
+
+    private val episodeLoads = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * A refresh reads the provider's series list again, and each series' episodes only when it is opened. For the few
+     * series the viewer is in the middle of, read them now, in the background, so "Continue watching" can name the next
+     * episode; the row is drawn again when they arrive.
+     */
+    private fun loadEpisodesFor(playlistId: PlaylistId, seriesIds: List<String>) {
+        for (seriesId in seriesIds.take(EPISODE_LOADS)) {
+            if (!episodeLoads.add(seriesId)) continue
+            scope.launch {
+                val loaded = runCatching { io { service.loadSeriesDetail(playlistId, seriesId) == null } }.getOrDefault(false)
+                // A provider that did not answer is asked again the next time the app starts, not on every redraw.
+                if (loaded) mutableWatchRevision.update { it + 1 }
+            }
+        }
+    }
+
+    /** Marks a film, an episode or a series as watched or not (ADR-0042); a series' episodes are read first if needed. */
+    suspend fun setWatched(playlistId: PlaylistId, type: ContentType, id: String, watched: Boolean) {
+        io {
+            if (type == ContentType.SERIES && watched && library.episodes(playlistId, id).isEmpty()) {
+                service.loadSeriesDetail(playlistId, id)
+            }
+            library.setWatched(playlistId, type, id, watched)
+        }
+        mutableWatchRevision.update { it + 1 }
+    }
+
+    /** Takes a card off "Continue watching" until the film or series is played again. */
+    suspend fun dismissFromContinue(playlistId: PlaylistId, card: ContinueCard) {
+        io { library.dismissFromContinue(playlistId, card.type, card.id, card.pageId.takeIf { card.type == ContentType.EPISODE }) }
+        mutableWatchRevision.update { it + 1 }
+    }
+
+    /** The version of a film that was being watched, so "Resume" carries on in it without asking which. */
+    suspend fun watchedVersion(playlistId: PlaylistId, movieId: String): String? = io { library.watchedVersion(playlistId, movieId) }
+
+    /** Whether any episode of the series has been played or marked. */
+    suspend fun seriesStarted(seriesId: String): Boolean = io { library.lastWatchedEpisode(seriesId) != null }
 
     /** Local search over the current source (FR-SRCH-001/003): no network, results grouped by type. */
     suspend fun search(playlistId: PlaylistId, query: String, limit: Int = 30): SearchResults = io {
@@ -909,7 +957,7 @@ class AppGraph(context: Context) {
     /** A movie or episode ready to play, resuming from its saved position unless [fromStart]. */
     suspend fun contentPlaybackRequest(playlistId: PlaylistId, type: ContentType, id: String, fromStart: Boolean): PlaybackRequest? = io {
         val resolved = service.resolveContent(playlistId, type, id) as? ResolveResult.Resolved ?: return@io null
-        val resume = library.progress(type, id)?.takeIf { !fromStart && !it.completed && it.position.isPositive() }?.position
+        val resume = library.progress(playlistId, type, id)?.takeIf { !fromStart && !it.completed && it.position.isPositive() }?.position
         PlaybackRequest(resolved.source, PlaybackMode.VOD, startPosition = resume)
     }
 
@@ -1002,6 +1050,9 @@ class AppGraph(context: Context) {
         val JUST_STARTED = 10.minutes
         val COMING_UP_AHEAD = 3.hours
         const val GENRE_HISTORY = 30
+
+        /** How many series "Continue watching" reads the episodes of at once, after a refresh. */
+        const val EPISODE_LOADS = 6
         const val MIN_GENRE_WATCHED = 2
         const val NEAR_YEARS = 8
     }

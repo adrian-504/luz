@@ -27,6 +27,7 @@ import app.iptvplayer.tv.ui.library.SearchTags
 import app.iptvplayer.tv.ui.player.PlayerTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
+import app.iptvplayer.tv.ui.theme.LuzMenuTags
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -291,5 +292,56 @@ class LibraryFlowTest {
 
         // The series now continues with episode 2.
         awaitText(DetailTags.PLAY, "S1 E2")
+
+        // "Continue watching" has one card for the series, on the episode that follows the one finished (ADR-0042).
+        val card = runBlocking { graph.continueCards(playlist, 10) }.single()
+        assertEquals(series.id, card.pageId)
+        assertEquals("S1 E2", card.subtitle)
+
+        // Home: a long press on that card can take it off the row.
+        press(KeyEvent.KEYCODE_BACK)
+        awaitFocus(LibraryTags.item(series.id))
+        press(KeyEvent.KEYCODE_BACK)
+        awaitFocus(LibraryTags.tile(Browse.ALL))
+        press(KeyEvent.KEYCODE_BACK)
+        awaitFocus(ShellTags.rail(Section.SERIES))
+        walkTabsTo(
+            Section.HOME,
+            ::focusedTag,
+            { key -> press(key) },
+        ) { timeout, condition -> runCatching { rule.waitUntil(timeout, condition) } }
+        awaitFocus(ShellTags.rail(Section.HOME))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(HomeTags.HERO_PLAY, timeout = 20_000)
+        pressUntilFocused(KeyEvent.KEYCODE_DPAD_DOWN, HomeTags.item(HomeTags.CONTINUE, series.id), times = 3)
+        longPressOk()
+        awaitFocus(LuzMenuTags.item("open"))
+        pressUntilFocused(KeyEvent.KEYCODE_DPAD_DOWN, LuzMenuTags.item("remove-continue"), times = 4)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.waitUntil(10_000) { runBlocking { graph.continueCards(playlist, 10) }.isEmpty() }
+        rule.waitUntil(10_000) {
+            rule.onAllNodes(hasTestTag(HomeTags.item(HomeTags.CONTINUE, series.id))).fetchSemanticsNodes().isEmpty()
+        }
+        // Its progress is kept: the series' page still knows where the viewer is.
+        assertEquals(true, runBlocking { graph.episode(playlist, first.id) }?.progress?.completed)
+    }
+
+    /** Holding OK: the remote sends repeats, and the first of them is the long press (ADR-0031). */
+    private fun longPressOk() {
+        val down = android.os.SystemClock.uptimeMillis()
+        instrumentation.sendKeySync(KeyEvent(down, down, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, 0))
+        Thread.sleep(700)
+        instrumentation.sendKeySync(
+            KeyEvent(down, android.os.SystemClock.uptimeMillis(), KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, 1),
+        )
+        Thread.sleep(100)
+        instrumentation.sendKeySync(
+            KeyEvent(down, android.os.SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER, 0),
+        )
+        rule.waitForIdle()
+        // A person lets go and looks before choosing; a menu ignores OK until the button has been quiet (LuzMenu).
+        Thread.sleep(MENU_SETTLE_MS)
     }
 }
+
+private const val MENU_SETTLE_MS = 300L

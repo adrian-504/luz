@@ -25,10 +25,11 @@ kotlin {
     }
 }
 
-// Same rule as the shared modules: tvOS simulator tests wait for a tvOS runtime (iptv.kmp-library.gradle.kts).
-val simulatorRuntimes = providers.exec { commandLine("xcrun", "simctl", "list", "runtimes") }.standardOutput.asText
+// Same rule as the shared modules: tvOS simulator tests wait for a tvOS runtime (iptv.kmp-library.gradle.kts). Decided
+// while the build is configured, because a condition checked later would hold a reference to this script, which the
+// configuration cache cannot store.
+val tvosRuntimeInstalled = providers.exec { commandLine("xcrun", "simctl", "list", "runtimes") }
+    .standardOutput.asText.map { it.contains("tvOS") }.getOrElse(false)
 tasks.matching { it.name == "tvosSimulatorArm64Test" }.configureEach {
-    onlyIf("a tvOS simulator runtime is installed (xcodebuild -downloadPlatform tvOS)") {
-        simulatorRuntimes.getOrElse("").contains("tvOS")
-    }
+    enabled = tvosRuntimeInstalled
 }

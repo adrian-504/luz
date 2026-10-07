@@ -92,6 +92,8 @@ private data class ShelfItem(
     val progress: Float?,
     val favorite: Boolean,
     val year: Int? = null,
+    /** A film watched to the end; a series is asked about when its menu opens. */
+    val watched: Boolean = false,
 )
 
 /** The last page built for each source and kind, kept while Luz runs. */
@@ -156,6 +158,7 @@ fun LibraryShelves(
             row.progress?.takeIf { !it.completed }?.fraction,
             row.isFavorite,
             row.year,
+            watched = row.progress?.completed == true,
         )
         fun series(row: SeriesRow) = ShelfItem(
             row.id,
@@ -190,7 +193,7 @@ fun LibraryShelves(
                     "continue",
                     R.string.home_continue,
                     graph.continueCards(playlist, SHELF_LIMIT).filter { it.type == ContentType.MOVIE }.mapNotNull { card ->
-                        graph.movie(playlist, card.id)?.let(::movie)
+                        graph.movie(playlist, card.pageId)?.let(::movie)
                     },
                 ),
             )
@@ -234,6 +237,18 @@ fun LibraryShelves(
                 add(Shelf.Titles("group-${group.id}", group.title, graph.moviesInUserGroup(playlist, group.id, SHELF_LIMIT).map(::movie)))
             }
         } else {
+            add(
+                titles(
+                    "continue",
+                    R.string.home_continue,
+                    graph.continueCards(playlist, SHELF_LIMIT).filter { it.type == ContentType.EPISODE }.mapNotNull { card ->
+                        graph.seriesById(playlist, card.pageId)?.let { row ->
+                            val place = listOfNotNull(card.subtitle, resources.getString(R.string.home_next_episode).takeIf { card.next })
+                            series(row).copy(caption = place.joinToString(" · ").ifEmpty { row.year?.toString() }, progress = card.fraction)
+                        }
+                    },
+                ),
+            )
             add(
                 titles(
                     "trending",
@@ -459,7 +474,7 @@ fun LibraryShelves(
     menuFor?.let { (shelfKey, item) ->
         TitleMenu(
             playlist,
-            TitleTarget(if (movies) ContentType.MOVIE else ContentType.SERIES, item.id, item.title, item.favorite),
+            TitleTarget(if (movies) ContentType.MOVIE else ContentType.SERIES, item.id, item.title, item.favorite, item.watched),
             onOpen = { onOpen(item.id) },
             onDismiss = {
                 menuFor = null

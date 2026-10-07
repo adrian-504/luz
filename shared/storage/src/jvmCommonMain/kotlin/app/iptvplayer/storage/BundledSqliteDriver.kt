@@ -39,11 +39,24 @@ public class BundledSqliteDriver private constructor(private val connection: SQL
             val version = driver.executeQuery(null, "PRAGMA user_version", { cursor ->
                 QueryResult.Value(if (cursor.next().value) cursor.getLong(0) ?: 0L else 0L)
             }, 0).value
-            when {
-                version == 0L -> schema.create(driver)
-                version < schema.version -> schema.migrate(driver, version, schema.version)
+            if (version != schema.version) {
+                // All or nothing: an upgrade that fails part-way leaves the database exactly as it was — the viewer's
+                // sources, favourites and progress untouched at the old version — rather than half-changed, where the
+                // next start would trip over a column that is already there.
+                driver.execute(null, "BEGIN IMMEDIATE", 0)
+                try {
+                    when {
+                        version == 0L -> schema.create(driver)
+                        version < schema.version -> schema.migrate(driver, version, schema.version)
+                    }
+                    driver.execute(null, "PRAGMA user_version=${schema.version}", 0)
+                    driver.execute(null, "COMMIT", 0)
+                } catch (failure: Throwable) {
+                    runCatching { driver.execute(null, "ROLLBACK", 0) }
+                    driver.close()
+                    throw failure
+                }
             }
-            if (version != schema.version) driver.execute(null, "PRAGMA user_version=${schema.version}", 0)
             return driver
         }
     }

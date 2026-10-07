@@ -88,7 +88,7 @@ public data class ChannelRow(
  */
 public class ContentStore(private val driver: SqlDriver, private val clock: Clock) {
     private val database = IptvDatabase(driver)
-    private val queries = database.contentQueries
+    internal val queries = database.contentQueries
     internal val libraryQueries = database.libraryQueries
     internal val searchQueries = database.searchQueries
     internal val detailQueries = database.detailQueries
@@ -467,9 +467,19 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
         setFavorite(ContentType.CHANNEL, channelId.value, favorite)
     }
 
-    /** Favorites are user state keyed by content type and stable id; imports never delete them. */
+    /**
+     * Favorites are user state keyed by content type and stable id; imports never delete them. A film is kept as the work
+     * it is a version of, so it is kept once and shows as kept on every version (ADR-0042).
+     */
     public fun setFavorite(type: ContentType, id: String, favorite: Boolean) {
-        if (favorite) {
+        if (type == ContentType.MOVIE) {
+            val work = libraryQueries.workOfAnyMovie(id).executeAsOneOrNull()?.work_key ?: "id:$id"
+            if (favorite) {
+                queries.addFavoriteWork(type.name, id, clock.now().toEpochMilliseconds(), work)
+            } else {
+                queries.removeFavoriteWork(type.name, work)
+            }
+        } else if (favorite) {
             queries.addFavorite(type.name, id, clock.now().toEpochMilliseconds())
         } else {
             queries.removeFavorite(type.name, id)

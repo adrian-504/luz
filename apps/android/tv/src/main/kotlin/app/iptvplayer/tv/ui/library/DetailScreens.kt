@@ -152,8 +152,10 @@ fun MovieDetailScreen(
     var loaded by remember { mutableStateOf(false) }
     var choosing by remember { mutableStateOf<Boolean?>(null) }
     var trailerMissing by remember { mutableStateOf(false) }
+    var watchedVersion by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(revision, watched) {
         movie = graph.movie(playlistId, movieId)
+        watchedVersion = graph.watchedVersion(playlistId, movieId)
         detail = graph.detail(playlistId, ContentType.MOVIE, movieId)
         loaded = true
         if (movie != null) {
@@ -183,7 +185,15 @@ fun MovieDetailScreen(
     // The provider's wide picture; TMDB's when the provider has none or only repeats the poster (ADR-0039).
     val backdrop = widePicture(info?.backdrop ?: item.backdrop, item.poster, tmdbArt.backdropUrl)
     val ambient = rememberAmbientColor(backdrop, resolver)
-    val play = { fromStart: Boolean -> if (versions.size > 1) choosing = fromStart else onPlay(item.id, fromStart) }
+    // Resume carries on in the version that was being watched, without asking which (ADR-0042); a fresh start asks.
+    val play = { fromStart: Boolean ->
+        val going = watchedVersion?.takeIf { version -> !fromStart && resume != null && versions.any { it.id == version } }
+        when {
+            going != null -> onPlay(going, false)
+            versions.size > 1 -> choosing = fromStart
+            else -> onPlay(item.id, fromStart)
+        }
+    }
     val shelves by produceState(TitleShelves<MovieRow>(null, emptyList(), emptyList()), item.id, info != null, versions) {
         value = graph.movieShelves(playlistId, item.id, versions.map { it.id }.toSet(), SHELF_TITLES)
     }
@@ -320,6 +330,7 @@ fun SeriesDetailScreen(
     var loaded by remember { mutableStateOf(false) }
     var season by rememberSaveable { mutableStateOf<Int?>(null) }
     var lastWatchedId by remember { mutableStateOf<String?>(null) }
+    var episodeMenu by remember { mutableStateOf<Pair<EpisodeRow, String>?>(null) }
 
     LaunchedEffect(revision, watched) {
         series = graph.seriesById(playlistId, seriesId)
@@ -427,7 +438,14 @@ fun SeriesDetailScreen(
                     val title = shownSeason?.let { stringResource(R.string.series_season, it) }.orEmpty()
                     LuzShelf(title = title) {
                         items(shown.size, key = { shown[it].id }) { index ->
-                            EpisodeCard(shown[index], item.title, episodeArt[shown[index].episodeNumber], resolver, focus) {
+                            EpisodeCard(
+                                shown[index],
+                                item.title,
+                                episodeArt[shown[index].episodeNumber],
+                                resolver,
+                                focus,
+                                onMenu = { name -> episodeMenu = shown[index] to name },
+                            ) {
                                 onPlayEpisode(shown[index].id, false)
                             }
                         }
@@ -461,6 +479,23 @@ fun SeriesDetailScreen(
                 modifier = Modifier.rememberedFocus(focus, DetailTags.ABOUT),
             )
         }
+    }
+    episodeMenu?.let { (episode, name) ->
+        val seen = episode.progress?.completed == true
+        LuzMenu(
+            title = name,
+            items = listOf(
+                LuzMenuItem("play", stringResource(R.string.detail_play)) { onPlayEpisode(episode.id, false) },
+                LuzMenuItem(
+                    if (seen) "mark-unwatched" else "mark-watched",
+                    stringResource(if (seen) R.string.menu_mark_unwatched else R.string.menu_mark_watched),
+                ) { graph.scope.launch { graph.setWatched(playlistId, ContentType.EPISODE, episode.id, !seen) } },
+            ),
+            onDismiss = {
+                episodeMenu = null
+                focus.requestFocus(DetailTags.episode(episode.id))
+            },
+        )
     }
     RestoreFocusEffect(focus, DetailTags.PLAY)
 }
@@ -558,6 +593,7 @@ private fun EpisodeCard(
     art: EpisodeArt?,
     resolver: ((UrlTemplate) -> String?)?,
     focus: FocusMemory,
+    onMenu: (String) -> Unit,
     onPlay: () -> Unit,
 ) {
     // The provider's name for the episode, once the show's name and the numbering it repeats are taken off, then TMDB's.
@@ -573,6 +609,7 @@ private fun EpisodeCard(
         shape = CardShape.LANDSCAPE,
         modifier = Modifier.rememberedFocus(focus, DetailTags.episode(episode.id)),
         progress = episode.progress?.takeIf { !it.completed }?.fraction,
+        onLongClick = { onMenu(title) },
         onClick = onPlay,
     ) { modifier ->
         Box(modifier) {

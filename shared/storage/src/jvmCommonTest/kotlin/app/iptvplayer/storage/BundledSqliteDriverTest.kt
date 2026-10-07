@@ -1,6 +1,9 @@
 package app.iptvplayer.storage
 
+import app.cash.sqldelight.db.AfterVersion
 import app.cash.sqldelight.db.QueryResult
+import app.cash.sqldelight.db.SqlDriver
+import app.cash.sqldelight.db.SqlSchema
 import app.iptvplayer.domain.id.EpgSourceId
 import app.iptvplayer.domain.id.ProgramId
 import app.iptvplayer.storage.db.IptvDatabase
@@ -108,6 +111,33 @@ class BundledSqliteDriverTest {
         val reopened = open()
         assertEquals(5, EpgStore(reopened).count(source, 1))
         assertEquals("${IptvDatabase.Schema.version}", reopened.single("PRAGMA user_version"))
+        reopened.close()
+    }
+
+    @Test
+    fun anUpgradeThatFailsLeavesTheDatabaseAsItWas() {
+        open().close()
+        // A later version of the schema whose upgrade breaks after its first step.
+        val broken = object : SqlSchema<QueryResult.Value<Unit>> {
+            override val version: Long = IptvDatabase.Schema.version + 1
+
+            override fun create(driver: SqlDriver): QueryResult.Value<Unit> = error("not a new database")
+
+            override fun migrate(
+                driver: SqlDriver,
+                oldVersion: Long,
+                newVersion: Long,
+                vararg callbacks: AfterVersion,
+            ): QueryResult.Value<Unit> {
+                driver.execute(null, "CREATE TABLE half_done (x INTEGER)", 0)
+                error("the second step failed")
+            }
+        }
+        assertFailsWith<IllegalStateException> { BundledSqliteDriver.open(file.path, broken) }
+
+        val reopened = open()
+        assertEquals("${IptvDatabase.Schema.version}", reopened.single("PRAGMA user_version"), "still the version it had")
+        assertEquals(null, reopened.single("SELECT name FROM sqlite_master WHERE name = 'half_done'"), "the first step was undone")
         reopened.close()
     }
 

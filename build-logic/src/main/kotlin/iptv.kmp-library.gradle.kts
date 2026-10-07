@@ -99,13 +99,14 @@ tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeSimu
 }
 
 // Apple TV comes after the iPhone (ROADMAP, 2026-09-21), and its simulator is a separate multi-gigabyte download not
-// installed yet. Without it the tvOS tests are skipped, saying why, rather than failing; the tvOS code still compiles on
-// every run, and the tests run by themselves once `xcodebuild -downloadPlatform tvOS` has been done.
+// installed yet. Without it the tvOS tests are switched off rather than failing; the tvOS code still compiles on every
+// run, and the tests run by themselves once `xcodebuild -downloadPlatform tvOS` has been done. Decided while the build is
+// configured: a condition checked later would have to hold a reference to this script, which the configuration cache
+// cannot store.
 if (appleTargetsEnabled) {
-    val simulatorRuntimes = providers.exec { commandLine("xcrun", "simctl", "list", "runtimes") }.standardOutput.asText
+    val tvosRuntimeInstalled = providers.exec { commandLine("xcrun", "simctl", "list", "runtimes") }
+        .standardOutput.asText.map { it.contains("tvOS") }.getOrElse(false)
     tasks.matching { it.name == "tvosSimulatorArm64Test" }.configureEach {
-        onlyIf("a tvOS simulator runtime is installed (xcodebuild -downloadPlatform tvOS)") {
-            simulatorRuntimes.getOrElse("").contains("tvOS")
-        }
+        enabled = tvosRuntimeInstalled
     }
 }

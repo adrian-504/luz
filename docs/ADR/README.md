@@ -62,3 +62,4 @@ line. Product-scope decisions still go to the owner.
 | [0039](0039-tmdb-artwork-for-opened-titles-and-people.md) | TMDB artwork for the titles and people the viewer opens | Accepted |
 | [0040](0040-channel-logos-and-live-tv-categories.md) | Channel logos made to sit well, and Live TV categories the viewer arranges | Accepted |
 | [0041](0041-apple-playback-with-a-vlckit-fallback.md) | Apple playback — AVPlayer first, MobileVLCKit for what it cannot play | Accepted |
+| [0042](0042-watching-and-keeping-follow-the-work.md) | Watching and keeping follow the film and the series, not one file | Accepted |

@@ -14,6 +14,7 @@ import app.iptvplayer.domain.model.Series
 import app.iptvplayer.domain.model.TitleDetail
 import app.iptvplayer.domain.ports.Clock
 import app.iptvplayer.domain.security.UrlTemplate
+import app.iptvplayer.storage.db.Watch_state
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -183,18 +184,31 @@ public data class DetailCoverage(
     public val releaseDate: Long,
 )
 
-/** A movie or episode to continue, most recently played first. */
+/** What "Continue watching" offers: a film stopped part-way, or the episode a series has reached (ADR-0042). */
 public data class ContinueItem(
     public val type: ContentType,
+    /** The film version or the episode to play. With [needsEpisodes] it is the episode that was finished last. */
     public val id: String,
     public val parentId: String?,
-    public val progress: WatchProgress,
+    /** Null for an episode that has not been started. */
+    public val progress: WatchProgress?,
+    public val playedAt: Instant,
+    /** The episode after the one finished last, rather than one stopped part-way. */
+    public val next: Boolean = false,
+    public val season: Int? = null,
+    public val episode: Int? = null,
+    /**
+     * The series' episodes are not loaded — the provider's list is read again after every refresh — so which episode
+     * comes next is not known yet. Opening the series loads them.
+     */
+    public val needsEpisodes: Boolean = false,
 )
 
 /**
  * Movies and series of a source (ROADMAP Phase 8). Each unit (MOVIES, SERIES) is imported into its own snapshot and published
  * atomically like live channels; Xtream seasons and episodes are added to the active SERIES snapshot when a series is opened.
- * Watch state is user state keyed by stable content ids, so it survives refreshes.
+ * Watch state is user state, so it survives refreshes: an episode's by its id, a film's by the work it is a version of — one
+ * record for the film, whichever version was played (ADR-0042).
  */
 public class LibraryStore(private val content: ContentStore, private val clock: Clock) {
     private val queries = content.libraryQueries
@@ -407,6 +421,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
     /**
      * Saves progress for a movie or episode. Completed at 95 % of a known duration (DOMAIN_MODEL.md); [newSession] counts a
      * play. Positions under 10 seconds from the start are stored as 0 so a quick look does not appear in "Continue watching".
+     * A film has one record: saving for one version replaces what was saved for another (ADR-0042).
      */
     public fun saveProgress(
         playlistId: PlaylistId,
@@ -421,21 +436,179 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
         require(type == ContentType.MOVIE || type == ContentType.EPISODE) { "progress is saved for movies and episodes" }
         val completed = ended || (duration != null && duration.isPositive() && position >= duration * COMPLETED_FRACTION)
         val stored = if (completed || position < MIN_RESUME_POSITION) Duration.ZERO else position
-        queries.upsertWatchState(
-            type.name, id, playlistId.value, parentId, stored.inWholeMilliseconds, duration?.inWholeMilliseconds,
-            if (completed) 1L else 0L, clock.now().toEpochMilliseconds(), newSession,
+        writeState(playlistId, type, id, parentId, stored, duration, completed, clock.now().toEpochMilliseconds(), newSession)
+    }
+
+    private fun writeState(
+        playlistId: PlaylistId,
+        type: ContentType,
+        id: String,
+        parentId: String?,
+        position: Duration,
+        duration: Duration?,
+        completed: Boolean,
+        at: Long,
+        newSession: Boolean,
+    ) {
+        if (type == ContentType.MOVIE) {
+            val work = workOf(playlistId, id)
+            content.transaction {
+                queries.deleteOtherVersionsWatched(playlistId.value, work, id)
+                queries.upsertWatchState(
+                    type = type.name, id = id, playlistId = playlistId.value, parentId = null,
+                    positionMs = position.inWholeMilliseconds, durationMs = duration?.inWholeMilliseconds,
+                    completed = if (completed) 1L else 0L, now = at, work = work, season = null, episode = null,
+                    newSession = newSession,
+                )
+            }
+        } else {
+            val place = active(playlistId, ImportUnit.SERIES)
+                ?.let { queries.placeOfEpisode(playlistId.value, it, id).executeAsOneOrNull() }
+            queries.upsertWatchState(
+                type = type.name, id = id, playlistId = playlistId.value, parentId = parentId ?: place?.series_id,
+                positionMs = position.inWholeMilliseconds,
+                durationMs = (duration ?: place?.duration_seconds?.seconds)?.inWholeMilliseconds,
+                completed = if (completed) 1L else 0L, now = at, work = null,
+                season = place?.season_number, episode = place?.episode_number, newSession = newSession,
+            )
+        }
+    }
+
+    /** The work the film [movieId] is a version of; a film the library no longer lists is its own. */
+    private fun workOf(playlistId: PlaylistId, movieId: String): String = active(playlistId, ImportUnit.MOVIES)
+        ?.let { queries.workOfMovie(playlistId.value, it, movieId).executeAsOneOrNull()?.work_key }
+        ?: "id:$movieId"
+
+    /** How far the viewer is. For a film this is the same whichever of its versions [id] names (ADR-0042). */
+    public fun progress(playlistId: PlaylistId, type: ContentType, id: String): WatchProgress? {
+        val row = if (type == ContentType.MOVIE) {
+            queries.watchStateOfWork(playlistId.value, workOf(playlistId, id)).executeAsOneOrNull()
+        } else {
+            queries.watchState(type.name, id).executeAsOneOrNull()
+        }
+        return row?.let { progressOf(it.position_ms, it.duration_ms, it.completed) }
+    }
+
+    /** The version of the film [id] that was played last, when one was — "Resume" goes back to it without asking. */
+    public fun watchedVersion(playlistId: PlaylistId, id: String): String? =
+        queries.watchStateOfWork(playlistId.value, workOf(playlistId, id)).executeAsOneOrNull()?.content_id
+
+    /** The version of the film [id] that stands for it on shelves (the best one the provider lists). */
+    public fun primaryVersion(playlistId: PlaylistId, id: String): String {
+        val snapshot = active(playlistId, ImportUnit.MOVIES) ?: return id
+        return queries.primaryOfWork(playlistId.value, snapshot, workOf(playlistId, id)).executeAsOneOrNull() ?: id
+    }
+
+    /**
+     * "Continue watching", most recently played first (ADR-0042): every film stopped part-way, once; and one entry for
+     * every series — the episode stopped part-way, or after a finished one the episode that follows. A series whose last
+     * episode was finished is not listed, nor is anything the viewer took off the list until it is played again.
+     */
+    public fun continueWatching(playlistId: PlaylistId, limit: Int): List<ContinueItem> {
+        val films = queries.moviesInProgress(playlistId.value, limit.toLong()).executeAsList().mapNotNull { row ->
+            progressOf(row.position_ms, row.duration_ms, row.completed)?.let {
+                ContinueItem(ContentType.MOVIE, row.content_id, null, it, Instant.fromEpochMilliseconds(row.last_played_at))
+            }
+        }
+        val shows = queries.lastEpisodeOfEachSeries(playlistId.value, limit.toLong()).executeAsList()
+            // Two episodes saved in the same millisecond: the later one in the series is where the viewer is.
+            .groupBy { it.parent_id }
+            .values
+            .mapNotNull { rows ->
+                seriesItem(playlistId, rows.maxWith(compareBy({ it.season_number ?: 0L }, { it.episode_number ?: 0L })))
+            }
+        return (films + shows).sortedByDescending { it.playedAt }.take(limit)
+    }
+
+    private fun seriesItem(playlistId: PlaylistId, row: Watch_state): ContinueItem? {
+        val seriesId = row.parent_id ?: return null
+        if (row.dismissed == 1L) return null
+        val playedAt = Instant.fromEpochMilliseconds(row.last_played_at)
+        if (row.completed != 1L) {
+            val started = row.position_ms > 0
+            return ContinueItem(
+                ContentType.EPISODE,
+                row.content_id,
+                seriesId,
+                progress = if (started) progressOf(row.position_ms, row.duration_ms, row.completed) else null,
+                playedAt = playedAt,
+                next = !started,
+                season = row.season_number?.toInt(),
+                episode = row.episode_number?.toInt(),
+            )
+        }
+        val all = episodes(playlistId, seriesId)
+        val index = all.indexOfFirst { it.id == row.content_id }
+        if (index < 0) {
+            return ContinueItem(
+                ContentType.EPISODE, row.content_id, seriesId, progress = null, playedAt = playedAt, next = true,
+                season = row.season_number?.toInt(), episode = row.episode_number?.toInt(), needsEpisodes = true,
+            )
+        }
+        val following = all.getOrNull(index + 1) ?: return null
+        val partial = following.progress?.takeIf { !it.completed && it.position.isPositive() }
+        return ContinueItem(
+            ContentType.EPISODE,
+            following.id,
+            seriesId,
+            progress = partial,
+            playedAt = playedAt,
+            next = partial == null,
+            season = following.seasonNumber,
+            episode = following.episodeNumber,
         )
     }
 
-    public fun progress(type: ContentType, id: String): WatchProgress? =
-        queries.watchState(type.name, id).executeAsOneOrNull()?.let { progressOf(it.position_ms, it.duration_ms, it.completed) }
-
-    /** Movies and episodes started but not finished, most recent first. */
-    public fun continueWatching(playlistId: PlaylistId, limit: Int): List<ContinueItem> =
-        queries.inProgress(playlistId.value, limit.toLong()).executeAsList().mapNotNull { row ->
-            val progress = progressOf(row.position_ms, row.duration_ms, row.completed) ?: return@mapNotNull null
-            ContinueItem(ContentType.valueOf(row.content_type), row.content_id, row.parent_id, progress)
+    /** Takes a film, or a series ([seriesId]), off "Continue watching" until it is played again. Progress is kept. */
+    public fun dismissFromContinue(playlistId: PlaylistId, type: ContentType, id: String, seriesId: String? = null) {
+        if (type == ContentType.MOVIE) {
+            queries.dismissWork(playlistId.value, workOf(playlistId, id))
+        } else {
+            (seriesId ?: queries.watchState(type.name, id).executeAsOneOrNull()?.parent_id)?.let(queries::dismissSeries)
         }
+    }
+
+    /**
+     * Marks a film, an episode or a whole series as watched or as not watched (ADR-0042). Marking a series covers the
+     * episodes that are loaded; marking it as not watched forgets every episode of it.
+     */
+    public fun setWatched(playlistId: PlaylistId, type: ContentType, id: String, watched: Boolean) {
+        val now = clock.now().toEpochMilliseconds()
+        when (type) {
+            ContentType.MOVIE -> content.transaction {
+                queries.deleteWatchStateOfWork(playlistId.value, workOf(playlistId, id))
+                if (watched) writeState(playlistId, type, id, null, Duration.ZERO, null, completed = true, at = now, newSession = false)
+            }
+            ContentType.EPISODE -> if (watched) {
+                writeState(playlistId, type, id, null, Duration.ZERO, null, completed = true, at = now, newSession = false)
+            } else {
+                queries.deleteWatchState(type.name, id)
+            }
+            ContentType.SERIES -> content.transaction {
+                queries.deleteWatchStateOfSeries(id)
+                if (watched) {
+                    // A millisecond apart, in order, so the last episode is the one "played last" and the series is done.
+                    episodes(playlistId, id).forEachIndexed { index, episode ->
+                        writeState(
+                            playlistId, ContentType.EPISODE, episode.id, id, Duration.ZERO, episode.duration,
+                            completed = true, at = now + index, newSession = false,
+                        )
+                    }
+                }
+            }
+            else -> error("only films, episodes and series are watched")
+        }
+    }
+
+    /** Keeps a film in My List or takes it out — the film, whichever version [id] names (ADR-0042). */
+    public fun setMovieFavorite(playlistId: PlaylistId, id: String, favorite: Boolean) {
+        val work = workOf(playlistId, id)
+        if (favorite) {
+            content.queries.addFavoriteWork(ContentType.MOVIE.name, id, clock.now().toEpochMilliseconds(), work)
+        } else {
+            content.queries.removeFavoriteWork(ContentType.MOVIE.name, work)
+        }
+    }
 
     /** The episode of [seriesId] played most recently, if any. */
     public fun lastWatchedEpisode(seriesId: String): Pair<String, WatchProgress>? =
@@ -952,7 +1125,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
                     playlistId.value, snapshot, movie.id.value, movie.title, order, movie.year?.toLong(), movie.duration?.inWholeSeconds,
                     movie.plot, encodeList(movie.genres), movie.rating, poster?.template, backdrop?.template,
                     movie.addedAt?.toEpochMilliseconds(), movie.quality?.name, encodeList(movie.tags), movie.language,
-                    movie.externalIds.tmdb, movie.workKey, ratingValue(movie.rating),
+                    movie.externalIds.tmdb, movie.workKey.ifBlank { "id:${movie.id.value}" }, ratingValue(movie.rating),
                 )
                 content.insertMediaSource(playlistId, snapshot, source)
             }

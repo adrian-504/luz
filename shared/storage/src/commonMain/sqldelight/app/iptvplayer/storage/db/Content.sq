@@ -109,8 +109,12 @@ CREATE TABLE favorite (
     content_id TEXT NOT NULL,
     sort_order INTEGER NOT NULL,
     created_at INTEGER NOT NULL,
+    -- For a film: the work it is a version of (movie.work_key), so every version shows it as kept (ADR-0042).
+    work TEXT,
     PRIMARY KEY (content_type, content_id)
 );
+
+CREATE INDEX favorite_work ON favorite(content_type, work);
 
 insertProvider:
 INSERT INTO provider(id, display_name, protocol, endpoint_display, endpoint_template, credential_ref, transport_security,
@@ -254,6 +258,15 @@ VALUES (?, ?, (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM favorite), ?);
 
 removeFavorite:
 DELETE FROM favorite WHERE content_type = ? AND content_id = ?;
+
+-- A film is kept once, whichever of its versions the viewer was looking at.
+addFavoriteWork:
+INSERT OR IGNORE INTO favorite(content_type, content_id, sort_order, created_at, work)
+SELECT :type, :id, (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM favorite), :now, :work
+WHERE NOT EXISTS (SELECT 1 FROM favorite WHERE content_type = :type AND work = :work);
+
+removeFavoriteWork:
+DELETE FROM favorite WHERE content_type = :type AND work = :work;
 
 -- Local search (FR-SRCH-001/002, Phase 8 subset): exact name, then prefix, then contains; provider order within a rank.
 -- Names for ids, hidden rows included: the list that offers to bring something back has to be able to name it.

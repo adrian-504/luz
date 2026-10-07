@@ -147,10 +147,20 @@ CREATE TABLE watch_state (
     completed INTEGER NOT NULL DEFAULT 0,
     last_played_at INTEGER NOT NULL,
     play_count INTEGER NOT NULL DEFAULT 1,
+    -- ADR-0042. For a film: the work it is a version of (movie.work_key); there is one row per work, and content_id is the
+    -- version last played. For an episode: its place in the series, kept here because episode rows are reloaded from the
+    -- provider after every refresh and "Continue watching" must not wait for that.
+    work TEXT,
+    -- Taken off "Continue watching" by the viewer; playing it again puts it back.
+    dismissed INTEGER NOT NULL DEFAULT 0,
+    season_number INTEGER,
+    episode_number INTEGER,
     PRIMARY KEY (content_type, content_id)
 );
 
 CREATE INDEX watch_recent ON watch_state(last_played_at);
+CREATE INDEX watch_work ON watch_state(content_type, work);
+CREATE INDEX watch_parent ON watch_state(content_type, parent_id, last_played_at);
 
 allocateSnapshot:
 INSERT INTO snapshot_allocation(playlist_id, last_snapshot) VALUES (:playlistId, :candidate)
@@ -245,8 +255,8 @@ ORDER BY g.sort_order;
 movies:
 SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
 FROM movie mo
-LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
-LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.work = mo.work_key AND w.playlist_id = mo.playlist_id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.work = mo.work_key
 WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND (mo.is_primary IS NULL OR mo.is_primary = 1)
     AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
 ORDER BY mo.sort_order
@@ -256,8 +266,8 @@ moviesInGroup:
 SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
 FROM library_member m
 JOIN movie mo ON mo.playlist_id = m.playlist_id AND mo.snapshot = m.snapshot AND mo.id = m.item_id
-LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
-LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.work = mo.work_key AND w.playlist_id = mo.playlist_id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.work = mo.work_key
 WHERE m.playlist_id = :playlistId AND m.snapshot = :snapshot AND m.group_id = :groupId
     AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
 ORDER BY m.sort_order
@@ -266,8 +276,8 @@ LIMIT :limit OFFSET :offset;
 recentMovies:
 SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
 FROM movie mo
-LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
-LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.work = mo.work_key AND w.playlist_id = mo.playlist_id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.work = mo.work_key
 WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.added_at IS NOT NULL
     AND (mo.is_primary IS NULL OR mo.is_primary = 1)
     AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
@@ -277,8 +287,8 @@ LIMIT :limit;
 movieById:
 SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
 FROM movie mo
-LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
-LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.work = mo.work_key AND w.playlist_id = mo.playlist_id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.work = mo.work_key
 WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.id = :id;
 
 movieCount:
@@ -373,21 +383,73 @@ deleteLibrary {
 }
 
 upsertWatchState:
-INSERT INTO watch_state(content_type, content_id, playlist_id, parent_id, position_ms, duration_ms, completed, last_played_at, play_count)
-VALUES (:type, :id, :playlistId, :parentId, :positionMs, :durationMs, :completed, :now, 1)
+INSERT INTO watch_state(content_type, content_id, playlist_id, parent_id, position_ms, duration_ms, completed, last_played_at, play_count,
+    work, dismissed, season_number, episode_number)
+VALUES (:type, :id, :playlistId, :parentId, :positionMs, :durationMs, :completed, :now, 1, :work, 0, :season, :episode)
 ON CONFLICT(content_type, content_id) DO UPDATE SET
     position_ms = excluded.position_ms, duration_ms = COALESCE(excluded.duration_ms, watch_state.duration_ms),
     completed = excluded.completed, last_played_at = excluded.last_played_at, parent_id = excluded.parent_id,
-    play_count = watch_state.play_count + (CASE WHEN :newSession THEN 1 ELSE 0 END);
+    play_count = watch_state.play_count + (CASE WHEN :newSession THEN 1 ELSE 0 END),
+    work = excluded.work, dismissed = 0,
+    season_number = COALESCE(excluded.season_number, watch_state.season_number),
+    episode_number = COALESCE(excluded.episode_number, watch_state.episode_number);
+
+-- A film has one row, for the version last played: the others of the same work give way to it.
+deleteOtherVersionsWatched:
+DELETE FROM watch_state WHERE content_type = 'MOVIE' AND playlist_id = :playlistId AND work = :work AND content_id != :id;
+
+watchStateOfWork:
+SELECT * FROM watch_state WHERE content_type = 'MOVIE' AND playlist_id = :playlistId AND work = :work
+ORDER BY last_played_at DESC LIMIT 1;
+
+workOfMovie:
+SELECT work_key FROM movie WHERE playlist_id = :playlistId AND snapshot = :snapshot AND id = :id;
+
+-- Without the source: reads every film, so only for a single action by the viewer.
+workOfAnyMovie:
+SELECT work_key FROM movie WHERE id = :id ORDER BY snapshot DESC LIMIT 1;
+
+primaryOfWork:
+SELECT id FROM movie WHERE playlist_id = :playlistId AND snapshot = :snapshot AND work_key = :work
+ORDER BY is_primary DESC, sort_order LIMIT 1;
+
+placeOfEpisode:
+SELECT series_id, season_number, episode_number, duration_seconds FROM episode
+WHERE playlist_id = :playlistId AND snapshot = :snapshot AND id = :id;
+
+-- "Continue watching" (ADR-0042): films stopped part-way, and for every series the episode played last.
+moviesInProgress:
+SELECT * FROM watch_state
+WHERE playlist_id = :playlistId AND content_type = 'MOVIE' AND completed = 0 AND position_ms > 0 AND dismissed = 0
+ORDER BY last_played_at DESC
+LIMIT :limit;
+
+lastEpisodeOfEachSeries:
+SELECT * FROM watch_state
+WHERE playlist_id = :playlistId AND content_type = 'EPISODE'
+    AND last_played_at = (
+        SELECT MAX(o.last_played_at) FROM watch_state o WHERE o.content_type = 'EPISODE' AND o.parent_id = watch_state.parent_id
+    )
+ORDER BY last_played_at DESC
+LIMIT :limit;
+
+dismissWork:
+UPDATE watch_state SET dismissed = 1 WHERE content_type = 'MOVIE' AND playlist_id = :playlistId AND work = :work;
+
+dismissSeries:
+UPDATE watch_state SET dismissed = 1 WHERE content_type = 'EPISODE' AND parent_id = :seriesId;
+
+deleteWatchStateOfWork:
+DELETE FROM watch_state WHERE content_type = 'MOVIE' AND playlist_id = :playlistId AND work = :work;
+
+deleteWatchState:
+DELETE FROM watch_state WHERE content_type = :type AND content_id = :id;
+
+deleteWatchStateOfSeries:
+DELETE FROM watch_state WHERE content_type = 'EPISODE' AND parent_id = :seriesId;
 
 watchState:
 SELECT * FROM watch_state WHERE content_type = ? AND content_id = ?;
-
-inProgress:
-SELECT * FROM watch_state
-WHERE playlist_id = :playlistId AND content_type IN ('MOVIE', 'EPISODE') AND completed = 0 AND position_ms > 0
-ORDER BY last_played_at DESC
-LIMIT :limit;
 
 lastWatchedEpisodeOfSeries:
 SELECT * FROM watch_state WHERE content_type = 'EPISODE' AND parent_id = ? ORDER BY last_played_at DESC LIMIT 1;
@@ -401,8 +463,8 @@ SELECT id, title FROM series WHERE playlist_id = :playlistId AND snapshot = :sna
 moviesByIds:
 SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
 FROM movie mo
-LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
-LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.work = mo.work_key AND w.playlist_id = mo.playlist_id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.work = mo.work_key
 WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.id IN :ids
     AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE');
 

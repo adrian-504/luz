@@ -57,8 +57,8 @@ SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (
     b.list_rank, b.tmdb_rating
 FROM best b
 CROSS JOIN movie mo ON mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.id = b.id
-LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
-LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.work = mo.work_key AND w.playlist_id = mo.playlist_id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.work = mo.work_key
 WHERE (mo.is_primary IS NULL OR mo.is_primary = 1)
     AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
 ORDER BY b.list_rank

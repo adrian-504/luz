@@ -12,7 +12,7 @@ diagnostics and low perceived latency — not feature count.
 
 ## Current phase
 
-**Phase 8 (Android VOD/Series) complete 2026-09-16.** **Phase 9 (Android QA) paused 2026-09-21 by the owner:** storage
+**Phase 8 (Android VOD/Series) complete 2026-09-16.** The Luz redesign programme (ten stages, ROADMAP.md) began 2026-10-07. **Phase 9 (Android QA) paused 2026-09-21 by the owner:** storage
 queries, launch, list scrolling and memory meet their gates on the owner's Bbox TV (docs/PERFORMANCE.md §6); guide and
 poster-shelf frame timing and the 8-hour playback soak remain. The interface phase (owner's review) is done: design system
 across all screens (ADR-0034, docs/DESIGN_SYSTEM.md). **Phase 10 (Apple shared core) is next, iPhone before Apple TV**

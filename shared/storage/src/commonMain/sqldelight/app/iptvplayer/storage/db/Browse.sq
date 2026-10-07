@@ -5,8 +5,8 @@
 topRatedMovies:
 SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
 FROM movie mo
-LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
-LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.work = mo.work_key AND w.playlist_id = mo.playlist_id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.work = mo.work_key
 WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND (mo.is_primary IS NULL OR mo.is_primary = 1)
     AND mo.rating_value > 0
     AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
@@ -19,8 +19,8 @@ LIMIT :limit;
 popularMovies:
 SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
 FROM movie mo
-LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
-LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.work = mo.work_key AND w.playlist_id = mo.playlist_id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.work = mo.work_key
 WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.added_at >= :since
     AND (mo.is_primary IS NULL OR mo.is_primary = 1) AND mo.rating_value > 0
     AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
@@ -31,8 +31,8 @@ moviesOfGenre:
 SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
 FROM title_genre g
 JOIN movie mo ON mo.playlist_id = g.playlist_id AND mo.snapshot = :snapshot AND mo.id = g.content_id
-LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
-LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.work = mo.work_key AND w.playlist_id = mo.playlist_id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.work = mo.work_key
 WHERE g.playlist_id = :playlistId AND g.content_type = 'MOVIE' AND g.genre = :genre AND (mo.is_primary IS NULL OR mo.is_primary = 1)
     AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
 ORDER BY mo.added_at DESC
@@ -51,8 +51,8 @@ moviesOfDecade:
 SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
 FROM movie mo
 LEFT JOIN title_detail d ON d.playlist_id = mo.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = mo.id
-LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
-LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.work = mo.work_key AND w.playlist_id = mo.playlist_id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.work = mo.work_key
 WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND (mo.is_primary IS NULL OR mo.is_primary = 1)
     AND COALESCE(d.year, mo.year) BETWEEN :fromYear AND :toYear
     AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
@@ -64,8 +64,8 @@ moviesOfLength:
 SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
 FROM movie mo
 LEFT JOIN title_detail d ON d.playlist_id = mo.playlist_id AND d.content_type = 'MOVIE' AND d.content_id = mo.id
-LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
-LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.work = mo.work_key AND w.playlist_id = mo.playlist_id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.work = mo.work_key
 WHERE mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND (mo.is_primary IS NULL OR mo.is_primary = 1)
     AND COALESCE(d.duration_seconds, mo.duration_seconds) BETWEEN :fromSeconds AND :toSeconds
     AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
@@ -91,8 +91,8 @@ ORDER BY CASE mo.quality WHEN 'UHD' THEN 0 WHEN 'FHD' THEN 1 WHEN 'HD' THEN 2 WH
 favoriteMovies:
 SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, 1 AS is_favorite
 FROM favorite f
-JOIN movie mo ON mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.id = f.content_id
-LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
+JOIN movie mo ON mo.playlist_id = :playlistId AND mo.snapshot = :snapshot AND mo.work_key = f.work AND (mo.is_primary IS NULL OR mo.is_primary = 1)
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.work = mo.work_key AND w.playlist_id = mo.playlist_id
 WHERE f.content_type = 'MOVIE'
     AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
 ORDER BY f.created_at DESC
@@ -103,8 +103,8 @@ moviesInUserGroup:
 SELECT mo.*, w.position_ms, w.duration_ms AS watched_duration_ms, w.completed, (f.content_id IS NOT NULL) AS is_favorite
 FROM user_group_member m
 JOIN movie mo ON mo.playlist_id = m.playlist_id AND mo.snapshot = :snapshot AND mo.id = m.content_id
-LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.content_id = mo.id
-LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.content_id = mo.id
+LEFT JOIN watch_state w ON w.content_type = 'MOVIE' AND w.work = mo.work_key AND w.playlist_id = mo.playlist_id
+LEFT JOIN favorite f ON f.content_type = 'MOVIE' AND f.work = mo.work_key
 WHERE m.playlist_id = :playlistId AND m.group_id = :groupId AND m.content_type = 'MOVIE'
     AND mo.id NOT IN (SELECT content_id FROM user_hidden WHERE playlist_id = :playlistId AND content_type = 'MOVIE')
 ORDER BY m.sort_order

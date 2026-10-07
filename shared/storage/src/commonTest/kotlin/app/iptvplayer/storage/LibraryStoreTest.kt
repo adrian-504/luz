@@ -213,12 +213,12 @@ class LibraryStoreTest {
         assertEquals(30.minutes, library.movie(playlist, "mv_1")!!.progress!!.position, "progress survives a refresh")
 
         library.saveProgress(playlist, ContentType.MOVIE, "mv_1", null, 96.minutes, 100.minutes)
-        val done = assertNotNull(library.progress(ContentType.MOVIE, "mv_1"))
+        val done = assertNotNull(library.progress(playlist, ContentType.MOVIE, "mv_1"))
         assertTrue(done.completed)
         assertEquals(listOf("ep_1"), library.continueWatching(playlist, 10).map { it.id }, "finished movies leave the list")
 
         content.deleteSource(playlist)
-        assertNull(library.progress(ContentType.EPISODE, "ep_1"), "removing the source removes its watch history")
+        assertNull(library.progress(playlist, ContentType.EPISODE, "ep_1"), "removing the source removes its watch history")
         assertTrue(library.movies(playlist).isEmpty())
     }
 
@@ -280,6 +280,8 @@ class LibraryStoreTest {
             driver.execute(null, "DROP TABLE $table", 0)
         }
         driver.execute(null, "DROP INDEX channel_member_order", 0)
+        driver.execute(null, "DROP INDEX favorite_work", 0)
+        driver.execute(null, "ALTER TABLE favorite DROP COLUMN work", 0)
         driver.execute(null, "PRAGMA user_version=1", 0)
         driver.close()
 
@@ -287,7 +289,7 @@ class LibraryStoreTest {
         content = ContentStore(driver, clock)
         library = LibraryStore(content, clock)
         assertEquals(
-            14L,
+            15L,
             driver.executeQuery(null, "PRAGMA user_version", {
                 it.next()
                 app.cash.sqldelight.db.QueryResult.Value(it.getLong(0))
@@ -302,5 +304,179 @@ class LibraryStoreTest {
         )
         importMovies(movie("mv_1", "Alpha", listOf("mg_action"), 1))
         assertEquals("Alpha", library.movies(playlist).single().title, "the new tables work after the upgrade")
+    }
+
+    private fun importSeries(episodes: Int) {
+        now += 1.minutes
+        val writer = library.beginSnapshot(playlist, ImportUnit.SERIES)
+        writer.group(group("sg_drama", ContentKind.SERIES))
+        writer.series(
+            Series(
+                SeriesId("se_1"), playlist, listOf(GroupId("sg_drama")), "Example Show", 2019, "A show", listOf("Drama"), null, null, null,
+                "501", ExternalIds(), null,
+            ),
+            null,
+            null,
+        )
+        if (episodes > 0) writer.season(Season(SeasonId("ss_1"), SeriesId("se_1"), 1, null, null, null), null)
+        for (number in 1..episodes) {
+            writer.episode(episode("ep_$number", "ss_1", number), source(ContentType.EPISODE, "ep_$number", XtreamStreamKind.SERIES), null)
+        }
+        writer.publish()
+    }
+
+    @Test
+    fun aFilmIsWatchedAndKeptOnceWhicheverVersionIsPlayed() {
+        addSource()
+        // Two versions of one film — same title and year — and another film.
+        importMovies(
+            movie("mv_1", "Alpha", listOf("mg_action"), 30),
+            movie("mv_1b", "Alpha", listOf("mg_action"), 30),
+            movie("mv_2", "Beta", listOf("mg_action"), 5),
+        )
+        assertEquals("mv_1", library.primaryVersion(playlist, "mv_1b"))
+
+        library.saveProgress(playlist, ContentType.MOVIE, "mv_1b", null, 30.minutes, 100.minutes, newSession = true)
+        assertEquals(30.minutes, library.movie(playlist, "mv_1")!!.progress!!.position, "the film's page shows it on any version")
+        assertEquals(30.minutes, library.progress(playlist, ContentType.MOVIE, "mv_1")!!.position)
+        assertEquals("mv_1b", library.watchedVersion(playlist, "mv_1"), "Resume goes back to the version that was played")
+        assertEquals(listOf("mv_1b"), library.continueWatching(playlist, 10).map { it.id })
+
+        now += 1.minutes
+        library.saveProgress(playlist, ContentType.MOVIE, "mv_1", null, 40.minutes, 100.minutes)
+        assertEquals(listOf("mv_1"), library.continueWatching(playlist, 10).map { it.id }, "another version, still one entry")
+        assertEquals(40.minutes, library.movie(playlist, "mv_1b")!!.progress!!.position)
+        assertNull(library.movie(playlist, "mv_2")!!.progress, "another film is untouched")
+
+        library.setMovieFavorite(playlist, "mv_1b", true)
+        assertTrue(library.movie(playlist, "mv_1")!!.isFavorite, "kept from one version, kept on every version")
+        library.setMovieFavorite(playlist, "mv_1", true)
+        assertEquals(listOf("mv_1"), library.favoriteMovies(playlist, 10).map { it.id }, "listed once, as its main version")
+        library.setMovieFavorite(playlist, "mv_1", false)
+        assertFalse(library.movie(playlist, "mv_1b")!!.isFavorite)
+        assertTrue(library.favoriteMovies(playlist, 10).isEmpty())
+    }
+
+    @Test
+    fun continueWatchingFollowsASeriesToItsNextEpisode() {
+        addSource()
+        importSeries(episodes = 3)
+
+        library.saveProgress(playlist, ContentType.EPISODE, "ep_1", "se_1", 10.minutes, 42.minutes, newSession = true)
+        library.continueWatching(playlist, 10).single().let {
+            assertEquals("ep_1", it.id)
+            assertFalse(it.next)
+            assertEquals(10.minutes, it.progress!!.position)
+        }
+
+        now += 1.minutes
+        library.saveProgress(playlist, ContentType.EPISODE, "ep_1", "se_1", 41.minutes, 42.minutes)
+        library.continueWatching(playlist, 10).single().let {
+            assertEquals("ep_2", it.id, "after a finished episode, the one that follows")
+            assertTrue(it.next)
+            assertNull(it.progress)
+            assertEquals(1 to 2, it.season to it.episode)
+        }
+
+        // A refresh reads the provider's list again and the episodes are gone until the series is opened: still offered.
+        importSeries(episodes = 0)
+        library.continueWatching(playlist, 10).single().let {
+            assertEquals("ep_1", it.id)
+            assertTrue(it.needsEpisodes)
+            assertEquals(1 to 1, it.season to it.episode, "where the viewer was is remembered without the episode list")
+        }
+        importSeries(episodes = 3)
+        assertEquals("ep_2", library.continueWatching(playlist, 10).single().id)
+
+        now += 1.minutes
+        library.saveProgress(playlist, ContentType.EPISODE, "ep_2", "se_1", 5.minutes, 42.minutes, newSession = true)
+        library.continueWatching(playlist, 10).single().let {
+            assertEquals("ep_2", it.id, "one entry for the series, not one for every episode")
+            assertFalse(it.next)
+        }
+
+        library.dismissFromContinue(playlist, ContentType.EPISODE, "ep_2")
+        assertTrue(library.continueWatching(playlist, 10).isEmpty(), "taken off the list")
+        assertEquals(5.minutes, library.episode(playlist, "ep_2")!!.progress!!.position, "its progress is kept")
+        now += 1.minutes
+        library.saveProgress(playlist, ContentType.EPISODE, "ep_2", "se_1", 6.minutes, 42.minutes)
+        assertEquals("ep_2", library.continueWatching(playlist, 10).single().id, "playing it again puts it back")
+
+        now += 1.minutes
+        library.saveProgress(playlist, ContentType.EPISODE, "ep_3", "se_1", 42.minutes, 42.minutes, ended = true)
+        assertTrue(library.continueWatching(playlist, 10).isEmpty(), "a series that was watched to the end leaves the list")
+    }
+
+    @Test
+    fun filmsEpisodesAndSeriesCanBeMarkedAsWatchedAndNotWatched() {
+        addSource()
+        importMovies(movie("mv_1", "Alpha", listOf("mg_action"), 30), movie("mv_1b", "Alpha", listOf("mg_action"), 30))
+        importSeries(episodes = 3)
+
+        library.saveProgress(playlist, ContentType.MOVIE, "mv_1", null, 30.minutes, 100.minutes, newSession = true)
+        library.setWatched(playlist, ContentType.MOVIE, "mv_1b", true)
+        assertTrue(library.movie(playlist, "mv_1")!!.progress!!.completed)
+        assertTrue(library.continueWatching(playlist, 10).isEmpty(), "a watched film is not something to continue")
+        library.setWatched(playlist, ContentType.MOVIE, "mv_1", false)
+        assertNull(library.movie(playlist, "mv_1b")!!.progress)
+
+        now += 1.minutes
+        library.setWatched(playlist, ContentType.EPISODE, "ep_1", true)
+        assertEquals("ep_2", library.continueWatching(playlist, 10).single().id, "marking an episode moves the series on")
+        library.setWatched(playlist, ContentType.EPISODE, "ep_1", false)
+        assertTrue(library.continueWatching(playlist, 10).isEmpty())
+
+        now += 1.minutes
+        library.setWatched(playlist, ContentType.SERIES, "se_1", true)
+        assertTrue(library.episodes(playlist, "se_1").all { it.progress?.completed == true })
+        assertTrue(library.continueWatching(playlist, 10).isEmpty(), "a series marked as watched is finished")
+        library.setWatched(playlist, ContentType.SERIES, "se_1", false)
+        assertTrue(library.episodes(playlist, "se_1").all { it.progress == null })
+    }
+
+    @Test
+    fun whatWasWatchedAndKeptBeforeWorksIsCarriedOverToTheFilm() {
+        addSource()
+        importMovies(
+            movie("mv_1", "Alpha", listOf("mg_action"), 30),
+            movie("mv_1b", "Alpha", listOf("mg_action"), 30),
+            movie("mv_2", "Beta", listOf("mg_action"), 5),
+        )
+        importSeries(episodes = 2)
+        // Recreate what schema 14 has on disk: state kept per file, with two versions of one film both watched and kept.
+        for (index in listOf("watch_work", "watch_parent", "favorite_work")) driver.execute(null, "DROP INDEX $index", 0)
+        for (column in listOf("work", "dismissed", "season_number", "episode_number")) {
+            driver.execute(null, "ALTER TABLE watch_state DROP COLUMN $column", 0)
+        }
+        driver.execute(null, "ALTER TABLE favorite DROP COLUMN work", 0)
+        val p = playlist.value
+        fun watched(type: String, id: String, parent: String?, position: Long, at: Long) = driver.execute(
+            null,
+            "INSERT INTO watch_state" +
+                "(content_type, content_id, playlist_id, parent_id, position_ms, duration_ms, completed, last_played_at)" +
+                " VALUES ('$type', '$id', '$p', ${parent?.let { "'$it'" } ?: "NULL"}, $position, 6000000, 0, $at)",
+            0,
+        )
+        watched("MOVIE", "mv_1", null, 600_000, 1_000)
+        watched("MOVIE", "mv_1b", null, 1_800_000, 2_000)
+        watched("MOVIE", "mv_2", null, 300_000, 3_000)
+        watched("EPISODE", "ep_2", "se_1", 120_000, 4_000)
+        for ((order, id) in listOf("mv_1b", "mv_1").withIndex()) {
+            val kept = "INSERT INTO favorite(content_type, content_id, sort_order, created_at) VALUES ('MOVIE', '$id', $order, $order)"
+            driver.execute(null, kept, 0)
+        }
+        driver.execute(null, "PRAGMA user_version=14", 0)
+        driver.close()
+
+        driver = openIptvDatabase(file.path)
+        content = ContentStore(driver, clock)
+        library = LibraryStore(content, clock)
+
+        assertEquals(30.minutes, library.movie(playlist, "mv_1")!!.progress!!.position, "the version played last speaks for the film")
+        assertEquals("mv_1b", library.watchedVersion(playlist, "mv_1"))
+        assertEquals(listOf("ep_2", "mv_2", "mv_1b"), library.continueWatching(playlist, 10).map { it.id }, "each film once")
+        assertEquals(1 to 2, library.continueWatching(playlist, 10).first().let { it.season to it.episode })
+        assertEquals(listOf("mv_1"), library.favoriteMovies(playlist, 10).map { it.id }, "kept once")
+        assertTrue(library.movie(playlist, "mv_1b")!!.isFavorite)
     }
 }

@@ -278,6 +278,7 @@
     <string name="home_good_afternoon">Good afternoon</string>
     <string name="home_good_evening">Good evening</string>
     <string name="home_minutes_left">%1$d min left</string>
+    <string name="home_next_episode">Next episode</string>
     <string name="home_hours_left">%1$d h %2$d min left</string>
     <string name="home_started_ago">Started %1$d min ago</string>
     <string name="home_starts_in">In %1$d min</string>
@@ -388,6 +389,9 @@
     <string name="hidden_series">Series</string>
     <string name="menu_add_my_list">Add to My List</string>
     <string name="menu_remove_my_list">Remove from My List</string>
+    <string name="menu_mark_watched">Mark as watched</string>
+    <string name="menu_mark_unwatched">Mark as not watched</string>
+    <string name="menu_remove_continue">Remove from Continue watching</string>
     <string name="menu_add_to_group">Add to a group…</string>
     <string name="menu_add_to">Add to %1$s</string>
     <string name="menu_remove_from">Remove from %1$s</string>

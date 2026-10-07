@@ -210,12 +210,18 @@ Artwork URLs pass the same URL policy as streams. Missing artwork is a normal st
 
 `id (random), contentRef, sortOrder, createdAt`. References the concrete content ID. Unified-library mode
 displays a favorite once even if equivalent channels exist in several playlists (equivalence clusters, §4.5).
+For a film it also records the *work* (`work`), so the film is kept once and shows as kept on every version of it
+(ADR-0042).
 
 ### WatchState
 
 `contentRef, playlistId, position?, duration?, completed (≥ 95 % or explicit end), lastPlayedAt, playCount,
 lastAudioTrackLanguage?, lastSubtitleTrackLanguage?`. For channels only `lastPlayedAt`/`playCount` apply
 (recently watched). Completed items leave "Continue watching".
+
+A film has one WatchState, keyed by its work: `contentRef` is the version played last. An episode's keeps its season and
+number so "Continue watching" can name the next episode before the provider's list is read again. A WatchState can be
+`dismissed` from "Continue watching" without losing its position (ADR-0042).
 
 ### EPGSource
 
