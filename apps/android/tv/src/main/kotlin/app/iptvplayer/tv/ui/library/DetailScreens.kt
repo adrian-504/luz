@@ -26,10 +26,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -75,6 +77,8 @@ import app.iptvplayer.tv.ui.theme.LuzStatusLine
 import app.iptvplayer.tv.ui.theme.Tokens
 import app.iptvplayer.tv.ui.theme.luzClickable
 import app.iptvplayer.tv.ui.theme.revealsListTop
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlin.time.Duration
 
@@ -331,6 +335,16 @@ fun SeriesDetailScreen(
     var season by rememberSaveable { mutableStateOf<Int?>(null) }
     var lastWatchedId by remember { mutableStateOf<String?>(null) }
     var episodeMenu by remember { mutableStateOf<Pair<EpisodeRow, String>?>(null) }
+    // The episode the remote is on, and the one it has rested on: the page's words become that episode's once the remote
+    // stops, as the stage does on Home (ADR-0043), and go back to the show's when it leaves the episodes.
+    var onEpisode by remember { mutableStateOf<EpisodeRow?>(null) }
+    var restingEpisode by remember { mutableStateOf<EpisodeRow?>(null) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { onEpisode }.collectLatest { episode ->
+            if (episode != null) delay(EPISODE_REST_MS)
+            restingEpisode = episode
+        }
+    }
 
     LaunchedEffect(revision, watched) {
         series = graph.seriesById(playlistId, seriesId)
@@ -382,17 +396,28 @@ fun SeriesDetailScreen(
     val listState = rememberLazyListState()
     DetailRoom(ambient, listState = listState) {
         item(key = "hero") {
+            val resting = restingEpisode
+            val restingArt = resting?.let { episodeArt[it.episodeNumber] }
+            val restingStory = resting?.let { it.plot ?: restingArt?.overview }
             LuzHero(
                 title = item.title,
-                meta = listOfNotNull(
-                    item.year?.toString(),
-                    seasons.size.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.series_seasons, it, it) },
-                    item.genres.take(2).joinToString(", ").ifEmpty { null },
-                    detail?.ageRating,
-                    item.rating?.let { "\u2605 $it" },
-                ),
-                badges = badgesOf(item.quality, item.tags, item.language),
-                detail = item.plot ?: detail?.plot,
+                meta = if (resting != null) {
+                    listOfNotNull(
+                        stringResource(R.string.series_episode_place, resting.seasonNumber, resting.episodeNumber),
+                        episodeName(resting, item.title, restingArt),
+                        resting.duration?.let { durationText(it) },
+                    )
+                } else {
+                    listOfNotNull(
+                        item.year?.toString(),
+                        seasons.size.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.series_seasons, it, it) },
+                        item.genres.take(2).joinToString(", ").ifEmpty { null },
+                        detail?.ageRating,
+                        item.rating?.let { "\u2605 $it" },
+                    )
+                },
+                badges = if (resting != null) emptyList() else badgesOf(item.quality, item.tags, item.language),
+                detail = restingStory ?: item.plot ?: detail?.plot,
                 detailLines = HERO_PLOT_LINES,
                 drift = true,
                 titleArt = { TitleLogo(tmdbArt.logoUrl, item.title) },
@@ -435,8 +460,13 @@ fun SeriesDetailScreen(
                 }
                 val shown = list.filter { it.seasonNumber == shownSeason }
                 item(key = "episodes-$shownSeason") {
-                    val title = shownSeason?.let { stringResource(R.string.series_season, it) }.orEmpty()
-                    LuzShelf(title = title) {
+                    // With tabs naming the season, the shelf says how many episodes it holds, not the season again.
+                    val title = if (seasons.size > 1) {
+                        pluralStringResource(R.plurals.series_episode_count, shown.size, shown.size)
+                    } else {
+                        shownSeason?.let { stringResource(R.string.series_season, it) }.orEmpty()
+                    }
+                    LuzShelf(title = title, modifier = Modifier.onFocusChanged { if (!it.hasFocus) onEpisode = null }) {
                         items(shown.size, key = { shown[it].id }) { index ->
                             EpisodeCard(
                                 shown[index],
@@ -444,6 +474,7 @@ fun SeriesDetailScreen(
                                 episodeArt[shown[index].episodeNumber],
                                 resolver,
                                 focus,
+                                onFocused = { onEpisode = shown[index] },
                                 onMenu = { name -> episodeMenu = shown[index] to name },
                             ) {
                                 onPlayEpisode(shown[index].id, false)
@@ -593,13 +624,11 @@ private fun EpisodeCard(
     art: EpisodeArt?,
     resolver: ((UrlTemplate) -> String?)?,
     focus: FocusMemory,
+    onFocused: () -> Unit,
     onMenu: (String) -> Unit,
     onPlay: () -> Unit,
 ) {
-    // The provider's name for the episode, once the show's name and the numbering it repeats are taken off, then TMDB's.
-    val own = remember(episode.id, seriesTitle, art) {
-        TitleCleaner.episodeTitle(episode.title, seriesTitle, episode.seasonNumber, episode.episodeNumber) ?: art?.name
-    }
+    val own = remember(episode.id, seriesTitle, art) { episodeName(episode, seriesTitle, art) }
     val title = own?.let { stringResource(R.string.series_episode_title, episode.episodeNumber, it) }
         ?: stringResource(R.string.series_episode_untitled, episode.episodeNumber)
     val still = remember(episode.still, art) { episode.still ?: art?.stillUrl?.let(::UrlTemplate) }
@@ -607,29 +636,36 @@ private fun EpisodeCard(
         title = title,
         subtitle = episode.duration?.let { durationText(it) },
         shape = CardShape.LANDSCAPE,
-        modifier = Modifier.rememberedFocus(focus, DetailTags.episode(episode.id)),
+        modifier = Modifier
+            .rememberedFocus(focus, DetailTags.episode(episode.id))
+            .onFocusChanged { if (it.isFocused) onFocused() },
         progress = episode.progress?.takeIf { !it.completed }?.fraction,
         onLongClick = { onMenu(title) },
         onClick = onPlay,
     ) { modifier ->
         Box(modifier) {
             ArtworkImage(still, resolver, null, Modifier.fillMaxSize(), 640, 360)
+            // A word, not a tick: a tick already means "in My List" on the buttons above.
             if (episode.progress?.completed == true) {
-                Box(
-                    Modifier
+                Text(
+                    stringResource(R.string.episode_watched),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Tokens.textSecondary,
+                    modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(Tokens.space2)
-                        .size(WATCHED_MARK)
-                        .clip(CircleShape)
-                        .background(Tokens.scrim),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(LuzIcons.Check, contentDescription = null, tint = Tokens.textPrimary, modifier = Modifier.size(WATCHED_ICON))
-                }
+                        .clip(RoundedCornerShape(Tokens.radiusSmall))
+                        .background(Tokens.scrim)
+                        .padding(horizontal = Tokens.space2, vertical = Tokens.space1),
+                )
             }
         }
     }
 }
+
+/** An episode's own name — the provider's, with the show's name and numbering taken off, else TMDB's; null when neither has one. */
+private fun episodeName(episode: EpisodeRow, seriesTitle: String, art: EpisodeArt?): String? =
+    TitleCleaner.episodeTitle(episode.title, seriesTitle, episode.seasonNumber, episode.episodeNumber) ?: art?.name
 
 @Composable
 private fun NotFound() {
@@ -646,10 +682,9 @@ internal fun durationText(duration: Duration): String {
     }
 }
 
-private val WATCHED_MARK = 24.dp
 private const val MOVIE_HERO_FRACTION = 0.86f
 private const val HERO_PLOT_LINES = 3
-private val WATCHED_ICON = 14.dp
+private const val EPISODE_REST_MS = 350L
 
 private const val SHELF_TITLES = 20
 

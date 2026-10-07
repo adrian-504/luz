@@ -65,3 +65,4 @@ line. Product-scope decisions still go to the owner.
 | [0042](0042-watching-and-keeping-follow-the-work.md) | Watching and keeping follow the film and the series, not one file | Accepted |
 | [0043](0043-the-stage-under-the-remote.md) | The stage — Home, Movies and Series follow the remote | Accepted |
 | [0044](0044-my-luz-and-a-quieter-guide.md) | My Luz, and a Guide that does not repeat itself | Accepted |
+| [0045](0045-one-white-thing-and-the-episode-on-the-page.md) | One white thing at a time, and the episode's story on its page | Accepted |

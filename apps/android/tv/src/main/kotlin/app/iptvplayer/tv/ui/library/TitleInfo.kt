@@ -107,7 +107,7 @@ fun PersonCard(name: String, subtitle: String, modifier: Modifier, photoUrl: Str
                 .luzLift(focused, CircleShape, shadow = false)
                 .clip(CircleShape)
                 .background(if (focused) Tokens.raisedFocused else Tokens.raised)
-                .then(if (focused) Modifier.border(Tokens.focusRingWidth, Tokens.hairline, CircleShape) else Modifier)
+                .then(if (focused) Modifier.border(PERSON_RING, Color.White, CircleShape) else Modifier)
                 .luzClickable(onClick = onClick, onFocus = { focused = it }),
             contentAlignment = Alignment.Center,
         ) {
@@ -226,3 +226,5 @@ private val FACT_LABEL = 96.dp
 private const val ABOUT_LINES = 8
 private const val ABOUT_CAST = 6
 private const val RESTING_PANEL_ALPHA = 0.04f
+
+private val PERSON_RING = 2.dp

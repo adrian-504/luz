@@ -115,8 +115,8 @@ the top) and all end in the room's colour, so there is no seam. Crossfades betwe
 crossfade hands back. Optional carousel page indicator. Backdrops decode at 1920×1080 px, never at poster size.
 
 ### 5.2 Buttons — `LuzButton`, `LuzIconButton`
-PRIMARY is a white pill, always; it lifts under the remote. SECONDARY is faint glass that turns white when focused, so
-exactly one thing on screen is white at a time. `LuzIconButton` is the round version for quiet actions (favourite,
+Every button turns white under the remote and none is white otherwise (ADR-0045): PRIMARY rests as bright glass, SECONDARY as
+faint glass, so exactly one thing on screen is white at a time. `LuzIconButton` is the round version for quiet actions (favourite,
 information, next). No amber fills.
 
 ### 5.3 Cards — `LuzCard`

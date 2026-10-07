@@ -26,7 +26,7 @@ import androidx.tv.material3.Text
 
 /** How much a button asks for attention. */
 enum class ButtonKind {
-    /** The one thing the screen wants the viewer to do: a white pill, always. */
+    /** The one thing the screen wants the viewer to do: bright glass at rest, white under the remote. */
     PRIMARY,
 
     /** Everything else: glass at rest, white under the remote. */
@@ -36,9 +36,9 @@ enum class ButtonKind {
 /**
  * A button in the reference app's manner (DESIGN_SYSTEM.md §5.2).
  *
- * The primary is white at rest and lifts under the remote — a white button cannot get brighter, only closer. A
- * secondary is a faint glass pill that turns white when focused, so exactly one thing on the screen is white at a time
- * and the eye always knows where the remote is. There is no amber fill: colour belongs to the artwork.
+ * Every button turns white under the remote and none is white otherwise, so exactly one thing on the screen is white at a
+ * time and the eye always knows where the remote is. The primary rests as bright glass, the secondary as faint glass. There
+ * is no amber fill: colour belongs to the artwork.
  */
 @Composable
 fun LuzButton(
@@ -50,7 +50,7 @@ fun LuzButton(
 ) {
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(Tokens.radiusPill)
-    val white = kind == ButtonKind.PRIMARY || focused
+    val white = focused
     Row(
         modifier = modifier
             .luzLift(focused, shape)
@@ -100,6 +100,6 @@ fun LuzIconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifie
     }
 }
 
-private const val PRIMARY_RESTING_ALPHA = 0.92f
+private const val PRIMARY_RESTING_ALPHA = 0.26f
 private val ICON_SIZE = 18.dp
 private val ICON_BUTTON_SIZE = 40.dp
