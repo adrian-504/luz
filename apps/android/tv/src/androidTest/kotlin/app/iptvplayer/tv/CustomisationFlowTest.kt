@@ -160,8 +160,11 @@ class CustomisationFlowTest {
         rule.waitUntil(10_000) { runBlocking { graph.userGroups(playlist) }.singleOrNull()?.movieCount == 1L }
         val group = runBlocking { graph.userGroups(playlist) }.single()
         assertEquals(1L to 0L, group.movieCount to group.channelCount)
-        // The group is a shelf of Movies, and not a list of channels in Live TV.
-        awaitExists(LibraryTags.shelfItem("group-${group.id}", film.id), timeout = 20_000)
+        // The group is a shelf of Movies, and not a list of channels in Live TV. The shelves under the stage are composed as
+        // the remote reaches them, so go down to it.
+        val inGroup = LibraryTags.shelfItem("group-${group.id}", film.id)
+        repeat(12) { if (focusedTag()?.startsWith("library-shelf-group-") != true) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitExists(inGroup, timeout = 20_000)
     }
 
     @Test

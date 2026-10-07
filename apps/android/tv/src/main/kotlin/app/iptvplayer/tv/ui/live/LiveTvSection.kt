@@ -292,7 +292,7 @@ fun LiveTvSection(
                 Unit
             }
             LuzMenu(
-                title = channel.name,
+                title = channel.label,
                 items = listOf(
                     LuzMenuItem("play", stringResource(R.string.menu_watch)) { onPlay(current, scope, channel.id) },
                     LuzMenuItem(
@@ -313,7 +313,7 @@ fun LiveTvSection(
             val holding = remember(channel.id, myGroups) { mutableStateOf(emptyList<String>()) }
             LaunchedEffect(channel.id, revision) { holding.value = graph.groupsHolding(current, ContentType.CHANNEL, channel.id.value) }
             LuzMenu(
-                title = channel.name,
+                title = channel.label,
                 items = myGroups.map { group ->
                     val inIt = group.id in holding.value
                     LuzMenuItem(
@@ -411,7 +411,7 @@ fun LiveTvSection(
         }
         infoFor?.let { (channel, guide) ->
             LuzMenu(
-                title = channel.name,
+                title = channel.label,
                 items = listOfNotNull(
                     channel.number?.let { LuzMenuItem("number", stringResource(R.string.info_channel_number, it)) {} },
                     guide?.current?.let { LuzMenuItem("now", stringResource(R.string.live_now, it.title)) {} },
@@ -633,7 +633,7 @@ private fun OnNowPanel(
             ArtworkImage(
                 channel.logo,
                 resolver,
-                channel.name,
+                channel.label,
                 Modifier.width(ON_NOW_LOGO_WIDTH).height(ON_NOW_HEIGHT).clip(RoundedCornerShape(Tokens.radiusMedium)),
                 ON_NOW_LOGO_PX_WIDTH,
                 ON_NOW_LOGO_PX_HEIGHT,
@@ -646,7 +646,7 @@ private fun OnNowPanel(
                 if (current !=
                     null
                 ) {
-                    channel.name.let { stringResource(R.string.live_on_now) + " · " + it }
+                    channel.label.let { stringResource(R.string.live_on_now) + " · " + it }
                 } else {
                     stringResource(R.string.live_on_now)
                 },
@@ -655,7 +655,7 @@ private fun OnNowPanel(
                 maxLines = 1,
             )
             Text(
-                current?.title ?: channel?.name.orEmpty(),
+                current?.title ?: channel?.label.orEmpty(),
                 style = MaterialTheme.typography.headlineMedium,
                 color = Tokens.textPrimary,
                 maxLines = 1,
@@ -712,7 +712,7 @@ private fun ChannelItem(
             LOGO_PX_HEIGHT,
             fit = true,
             inset = Tokens.space1,
-            name = channel.name,
+            name = channel.label,
         )
         Text(
             channel.number?.toString() ?: "",
@@ -724,7 +724,7 @@ private fun ChannelItem(
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space2), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    channel.name,
+                    channel.label,
                     style = MaterialTheme.typography.titleSmall,
                     color = Tokens.textPrimary,
                     maxLines = 1,

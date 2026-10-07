@@ -99,7 +99,16 @@ second type scale gets into an app.
 
 All in `ui/theme/` unless noted. Screens do not style themselves; they compose these.
 
+### 5.0 Stage — `LuzStage` (ADR-0043)
+The top 46 % of Home, Movies and Series. One wide picture on the right two thirds and, on a solid dark ground at the left,
+a line above (the shelf's name), the title (TMDB's logo when one is already stored), the facts, three lines of story and,
+for something part-way watched, a thin bar. It holds nothing the remote can reach and it follows the remote: it changes
+only after the remote has rested 350 ms on a card, as a 320 ms fade. The words never sit on the picture, so no artwork
+can make them unreadable, and no colour is lent to the room. Without a wide picture a film's poster stands at the right;
+a channel's logo shows on a plate. Under it, `StageShelves`: one shelf at a time, its top edge dissolving into the stage.
+
 ### 5.1 Hero — `LuzHero`
+Used on a title's own page (section 10); Home, Movies and Series use the stage above.
 A picture filling most of the screen; title, metadata line and a short description over its lower left; an actions
 slot beneath. Three gradients take the picture into the room (up from the bottom, in from the left, a faint one from
 the top) and all end in the room's colour, so there is no seam. Crossfades between pictures (700 ms) from the state the
@@ -179,8 +188,9 @@ information, next. The room takes the featured picture's colour. Shelves beneath
 Your channels (favourites, then the most watched) or Live now, Popular films, New episodes, Recently added movies,
 Because you watched…, Highest rated films, Popular shows, Highest rated shows, My List. Empty shelves are left out, and
 so is a shelf that mostly repeats one above it; the viewer chooses and orders them in Settings → Home. On first opening,
-rows appear as they are read. The remote lands on the hero's Play. A quiet **greeting** ("Good evening") sits over the top
-of the hero while it is in view. **Continue watching** cards show the wide picture and what is left ("S1 E6 · 21 min
+rows appear as they are read. The remote lands on the first card of the first row, and the stage above follows it; the
+first row's line reads "Good evening · Continue watching". Holding OK on any film or series opens its menu (Open, My
+List, Add to a group…, Mark as watched, Hide). **Continue watching** cards show the wide picture and what is left ("S1 E6 · 21 min
 left"). **Coming up on your channels** lists programmes starting in the next three hours, or started in the last ten
 minutes, on the viewer's favourites and most-watched channels ("In 3 min · beIN Sports 1"), from the stored guide; OK
 tunes in. **Because you watch *genre*** takes the genre of most of the films watched lately (at least two) and offers
@@ -225,11 +235,9 @@ Drawn under the rail like Home: a featured title with a backdrop, then shelves L
 Recently added / New episodes, Popular, Because you watched…, Highest rated, My List, the viewer's own groups, the six
 largest genres — then glass tiles for every genre, decade and provider category ("Browse all categories"). A tile opens
 the full grid: categories on the left and a poster grid that loads a page at a time; Back returns to the tile. Holding OK
-on a poster offers Open, My List, Add to a group…, Hide. When the remote **rests** on a title with a wide picture, the
-room behind the shelves takes it: enlarged, lightly blurred and visible behind the shelves, fading in after 400 ms and
-gone the moment the remote moves again, so nothing is drawn while the viewer is travelling (PERFORMANCE.md §6.5). The
-**colour wash** a hero lends the room lasts only while that hero is on screen; scrolled past it the room returns to plain
-dark, so one film's colour does not sit under shelves of others.
+on a poster offers Open, My List, Add to a group…, Mark as watched, Hide. The stage (section 5.0) follows the poster the
+remote rests on. The room behind the shelves is plain dark: the earlier blurred picture behind the shelves and the colour
+wash of a hero are gone, because the wash turned muddy under bright artwork (ADR-0043).
 
 ## 14. Search
 The query written large with a search symbol; a **letter strip** beneath it (123/abc, space, a–z, delete) so the remote

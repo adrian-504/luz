@@ -129,7 +129,7 @@ class TmdbFlowTest {
         assertTrue(runBlocking { graph.tmdbStatus() }.hasKey)
         val film = runBlocking { graph.moviesOfList(playlist, ExternalList.TRENDING_MOVIES, 1) }.single()
 
-        // Home: the Trending row, under the hero, starts with that film.
+        // Home: the Trending row, under the stage, starts with that film.
         press(KeyEvent.KEYCODE_BACK)
         rule.waitUntil(5_000) { focusedTag()?.startsWith("rail-") == true }
         walkTabsTo(
@@ -139,7 +139,7 @@ class TmdbFlowTest {
         ) { timeout, condition -> runCatching { rule.waitUntil(timeout, condition) } }
         awaitFocus(ShellTags.rail(Section.HOME))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitFocus(HomeTags.HERO_PLAY, timeout = 20_000)
+        rule.waitUntil(20_000) { focusedTag()?.startsWith("home-") == true }
         repeat(4) { if (focusedTag()?.startsWith("home-${HomeTags.TRENDING_MOVIES}-") != true) press(KeyEvent.KEYCODE_DPAD_DOWN) }
         awaitFocus(HomeTags.item(HomeTags.TRENDING_MOVIES, film.id))
     }

@@ -177,12 +177,12 @@ fun SearchSection(
                                 items(found.channels.size, key = { found.channels[it].id.value }) { index ->
                                     val channel = found.channels[index]
                                     LuzCard(
-                                        title = channel.name,
+                                        title = channel.label,
                                         subtitle = channel.number?.toString(),
                                         shape = CardShape.LANDSCAPE,
                                         modifier = Modifier.rememberedFocus(focus, SearchTags.result("channel", channel.id.value)),
                                         onClick = { onPlayChannel(current, ChannelScope.All, channel.id) },
-                                    ) { art -> ArtworkImage(channel.logo, resolver, channel.name, art, fit = true) }
+                                    ) { art -> ArtworkImage(channel.logo, resolver, channel.label, art, fit = true) }
                                 }
                             }
                         }

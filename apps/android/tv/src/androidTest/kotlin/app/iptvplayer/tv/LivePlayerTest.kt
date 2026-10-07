@@ -88,7 +88,7 @@ class LivePlayerTest {
 
         // OK on a channel plays it with the controls up: the live bar names the channel and says what is on.
         awaitFocus(PlayerTags.PLAY_PAUSE, timeout = 20_000)
-        awaitExists(PlayerTags.TITLE, first.name)
+        awaitExists(PlayerTags.TITLE, first.label)
         awaitExists(PlayerTags.PROGRAMME, "programme")
         shot("live-controls")
 

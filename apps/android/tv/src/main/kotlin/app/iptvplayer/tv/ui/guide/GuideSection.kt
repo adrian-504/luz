@@ -427,7 +427,7 @@ private fun ProgrammeDetails(channelOf: () -> ChannelRow?, programmeOf: () -> Gu
         verticalArrangement = Arrangement.spacedBy(Tokens.space1),
     ) {
         Text(
-            programme?.title ?: channel?.name.orEmpty(),
+            programme?.title ?: channel?.label.orEmpty(),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.headlineMedium,
@@ -437,7 +437,7 @@ private fun ProgrammeDetails(channelOf: () -> ChannelRow?, programmeOf: () -> Gu
             val onNow = programme.start <= now && now < programme.end
             MetadataLine(
                 listOfNotNull(
-                    channel.name,
+                    channel.label,
                     stringResource(R.string.guide_programme_time, shortTime(programme.start), shortTime(programme.end)),
                     if (onNow) stringResource(R.string.guide_on_now) else null,
                 ),
@@ -537,10 +537,10 @@ private fun GuideRow(
                 LOGO_PX_HEIGHT,
                 fit = true,
                 inset = Tokens.space1,
-                name = channel.name,
+                name = channel.label,
             )
             Text(
-                channel.name,
+                channel.label,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.titleSmall,

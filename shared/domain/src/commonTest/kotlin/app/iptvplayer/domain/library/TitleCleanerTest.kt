@@ -83,4 +83,31 @@ class TitleCleanerTest {
         kotlin.test.assertEquals("Pilot", TitleCleaner.episodeTitle("Pilot", "Slow Horses", 1, 1), "a real name is kept")
         kotlin.test.assertNull(TitleCleaner.episodeTitle(null, "Slow Horses", 1, 1))
     }
+
+    @Test
+    fun aRecordingFromACinemaBecomesABadgeNotPartOfTheName() {
+        check("The Odyssey - CAM", "The Odyssey", tags = listOf("CAM"))
+        check("EN | The Odyssey HDCAM", "The Odyssey", tags = listOf("CAM"), language = "EN")
+        check("Spider Man Brand New Day [HDTS]", "Spider Man Brand New Day", tags = listOf("CAM"))
+        check("CAM", "CAM")
+    }
+
+    @Test
+    fun aCardShowsTheTitleWithoutTheYearItAlreadyShowsBesideIt() {
+        assertEquals("The Social Network", TitleCleaner.forDisplay("The Social Network 2010", 2010))
+        assertEquals("Blade Runner 2049", TitleCleaner.forDisplay("Blade Runner 2049", 2017))
+        assertEquals("1917", TitleCleaner.forDisplay("1917", 1917), "a title that is only a year keeps it")
+        assertEquals("The Odyssey", TitleCleaner.forDisplay("The Odyssey - CAM", 2026), "an old import is cleaned on the way out")
+        assertEquals("Dune", TitleCleaner.forDisplay("Dune", 2021))
+    }
+
+    @Test
+    fun ratingsAreWrittenWithOneDecimal() {
+        assertEquals("7.9", TitleCleaner.ratingText("7.925"))
+        assertEquals("8", TitleCleaner.ratingText("8.0"))
+        assertEquals("6.5", TitleCleaner.ratingText("6,5"))
+        assertEquals(null, TitleCleaner.ratingText("0"))
+        assertEquals(null, TitleCleaner.ratingText("n/a"))
+        assertEquals(null, TitleCleaner.ratingText(null))
+    }
 }

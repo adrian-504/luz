@@ -7,6 +7,7 @@ import app.iptvplayer.domain.id.CredentialRef
 import app.iptvplayer.domain.id.MediaSourceId
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.id.ProviderId
+import app.iptvplayer.domain.library.ChannelNames
 import app.iptvplayer.domain.model.AccountStatus
 import app.iptvplayer.domain.model.Channel
 import app.iptvplayer.domain.model.ChannelGroup
@@ -80,7 +81,13 @@ public data class ChannelRow(
     public val logo: UrlTemplate?,
     public val tvgId: String?,
     public val isFavorite: Boolean,
-)
+) {
+    /** The name as a viewer reads it, without the provider's country prefix or quality words. */
+    public val label: String get() = ChannelNames.display(name).name
+
+    /** "HD", "4K" and the like, taken out of the name, for a badge. */
+    public val quality: String? get() = ChannelNames.display(name).quality
+}
 
 /**
  * Sources, live channels, groups, stream locators and favorites (docs/DOMAIN_MODEL.md §9). Imports write a new snapshot

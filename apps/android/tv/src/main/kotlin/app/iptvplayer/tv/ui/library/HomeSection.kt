@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -101,11 +102,6 @@ object HomeTags {
     const val MY_LIST = "my-list"
     const val COMING_UP = "coming-up"
     const val GENRE = "genre"
-    const val GREETING = "home-greeting"
-    const val HERO_PLAY = "home-hero-play"
-    const val HERO_FAVORITE = "home-hero-favorite"
-    const val HERO_INFO = "home-hero-info"
-    const val HERO_NEXT = "home-hero-next"
 }
 
 /** A card on a Home row, and what the hero needs to feature it. */
@@ -263,10 +259,10 @@ fun HomeSection(
                     HomeCard(
                         key = "${item.channel.id.value}-${item.programme.start.toEpochMilliseconds()}",
                         title = item.programme.title,
-                        caption = "${startsText(resources, item.programme.start, now)} · ${item.channel.name}",
+                        caption = "${startsText(resources, item.programme.start, now)} · ${item.channel.label}",
                         poster = item.channel.logo,
                         fraction = null,
-                        channelName = item.channel.name,
+                        channelName = item.channel.label,
                         open = {
                             onPlayChannel(p, if (item.channel.isFavorite) ChannelScope.Favorites else ChannelScope.All, item.channel.id)
                         },
@@ -345,13 +341,13 @@ fun HomeSection(
                 if (firstLoad) {
                     arranged(loaded).takeIf { it.isNotEmpty() }?.let {
                         rows = it
-                        onFirstKey(HomeTags.HERO_PLAY)
+                        onFirstKey(firstCardKey(it))
                     }
                 }
             }
             arranged(loaded)
         }
-        onFirstKey(rows?.takeIf { it.isNotEmpty() }?.let { HomeTags.HERO_PLAY })
+        onFirstKey(rows?.takeIf { it.isNotEmpty() }?.let(::firstCardKey))
     }
 
     val shown = rows ?: return
@@ -360,146 +356,98 @@ fun HomeSection(
         return
     }
     val resolver = rememberArtworkResolver(playlist)
-    val featured = remember(shown) { featuredFrom(shown) }
-    var page by remember(featured) { mutableIntStateOf(0) }
-    var heroFocused by remember { mutableStateOf(false) }
-    val hero = featured.getOrNull(page) ?: featured.first()
-    val ambient = rememberAmbientColor(hero.backdrop ?: hero.poster, resolver)
     val scope = rememberCoroutineScope()
     var menuFor by remember { mutableStateOf<Pair<String, HomeCard>?>(null) }
-
     val listState = rememberLazyListState()
-    val wash = rememberRoomWash(ambient) { listState.firstVisibleItemIndex == 0 }
-
-    // The carousel turns slowly on its own, but never while the viewer is reading it.
-    LaunchedEffect(featured, heroFocused, page) {
-        if (featured.size < 2 || heroFocused) return@LaunchedEffect
-        delay(CAROUSEL_INTERVAL_MS)
-        page = (page + 1) % featured.size
+    val greeting = greeting(resources, java.time.LocalTime.now().hour)
+    fun stageOf(row: HomeRow, card: HomeCard) = StageInfo(
+        eyebrow = if (row.id == shown.first().id) "$greeting · ${row.title}" else row.title,
+        title = card.title,
+        facts = card.facts.ifEmpty { listOfNotNull(card.caption) },
+        synopsis = card.plot,
+        art = card.backdrop.takeIf { card.channelName == null },
+        poster = card.poster,
+        progress = card.fraction,
+        logoOf = card.type?.takeIf { it == ContentType.MOVIE || it == ContentType.SERIES },
+        year = card.year,
+        isChannel = card.channelName != null,
+    )
+    // What the stage says about the card the remote is on; written from focus and read only by the stage (ADR-0043).
+    val onCard = remember { mutableStateOf<StageInfo?>(null) }
+    LaunchedEffect(shown) {
+        if (onCard.value == null) shown.first().let { row -> row.cards.firstOrNull()?.let { onCard.value = stageOf(row, it) } }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .drawBehind {
-                drawRect(Brush.verticalGradient(0f to wash.value, Tokens.HERO_HEIGHT_FRACTION to wash.value, 1f to Tokens.bgBase))
-            },
-    ) {
-        CalmScrolling {
-            // No content padding: the hero's height is a share of the list's viewport, and padding would shrink it.
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                state = listState,
-                verticalArrangement = Arrangement.spacedBy(Tokens.shelfSpacing),
-            ) {
-                item(key = "hero") {
-                    LuzHero(
-                        title = hero.title,
-                        meta = hero.facts,
-                        detail = hero.plot,
-                        // Only a logo already stored from a page the viewer opened: the carousel asks TMDB nothing.
-                        titleArt = hero.type?.let { type ->
-                            {
-                                val art = rememberTitlePageArt(type, hero.title, hero.year, null, emptyList(), ask = false)
-                                TitleLogo(art.logoUrl, hero.title)
-                            }
-                        },
-                        // A share of the list's own height, not of the "screen height" the platform reports: some
-                        // televisions report a smaller one than they draw, and the hero came out half the size.
-                        modifier = Modifier.fillMaxWidth().fillParentMaxHeight(Tokens.HERO_HEIGHT_FRACTION).onFocusChanged {
-                            heroFocused = it.hasFocus
-                        }.revealsListTop(listState),
-                        room = ambient,
-                        page = page,
-                        pages = featured.size,
-                        artworkOf = hero,
-                        actions = {
-                            HeroActions(
-                                card = hero,
-                                focus = focus,
-                                canAdvance = featured.size > 1,
-                                onFavorite = {
-                                    hero.type?.let { type -> scope.launch { graph.setFavorite(type, hero.key, !hero.favorite) } }
-                                },
-                                onNext = { page = (page + 1) % featured.size },
-                            )
-                        },
-                    ) { card, modifier ->
-                        ArtworkImage(card.backdrop ?: card.poster, resolver, null, modifier, BACKDROP_WIDTH_PX, BACKDROP_HEIGHT_PX)
-                    }
-                }
-                items(shown.size, key = { shown[it].id }) { index ->
-                    val row = shown[index]
-                    LuzShelf(title = row.title) {
-                        items(row.cards.size, key = { row.cards[it].key }) { cardIndex ->
-                            val card = row.cards[cardIndex]
-                            val channel = card.channelName != null
-                            LuzCard(
-                                title = card.title,
-                                subtitle = card.caption,
-                                shape = if (row.landscape) CardShape.LANDSCAPE else CardShape.POSTER,
-                                progress = card.fraction,
-                                modifier = Modifier.rememberedFocus(focus, HomeTags.item(row.id, card.key)),
-                                onLongClick = card.continuing?.let { { menuFor = row.id to card } },
-                                onClick = card.open,
-                            ) { modifier ->
-                                if (channel) {
-                                    ArtworkImage(card.poster, resolver, null, modifier, fit = true, name = card.channelName)
-                                } else {
-                                    // A wide card shows the wide picture: a film's backdrop in Continue watching, not its
-                                    // poster cropped to a strip.
-                                    val art = if (row.landscape) card.backdrop ?: card.poster else card.poster
-                                    ArtworkImage(art, resolver, card.title, modifier, LANDSCAPE_PX_WIDTH, LANDSCAPE_PX_HEIGHT)
+    Column(Modifier.fillMaxSize().background(Tokens.bgBase)) {
+        LuzStage({ onCard.value }, resolver, Modifier.fillMaxWidth().weight(STAGE_FRACTION))
+        StageShelves(Modifier.fillMaxWidth().weight(1f - STAGE_FRACTION)) {
+            CalmScrolling {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(Tokens.shelfSpacing),
+                ) {
+                    items(shown.size, key = { shown[it].id }) { index ->
+                        val row = shown[index]
+                        LuzShelf(title = row.title) {
+                            items(row.cards.size, key = { row.cards[it].key }) { cardIndex ->
+                                val card = row.cards[cardIndex]
+                                val channel = card.channelName != null
+                                LuzCard(
+                                    title = card.title,
+                                    subtitle = card.caption,
+                                    shape = if (row.landscape) CardShape.LANDSCAPE else CardShape.POSTER,
+                                    progress = card.fraction,
+                                    modifier = Modifier
+                                        .rememberedFocus(focus, HomeTags.item(row.id, card.key))
+                                        .onFocusChanged { if (it.isFocused) onCard.value = stageOf(row, card) },
+                                    onLongClick = if (hasMenu(card)) ({ menuFor = row.id to card }) else null,
+                                    onClick = card.open,
+                                ) { modifier ->
+                                    if (channel) {
+                                        ArtworkImage(card.poster, resolver, null, modifier, fit = true, name = card.channelName)
+                                    } else {
+                                        // A wide card shows the wide picture: a film's backdrop in Continue watching, not its
+                                        // poster cropped to a strip.
+                                        val art = if (row.landscape) card.backdrop ?: card.poster else card.poster
+                                        ArtworkImage(art, resolver, card.title, modifier, LANDSCAPE_PX_WIDTH, LANDSCAPE_PX_HEIGHT)
+                                    }
                                 }
                             }
                         }
                     }
+                    item(key = "end") { Spacer(Modifier.height(Tokens.space16)) }
                 }
-                item(key = "end") { Spacer(Modifier.height(Tokens.space16)) }
             }
         }
-        val menuPlaylist = playlist
-        val menu = menuFor
-        if (menu != null && menuPlaylist != null) {
-            val (rowId, card) = menu
-            card.continuing?.let { continuing ->
-                ContinueMenu(
-                    playlistId = menuPlaylist,
-                    card = continuing,
-                    onOpen = { card.details?.invoke() },
-                    onDismiss = {
-                        menuFor = null
-                        // Back to the card — or, when it has just left the row, to the one now first in it.
-                        scope.launch {
-                            repeat(MENU_RETURN_ATTEMPTS) {
-                                if (focus.requestFocus(HomeTags.item(rowId, card.key))) return@launch
-                                val first = rows?.firstOrNull { it.id == rowId }?.cards?.firstOrNull()
-                                if (first != null && focus.requestFocus(HomeTags.item(rowId, first.key))) return@launch
-                                delay(MENU_RETURN_INTERVAL_MS)
-                            }
-                        }
-                    },
-                )
+    }
+    val menuPlaylist = playlist
+    val menu = menuFor
+    if (menu != null && menuPlaylist != null) {
+        val (rowId, card) = menu
+        // Back to the card — or, when it has just left the row, to the one now first in it.
+        val returnToCard = {
+            menuFor = null
+            scope.launch {
+                repeat(MENU_RETURN_ATTEMPTS) {
+                    if (focus.requestFocus(HomeTags.item(rowId, card.key))) return@launch
+                    val first = rows?.firstOrNull { it.id == rowId }?.cards?.firstOrNull()
+                    if (first != null && focus.requestFocus(HomeTags.item(rowId, first.key))) return@launch
+                    delay(MENU_RETURN_INTERVAL_MS)
+                }
             }
+            Unit
         }
-        // "Good evening", quietly over the top of the hero while it is in view.
-        val atTop by remember {
-            derivedStateOf {
-                listState.firstVisibleItemIndex == 0 &&
-                    listState.firstVisibleItemScrollOffset < GREETING_FADE_PX
-            }
-        }
-        AnimatedVisibility(
-            visible = atTop,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopStart).padding(start = Tokens.contentStart, top = Tokens.space8),
-        ) {
-            Text(
-                greeting(resources, java.time.LocalTime.now().hour),
-                style = MaterialTheme.typography.titleLarge,
-                color = Tokens.textSecondary,
-                modifier = Modifier.testTag(HomeTags.GREETING),
+        val continuing = card.continuing
+        val type = card.type
+        if (continuing != null) {
+            ContinueMenu(menuPlaylist, continuing, onOpen = { card.details?.invoke() }, onDismiss = returnToCard)
+        } else if (type != null) {
+            TitleMenu(
+                menuPlaylist,
+                TitleTarget(type, card.key, card.title, card.favorite),
+                onOpen = { (card.details ?: card.open)() },
+                onDismiss = returnToCard,
             )
         }
     }
@@ -557,54 +505,17 @@ private fun startsText(resources: android.content.res.Resources, start: kotlin.t
     }
 }
 
-private const val GREETING_FADE_PX = 40
 private const val MENU_RETURN_ATTEMPTS = 10
 private const val MENU_RETURN_INTERVAL_MS = 50L
 private const val LANDSCAPE_PX_WIDTH = 480
 private const val LANDSCAPE_PX_HEIGHT = 270
 
-/**
- * The hero's buttons: Play (or Resume, or Episodes for a series), then favourite and more information as round buttons,
- * then Next when there is more than one featured title.
- */
-@Composable
-private fun RowScope.HeroActions(card: HomeCard, focus: FocusMemory, canAdvance: Boolean, onFavorite: () -> Unit, onNext: () -> Unit) {
-    val primary = when {
-        card.type == ContentType.SERIES -> stringResource(R.string.home_hero_open)
-        card.fraction != null && card.fraction > 0f -> stringResource(R.string.home_hero_resume)
-        else -> stringResource(R.string.home_hero_play)
-    }
-    LuzButton(primary, card.open, Modifier.rememberedFocus(focus, HomeTags.HERO_PLAY), kind = ButtonKind.PRIMARY, icon = LuzIcons.Play)
-    if (card.type == ContentType.MOVIE || card.type == ContentType.SERIES) {
-        LuzIconButton(
-            if (card.favorite) LuzIcons.Check else LuzIcons.Add,
-            stringResource(if (card.favorite) R.string.home_hero_unfavorite else R.string.home_hero_favorite),
-            onFavorite,
-            Modifier.rememberedFocus(focus, HomeTags.HERO_FAVORITE),
-        )
-    }
-    card.details?.let {
-        LuzIconButton(LuzIcons.Info, stringResource(R.string.home_hero_info), it, Modifier.rememberedFocus(focus, HomeTags.HERO_INFO))
-    }
-    if (canAdvance) {
-        LuzIconButton(
-            LuzIcons.Chevron,
-            stringResource(R.string.home_hero_next),
-            onNext,
-            Modifier.rememberedFocus(focus, HomeTags.HERO_NEXT),
-        )
-    }
-}
+/** Whether a long press on the card opens a menu: films and series do (and Continue watching), channels do not. */
+private fun hasMenu(card: HomeCard): Boolean = card.continuing != null || card.type != null
 
-/**
- * What the hero features, in order: what the viewer is part-way through, then titles with wide artwork, then anything
- * with a picture at all. Channels never feature — a logo is not a hero.
- */
-private fun featuredFrom(rows: List<HomeRow>): List<HomeCard> {
-    val titles = rows.flatMap { it.cards }.filter { it.channelName == null }
-    val ordered = titles.filter { it.fraction != null } + titles.filter { it.backdrop != null } + titles.filter { it.poster != null }
-    return ordered.distinctBy { it.key }.take(FEATURED_LIMIT).ifEmpty { rows.first().cards.take(1) }
-}
+/** Where the remote lands when Home opens: the first card of the first row. */
+private fun firstCardKey(rows: List<HomeRow>): String? =
+    rows.firstOrNull()?.let { row -> row.cards.firstOrNull()?.let { HomeTags.item(row.id, it.key) } }
 
 /**
  * Channel cards with what is on now underneath: the viewer's own channels ([mine] — favourites, then the most watched),
@@ -626,11 +537,11 @@ private suspend fun channelCards(
     return channels.map { channel ->
         HomeCard(
             key = channel.id.value,
-            title = channel.name,
+            title = channel.label,
             caption = guide[channel.id.value]?.current?.title,
             poster = channel.logo,
             fraction = null,
-            channelName = channel.name,
+            channelName = channel.label,
             // Zapping from a favourite stays among favourites; from any other channel, the whole list.
             open = { onPlay(playlist, if (channel.isFavorite) ChannelScope.Favorites else ChannelScope.All, channel.id) },
         )
@@ -658,8 +569,6 @@ internal fun <T> withoutRepeats(rows: List<T>, checked: (T) -> Boolean, idsOf: (
 private const val REPEAT_SHARE = 0.6
 private val PERSONAL_ROWS = setOf(HomeTags.CONTINUE, HomeTags.CHANNELS, HomeTags.LIVE, HomeTags.MY_LIST)
 private const val ROW_LIMIT = 20
-private const val FEATURED_LIMIT = 6
-private const val CAROUSEL_INTERVAL_MS = 9_000L
 
 /** Home is rebuilt for background film pages once every this many progress steps (each step is 50 pages). */
 private const val DETAIL_REFRESH_STEP = 10

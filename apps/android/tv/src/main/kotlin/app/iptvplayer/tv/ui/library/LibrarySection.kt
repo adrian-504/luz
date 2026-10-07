@@ -66,8 +66,6 @@ object LibraryTags {
     const val CATEGORY_ALL = "library-category-all"
     const val ADD_SOURCE = "library-add-source"
     const val EMPTY = "library-empty"
-    const val HERO_PLAY = "library-hero-play"
-    const val HERO_INFO = "library-hero-info"
 
     fun shelfItem(shelf: String, id: String) = "library-shelf-$shelf-$id"
 

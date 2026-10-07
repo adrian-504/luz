@@ -2,6 +2,7 @@ package app.iptvplayer.storage
 
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.library.Quality
+import app.iptvplayer.domain.library.TitleCleaner
 import app.iptvplayer.domain.model.ChannelGroup
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.Episode
@@ -1266,7 +1267,8 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             language: String? = null,
             versions: Long? = null,
         ) = MovieRow(
-            id, title, year?.toInt(), duration?.seconds, plot, decodeList(genres), rating, poster?.let(::UrlTemplate),
+            id, TitleCleaner.forDisplay(title, year?.toInt()), year?.toInt(), duration?.seconds, plot, decodeList(genres),
+            TitleCleaner.ratingText(rating), poster?.let(::UrlTemplate),
             backdrop?.let(::UrlTemplate),
             added?.let(Instant::fromEpochMilliseconds), progressOf(position, watched ?: duration?.times(1000), completed), favorite == true,
             qualityOf(quality), decodeList(tags), language, versions?.toInt() ?: 1,
@@ -1288,8 +1290,14 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             language: String? = null,
             modified: Long? = null,
         ) = SeriesRow(
-            id, title, year?.toInt(), plot, decodeList(genres), rating, poster?.let(::UrlTemplate), backdrop?.let(::UrlTemplate), provider,
-            favorite == true, qualityOf(quality), decodeList(tags), language, modified?.let(Instant::fromEpochMilliseconds),
+            id, TitleCleaner.forDisplay(title, year?.toInt()), year?.toInt(), plot, decodeList(genres), TitleCleaner.ratingText(rating),
+            poster?.let(
+                ::UrlTemplate,
+            ),
+            backdrop?.let(
+                ::UrlTemplate,
+            ),
+            provider, favorite == true, qualityOf(quality), decodeList(tags), language, modified?.let(Instant::fromEpochMilliseconds),
         )
 
         fun qualityOf(name: String?): Quality? = name?.let { value -> Quality.entries.firstOrNull { it.name == value } }

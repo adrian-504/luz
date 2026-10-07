@@ -119,18 +119,3 @@ private object AmbientColors {
 }
 
 private const val AMBIENT_FADE_MS = 650
-
-/**
- * The colour the room takes from the hero's picture — and only while the hero is on screen. Scrolled past it, the room
- * goes back to plain dark: the wash belongs to the picture it came from, and a green screen under shelves of other
- * films is not what the colour was for. Read while drawing, so the change repaints the background and rebuilds nothing.
- */
-@Composable
-internal fun rememberRoomWash(ambient: Color, atTop: () -> Boolean): Animatable<Color, AnimationVector4D> {
-    val wash = remember { Animatable(Tokens.bgBase, Color.VectorConverter(Tokens.bgBase.colorSpace)) }
-    val showing by remember { derivedStateOf(atTop) }
-    LaunchedEffect(ambient, showing) { wash.animateTo(if (showing) ambient else Tokens.bgBase, tween(WASH_MS, easing = LuzEase)) }
-    return wash
-}
-
-private const val WASH_MS = 600

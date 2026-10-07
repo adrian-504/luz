@@ -122,6 +122,23 @@ public object TitleCleaner {
     }
 
     /**
+     * A title as a card shows it. Titles are cleaned when imported, but a library imported before a rule existed still
+     * holds the old result, and a year the provider only gave later (from the film's page) can leave "Movie 2010" beside
+     * "2010". Cleaning again with the year known takes those off; a title that is already clean comes back unchanged.
+     */
+    public fun forDisplay(title: String, year: Int?): String = clean(title, year).title
+
+    /**
+     * A rating as one decimal: "7.925" and "8.0" are written "7.9" and "8". Anything that is not a number, or is 0, is
+     * returned as null — a card then shows no rating rather than "0" or a word.
+     */
+    public fun ratingText(raw: String?): String? {
+        val value = raw?.trim()?.replace(',', '.')?.toDoubleOrNull()?.takeIf { it > 0.0 && it <= 10.0 } ?: return null
+        val tenths = kotlin.math.round(value * 10).toInt()
+        return if (tenths % 10 == 0) "${tenths / 10}" else "${tenths / 10}.${tenths % 10}"
+    }
+
+    /**
      * An episode's own name, from what the provider called it: without the show's name and without the season and episode
      * numbering it repeats ("Slow Horses-S1.E1", "Slow Horses 1x01 - Failure's Contagious"). Null when nothing is left,
      * which is the honest answer for a provider that only numbers its episodes.
@@ -203,6 +220,8 @@ public object TitleCleaner {
         "MULTI", "MULTISUB", "MULTI-SUB", "MULTIAUDIO", "DUAL" -> "Multi-language"
         "VOSTFR", "VOST", "SUB", "SUBBED", "SUBS", "VOSE" -> "Subtitled"
         "IMAX" -> "IMAX"
+        // A recording made in a cinema, not a release: the viewer should know before pressing play.
+        "CAM", "HDCAM", "TS", "HDTS", "TELESYNC", "HDTC" -> "CAM"
         else -> null
     }
 

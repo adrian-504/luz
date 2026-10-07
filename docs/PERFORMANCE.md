@@ -286,3 +286,17 @@ time, are the poster decode size, the card's clip and border, and how much of th
 **Movies opening time.** Matching TMDB's lists against the library took 2.5 s, 4.1 s and 7.8 s for the three TMDB shelves
 (every film compared with every list entry); with indexed lookups the whole page is up in about 2.5 s, and reopening it
 shows the last page at once.
+
+### 6.6 The stage layout (ADR-0043, 2026-10-07)
+
+Release build on the owner's Bbox with their library, Home open, `tooling/scripts/measure_frames.sh`.
+
+| Movement | Frames drawn | Janky | 50th | 95th | 99th |
+|---|---|---|---|---|---|
+| 14 presses down through Home's rows, 250 ms apart (one run) | 120 | 1.7 % | 9 ms | 15 ms | 21 ms |
+
+**One run, and not comparable with §6.5**: it moves between rows rather than along a poster shelf, and §6.5 has the
+reasons a single run proves nothing. **Moving along a shelf was not measured**: the sideways runs on the first attempt
+reached the end of the row, and the next press opened the navigation, so their counts (1 to 15 frames) say nothing.
+Next: three runs each way along a poster shelf in Movies, as in §6.5, before this layout is called as fast as or faster than
+the one it replaced.

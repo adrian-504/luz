@@ -163,7 +163,8 @@ class LiveTvFlowTest {
         Thread.sleep(PREPARE_GRACE_MS)
         rule.waitForIdle()
         press(KeyEvent.KEYCODE_LAST_CHANNEL)
-        awaitExists(PlayerTags.TITLE, "Test News HD")
+        // The player names the channel as the viewer reads it: the provider's "HD" is a badge, not part of the name.
+        awaitExists(PlayerTags.TITLE, "Test News")
         rule.waitUntil(20_000) {
             runCatching { rule.onNodeWithTag(PlayerTags.STATE).assertExistsWithText(stateText(PlaybackState.PLAYING)) }.isSuccess
         }

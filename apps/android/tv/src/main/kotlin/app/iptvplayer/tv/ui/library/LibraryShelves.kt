@@ -346,18 +346,11 @@ fun LibraryShelves(
     val coroutines = rememberCoroutineScope()
     val loaded = shelves ?: return LuzSkeletonShelf(CardShape.POSTER, Modifier.padding(top = Tokens.space16))
     val resolver = rememberArtworkResolver(playlist)
-    val featured = remember(loaded) {
-        loaded.filterIsInstance<Shelf.Titles>().filter { it.key != "continue" }.flatMap { it.items }.firstOrNull { it.backdrop != null }
-    }
-    // Where the remote lands when the section opens: the hero's Play, or the first title when nothing has a backdrop.
-    val firstKey = if (featured != null) {
-        LibraryTags.HERO_PLAY
-    } else {
-        when (val first = loaded.firstOrNull()) {
-            is Shelf.Titles -> LibraryTags.shelfItem(first.key, first.items.first().id)
-            is Shelf.Tiles -> LibraryTags.tile(first.tiles.first().key)
-            null -> null
-        }
+    // Where the remote lands when the section opens: the first title on the first shelf.
+    val firstKey = when (val first = loaded.firstOrNull()) {
+        is Shelf.Titles -> first.items.firstOrNull()?.let { LibraryTags.shelfItem(first.key, it.id) }
+        is Shelf.Tiles -> first.tiles.firstOrNull()?.let { LibraryTags.tile(it.key) }
+        null -> null
     }
     LaunchedEffect(firstKey) { onFirstKey(firstKey) }
     // Back from a grid: bring the shelf holding its tile into view — it is near the bottom, beyond what the list has
@@ -366,7 +359,7 @@ fun LibraryShelves(
     val returnIndex = returnTo?.let { key -> loaded.indexOfFirst { it is Shelf.Tiles && it.tiles.any { tile -> tile.key == key } } }
     LaunchedEffect(returnTo, returnIndex) {
         if (returnTo == null || returnIndex == null || returnIndex < 0) return@LaunchedEffect
-        listState.scrollToItem(returnIndex + 1)
+        listState.scrollToItem(returnIndex)
         repeat(RETURN_ATTEMPTS) {
             if (focus.requestFocus(LibraryTags.tile(returnTo))) {
                 onReturned()
@@ -376,98 +369,72 @@ fun LibraryShelves(
         }
         onReturned()
     }
-    val ambient = rememberAmbientColor(featured?.backdrop, resolver)
-    // The poster the remote is resting on, for the room behind the shelves (ideas 5 and 6). Written from focus and read
-    // only by the backdrop, so moving along a shelf rebuilds nothing else.
-    val underRemote = remember { mutableStateOf<UrlTemplate?>(null) }
+    // What the stage says about the card the remote is on (ADR-0043). Written from focus and read only by the stage, so
+    // moving along a shelf rebuilds nothing else.
+    val kind = if (movies) ContentType.MOVIE else ContentType.SERIES
+    val kindLabel = stringResource(if (movies) R.string.home_kind_movie else R.string.home_kind_series)
+    fun stageOf(shelfTitle: String, item: ShelfItem) = StageInfo(
+        eyebrow = shelfTitle,
+        title = item.title,
+        facts = listOf(kindLabel) + item.facts,
+        synopsis = item.plot,
+        art = item.backdrop,
+        poster = item.poster,
+        progress = item.progress,
+        logoOf = kind,
+        year = item.year,
+    )
+    val onCard = remember { mutableStateOf<StageInfo?>(null) }
+    LaunchedEffect(loaded) {
+        if (onCard.value == null) {
+            (loaded.firstOrNull() as? Shelf.Titles)?.let { shelf ->
+                shelf.items.firstOrNull()?.let {
+                    onCard.value = stageOf(
+                        shelf.title,
+                        it,
+                    )
+                }
+            }
+        }
+    }
 
-    val wash = rememberRoomWash(ambient) { listState.firstVisibleItemIndex == 0 }
-    Box(
-        Modifier
-            .fillMaxSize()
-            .drawBehind {
-                drawRect(Brush.verticalGradient(0f to wash.value, LIBRARY_HERO_FRACTION to wash.value, 1f to Tokens.bgBase))
-            },
-    ) {
-        RoomBackdrop({ underRemote.value }, { listState.firstVisibleItemIndex > 0 }, resolver)
-        CalmScrolling {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                state = listState,
-                verticalArrangement = Arrangement.spacedBy(Tokens.shelfSpacing),
-            ) {
-                if (featured != null) {
-                    item(key = "hero") {
-                        LuzHero(
-                            title = featured.title,
-                            meta =
-                            listOf(
-                                stringResource(if (movies) R.string.home_kind_movie else R.string.home_kind_series),
-                            ) + featured.facts,
-                            detail = featured.plot,
-                            titleArt = {
-                                val type = if (movies) ContentType.MOVIE else ContentType.SERIES
-                                val art = rememberTitlePageArt(type, featured.title, featured.year, null, emptyList(), ask = false)
-                                TitleLogo(art.logoUrl, featured.title)
-                            },
-                            modifier = Modifier.fillParentMaxHeight(LIBRARY_HERO_FRACTION).revealsListTop(listState),
-                            room = ambient,
-                            artworkOf = featured.backdrop,
-                            actions = {
-                                LuzButton(
-                                    stringResource(if (movies) R.string.home_hero_play else R.string.home_hero_open),
-                                    { if (movies) onPlay(featured.id) else onOpen(featured.id) },
-                                    Modifier.rememberedFocus(focus, LibraryTags.HERO_PLAY),
-                                    kind = ButtonKind.PRIMARY,
-                                    icon = LuzIcons.Play,
-                                )
-                                LuzIconButton(
-                                    LuzIcons.Info,
-                                    stringResource(R.string.home_hero_info),
-                                    { onOpen(featured.id) },
-                                    Modifier.rememberedFocus(focus, LibraryTags.HERO_INFO),
-                                )
-                            },
-                        ) { art, modifier -> ArtworkImage(art, resolver, null, modifier, BACKDROP_WIDTH_PX, BACKDROP_HEIGHT_PX) }
-                    }
-                } else {
-                    item(key = "title") {
-                        Text(
-                            stringResource(if (movies) R.string.section_movies else R.string.section_series),
-                            style = MaterialTheme.typography.displaySmall,
-                            color = Tokens.textPrimary,
-                            modifier = Modifier.padding(start = Tokens.contentStart, top = Tokens.space10),
-                        )
-                    }
-                }
-                items(loaded.size, key = { loaded[it].key }) { index ->
-                    when (val shelf = loaded[index]) {
-                        is Shelf.Titles -> LuzShelf(shelf.title) {
-                            items(shelf.items.size, key = { shelf.items[it].id }) { i ->
-                                val item = shelf.items[i]
-                                LuzCard(
-                                    title = item.title,
-                                    subtitle = item.caption,
-                                    shape = CardShape.POSTER,
-                                    progress = item.progress,
-                                    modifier = Modifier
-                                        .rememberedFocus(focus, LibraryTags.shelfItem(shelf.key, item.id))
-                                        // Only a wide picture: a poster stretched across the screen washes the words out.
-                                        .onFocusChanged { if (it.isFocused) underRemote.value = item.backdrop },
-                                    onLongClick = { menuFor = shelf.key to item },
-                                    onClick = { onOpen(item.id) },
-                                ) { art -> ArtworkImage(item.poster, resolver, item.title, art) }
+    Column(Modifier.fillMaxSize().background(Tokens.bgBase)) {
+        LuzStage({ onCard.value }, resolver, Modifier.fillMaxWidth().weight(STAGE_FRACTION))
+        StageShelves(Modifier.fillMaxWidth().weight(1f - STAGE_FRACTION)) {
+            CalmScrolling {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(Tokens.shelfSpacing),
+                ) {
+                    items(loaded.size, key = { loaded[it].key }) { index ->
+                        when (val shelf = loaded[index]) {
+                            is Shelf.Titles -> LuzShelf(shelf.title) {
+                                items(shelf.items.size, key = { shelf.items[it].id }) { i ->
+                                    val item = shelf.items[i]
+                                    LuzCard(
+                                        title = item.title,
+                                        subtitle = item.caption,
+                                        shape = CardShape.POSTER,
+                                        progress = item.progress,
+                                        modifier = Modifier
+                                            .rememberedFocus(focus, LibraryTags.shelfItem(shelf.key, item.id))
+                                            .onFocusChanged { if (it.isFocused) onCard.value = stageOf(shelf.title, item) },
+                                        onLongClick = { menuFor = shelf.key to item },
+                                        onClick = { onOpen(item.id) },
+                                    ) { art -> ArtworkImage(item.poster, resolver, item.title, art) }
+                                }
                             }
-                        }
-                        is Shelf.Tiles -> LuzShelf(shelf.title) {
-                            items(shelf.tiles.size, key = { shelf.tiles[it].key }) { i ->
-                                val tile = shelf.tiles[i]
-                                Tile(tile, Modifier.rememberedFocus(focus, LibraryTags.tile(tile.key))) { onBrowse(tile.key) }
+                            is Shelf.Tiles -> LuzShelf(shelf.title) {
+                                items(shelf.tiles.size, key = { shelf.tiles[it].key }) { i ->
+                                    val tile = shelf.tiles[i]
+                                    Tile(tile, Modifier.rememberedFocus(focus, LibraryTags.tile(tile.key))) { onBrowse(tile.key) }
+                                }
                             }
                         }
                     }
+                    item(key = "end") { Spacer(Modifier.height(Tokens.space10)) }
                 }
-                item(key = "end") { Spacer(Modifier.height(Tokens.space10)) }
             }
         }
     }

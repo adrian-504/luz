@@ -256,9 +256,8 @@ class LibraryFlowTest {
         ) { timeout, condition -> runCatching { rule.waitUntil(timeout, condition) } }
         awaitFocus(ShellTags.rail(Section.HOME))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        // Home opens on its hero, which features what the viewer is part-way through first: its Play resumes the movie.
-        awaitFocus(HomeTags.HERO_PLAY, timeout = 20_000)
-        awaitText(HomeTags.HERO_PLAY, rule.activity.getString(R.string.home_hero_resume))
+        // Home opens on its first row, "Continue watching", with the remote on the movie: OK resumes it.
+        awaitFocus(HomeTags.item(HomeTags.CONTINUE, movie.id), timeout = 20_000)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitPlaying()
     }
@@ -312,8 +311,7 @@ class LibraryFlowTest {
         ) { timeout, condition -> runCatching { rule.waitUntil(timeout, condition) } }
         awaitFocus(ShellTags.rail(Section.HOME))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitFocus(HomeTags.HERO_PLAY, timeout = 20_000)
-        pressUntilFocused(KeyEvent.KEYCODE_DPAD_DOWN, HomeTags.item(HomeTags.CONTINUE, series.id), times = 3)
+        awaitFocus(HomeTags.item(HomeTags.CONTINUE, series.id), timeout = 20_000)
         longPressOk()
         awaitFocus(LuzMenuTags.item("open"))
         pressUntilFocused(KeyEvent.KEYCODE_DPAD_DOWN, LuzMenuTags.item("remove-continue"), times = 4)

@@ -104,8 +104,8 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
     val resolver = rememberArtworkResolver(playlistId)
     PlayerScreen(
         request = request,
-        live = LiveInfo(channel.number, channel.name, channel.logo, guide?.current, guide?.next),
-        channels = list.map { ChannelChoice(it.id.value, it.number, it.name, it.logo, listGuide[it.id.value]?.current?.title) },
+        live = LiveInfo(channel.number, channel.label, channel.logo, guide?.current, guide?.next),
+        channels = list.map { ChannelChoice(it.id.value, it.number, it.label, it.logo, listGuide[it.id.value]?.current?.title) },
         currentChannelId = channel.id.value,
         onChooseChannel = { id ->
             if (id != target) {
@@ -117,7 +117,7 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
             }
         },
         resolver = resolver,
-        title = listOfNotNull(channel.number?.toString(), channel.name).joinToString("  "),
+        title = listOfNotNull(channel.number?.toString(), channel.label).joinToString("  "),
         subtitle = subtitle,
         unavailable = unavailable,
         isFavorite = channel.isFavorite,
