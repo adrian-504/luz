@@ -524,7 +524,7 @@ paused. Smoothness on the Bbox decides what stays: every animation and the stage
 
 | # | Stage | Status |
 |---|---|---|
-| 1 | Watching and keeping rebuilt per film and series (ADR-0042) | **Built 2026-10-07** — storage tests (38 on the host, upgrade of schema 14 included) and the library flow tests on the emulator; not yet on the owner's TV |
+| 1 | Watching and keeping rebuilt per film and series (ADR-0042) | **Done 2026-10-07** — VERIFIED: 38 storage tests (upgrade of schema 14 included), all 38 TV device tests on the emulator, `verify.sh`; on the owner's TV the upgrade kept the library and Home and Series show Continue watching with the next episode. NOT YET VERIFIED on a real remote: the long-press menus (covered by the emulator test only) |
 | 2 | The stage layout on Home, Movies, Series; cleaned names, badges | Not started |
 | 3 | My Luz, the menu, Guide empty state, Settings, search keyboard | Not started |
 | 4 | Title page and motion | Not started |
