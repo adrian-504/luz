@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -207,7 +208,10 @@ fun SettingsSection(
                 entries.forEach { entry ->
                     LuzRow(
                         onClick = { selected = entry.key },
-                        modifier = Modifier.rememberedFocus(focus, SettingsTags.entry(entry.key)),
+                        // The page on the right follows the remote down the list, as the pages of a settings menu do.
+                        modifier = Modifier
+                            .rememberedFocus(focus, SettingsTags.entry(entry.key))
+                            .onFocusChanged { if (it.isFocused) selected = entry.key },
                         selected = selected == entry.key,
                     ) {
                         // Each section's symbol on a small round plate, so the list reads at a glance from the sofa.

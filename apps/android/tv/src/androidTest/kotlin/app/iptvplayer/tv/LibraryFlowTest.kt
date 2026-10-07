@@ -36,6 +36,7 @@ import org.junit.Test
 import org.junit.rules.ExternalResource
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /** Movies and series with the remote (ROADMAP Phase 8): browse, detail, play, resume, next episode. */
@@ -322,6 +323,22 @@ class LibraryFlowTest {
         }
         // Its progress is kept: the series' page still knows where the viewer is.
         assertEquals(true, runBlocking { graph.episode(playlist, first.id) }?.progress?.completed)
+    }
+
+    @Test
+    fun myLuzGathersWhatTheViewerKeptAndIsPartWayThrough() {
+        val movie = runBlocking { graph.movies(playlist, null, 10, 0) }.first { it.title == "Test Movie One" }
+        runBlocking {
+            graph.setFavorite(ContentType.MOVIE, movie.id, true)
+            graph.saveProgress(playlist, ContentType.MOVIE, movie.id, null, 12.seconds, 30.seconds, ended = false, newSession = true)
+        }
+        // My Luz is the old Favorites place in the navigation: Continue watching first, then My List, with the remote on the
+        // first card.
+        openSection(Section.FAVORITES, entry = HomeTags.item(HomeTags.CONTINUE, movie.id))
+        pressUntilFocused(KeyEvent.KEYCODE_DPAD_DOWN, HomeTags.item(HomeTags.MY_LIST, movie.id), times = 3)
+        // OK on a card in My List plays it, resuming where it was left.
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitPlaying()
     }
 
     /** Holding OK: the remote sends repeats, and the first of them is the long press (ADR-0031). */

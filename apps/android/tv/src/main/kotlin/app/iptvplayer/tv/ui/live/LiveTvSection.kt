@@ -129,7 +129,7 @@ object LiveTags {
 @Composable
 fun LiveTvSection(
     focus: FocusMemory,
-    favoritesOnly: Boolean,
+    favoritesOnly: Boolean = false,
     onPlay: (PlaylistId, ChannelScope, ChannelId) -> Unit,
     onAddSource: () -> Unit,
     /** Opens the guide on a channel's row (item 34). */
@@ -669,8 +669,6 @@ private fun OnNowPanel(
                         color = Tokens.textSecondary,
                     )
                     Box(Modifier.width(ON_NOW_BAR)) { ProgressBar(progressOf(current, now), Modifier.padding(0.dp)) }
-                } else if (channel != null) {
-                    Text(stringResource(R.string.live_no_guide), style = MaterialTheme.typography.bodyMedium, color = Tokens.textTertiary)
                 }
                 guide?.next?.let {
                     Text(
@@ -740,13 +738,16 @@ private fun ChannelItem(
                     )
                 }
             }
-            Text(
-                current?.title ?: stringResource(R.string.live_no_guide),
-                style = MaterialTheme.typography.bodySmall,
-                color = Tokens.textSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            // A channel with nothing listed has just its name: a line saying so on every row says nothing new.
+            current?.title?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Tokens.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         if (current != null) {
             Box(Modifier.width(ROW_BAR)) { ProgressBar(progressOf(current, now), Modifier.padding(0.dp)) }

@@ -100,6 +100,8 @@ object HomeTags {
     const val TOP_SERIES = "top-series"
     const val BECAUSE = "because"
     const val MY_LIST = "my-list"
+    const val FAVOURITE_CHANNELS = "favourite-channels"
+    const val RECENT = "recent"
     const val COMING_UP = "coming-up"
     const val GENRE = "genre"
 }
@@ -162,6 +164,8 @@ fun HomeSection(
     onOpenSeries: (PlaylistId, String) -> Unit,
     onPlayContent: (PlaylistId, ContentType, String) -> Unit,
     onFirstKey: (String?) -> Unit,
+    /** My Luz (ADR-0044): the same screen, holding only what the viewer has made their own. */
+    myLuz: Boolean = false,
     placeholder: @Composable () -> Unit,
 ) {
     val graph = LocalAppGraph.current
@@ -317,6 +321,28 @@ fun HomeSection(
             },
         )
         val chosen = graph.homeRows()?.let { withNewRows(it, graph.homeRowsKnown()) }
+        // My Luz: what is in progress, what was kept, the channels kept, each group the viewer made, what was watched.
+        val myLuzSpecs = if (myLuz && id != null) {
+            val groups = graph.userGroups(id).filter { it.movieCount + it.seriesCount > 0 }
+            listOfNotNull(specs.firstOrNull { it.id == HomeTags.CONTINUE }) + listOf(
+                HomeRowSpec(HomeTags.MY_LIST, R.string.home_my_list) { p ->
+                    graph.favoriteMovies(p, MY_LIST_LIMIT).map { movieCard(p, it) } +
+                        graph.favoriteSeries(p, MY_LIST_LIMIT).map { seriesCard(p, it) }
+                },
+                HomeRowSpec(HomeTags.FAVOURITE_CHANNELS, R.string.home_favourite_channels, landscape = true) { p ->
+                    channelCards(graph, p, mine = true, onPlay = onPlayChannel, favouritesOnly = true)
+                },
+            ) + groups.map { group ->
+                HomeRowSpec("group-${group.id}", R.string.home_favourite_channels, titleOf = { group.title }) { p ->
+                    graph.moviesInUserGroup(p, group.id, MY_LIST_LIMIT).map { movieCard(p, it) } +
+                        graph.seriesInUserGroup(p, group.id, MY_LIST_LIMIT).map { seriesCard(p, it) }
+                }
+            } + HomeRowSpec(HomeTags.RECENT, R.string.home_recently_watched) { p ->
+                graph.recentlyWatchedMovies(p, ROW_LIMIT).map { movieCard(p, it) }
+            }
+        } else {
+            null
+        }
         rows = if (id == null) {
             emptyList()
         } else {
@@ -330,7 +356,7 @@ fun HomeSection(
                 return if (kept.any { it.id == HomeTags.CHANNELS }) kept.filterNot { it.id == HomeTags.LIVE } else kept
             }
             // The viewer's own choice of rows and their order, when they have made one; otherwise Home's own order.
-            val wanted = chosen?.mapNotNull { key -> specs.firstOrNull { it.id == key } } ?: specs
+            val wanted = myLuzSpecs ?: chosen?.mapNotNull { key -> specs.firstOrNull { it.id == key } } ?: specs
             // The first time Home opens, each row appears as soon as it is read, rather than all of them after the slowest.
             // Later reloads replace the rows in one step, so nothing on screen shrinks and grows again under the viewer.
             val firstLoad = rows == null
@@ -361,7 +387,7 @@ fun HomeSection(
     val listState = rememberLazyListState()
     val greeting = greeting(resources, java.time.LocalTime.now().hour)
     fun stageOf(row: HomeRow, card: HomeCard) = StageInfo(
-        eyebrow = if (row.id == shown.first().id) "$greeting · ${row.title}" else row.title,
+        eyebrow = if (row.id == shown.first().id && !myLuz) "$greeting · ${row.title}" else row.title,
         title = card.title,
         facts = card.facts.ifEmpty { listOfNotNull(card.caption) },
         synopsis = card.plot,
@@ -526,8 +552,11 @@ private suspend fun channelCards(
     playlist: PlaylistId,
     mine: Boolean,
     onPlay: (PlaylistId, ChannelScope, ChannelId) -> Unit,
+    favouritesOnly: Boolean = false,
 ): List<HomeCard> {
-    val channels = if (mine) {
+    val channels = if (favouritesOnly) {
+        graph.favoriteChannels(playlist).take(ROW_LIMIT)
+    } else if (mine) {
         (graph.favoriteChannels(playlist) + graph.mostWatchedChannels(playlist, ROW_LIMIT)).distinctBy { it.id }.take(ROW_LIMIT)
     } else {
         graph.channels(playlist, null).take(ROW_LIMIT)
@@ -567,8 +596,18 @@ internal fun <T> withoutRepeats(rows: List<T>, checked: (T) -> Boolean, idsOf: (
 }
 
 private const val REPEAT_SHARE = 0.6
-private val PERSONAL_ROWS = setOf(HomeTags.CONTINUE, HomeTags.CHANNELS, HomeTags.LIVE, HomeTags.MY_LIST)
+private val PERSONAL_ROWS = setOf(
+    HomeTags.CONTINUE,
+    HomeTags.CHANNELS,
+    HomeTags.LIVE,
+    HomeTags.MY_LIST,
+    HomeTags.FAVOURITE_CHANNELS,
+    HomeTags.RECENT,
+)
 private const val ROW_LIMIT = 20
+
+/** My Luz shows all of what was kept, up to this many of each; Home's shelves stay short. */
+private const val MY_LIST_LIMIT = 100
 
 /** Home is rebuilt for background film pages once every this many progress steps (each step is 50 pages). */
 private const val DETAIL_REFRESH_STEP = 10

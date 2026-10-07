@@ -235,7 +235,8 @@ Drawn under the rail like Home: a featured title with a backdrop, then shelves L
 Recently added / New episodes, Popular, Because you watched…, Highest rated, My List, the viewer's own groups, the six
 largest genres — then glass tiles for every genre, decade and provider category ("Browse all categories"). A tile opens
 the full grid: categories on the left and a poster grid that loads a page at a time; Back returns to the tile. Holding OK
-on a poster offers Open, My List, Add to a group…, Mark as watched, Hide. The stage (section 5.0) follows the poster the
+on a poster offers Open, My List, Add to a group…, Mark as watched, Hide. **My Luz** (the heart in the navigation) is this
+same screen holding Continue watching, My List, Favourite channels, the viewer's groups and Recently watched (ADR-0044). The stage (section 5.0) follows the poster the
 remote rests on. The room behind the shelves is plain dark: the earlier blurred picture behind the shelves and the colour
 wash of a hero are gone, because the wash turned muddy under bright artwork (ADR-0043).
 

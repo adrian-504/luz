@@ -64,6 +64,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.epg.GuideMath
 import app.iptvplayer.epg.TimeWindow
@@ -78,7 +79,9 @@ import app.iptvplayer.tv.ui.live.ChannelScope
 import app.iptvplayer.tv.ui.live.EmptyState
 import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.shortTime
+import app.iptvplayer.tv.ui.theme.ButtonKind
 import app.iptvplayer.tv.ui.theme.LuzButton
+import app.iptvplayer.tv.ui.theme.LuzEmptyState
 import app.iptvplayer.tv.ui.theme.LuzIcons
 import app.iptvplayer.tv.ui.theme.MetadataLine
 import app.iptvplayer.tv.ui.theme.Tokens
@@ -98,6 +101,7 @@ import kotlin.time.toJavaInstant
 
 object GuideTags {
     const val ADD_SOURCE = "guide-add-source"
+    const val ADD_GUIDE_LINK = "guide-add-link"
     const val NOW = "guide-now"
     const val WINDOW_START = "guide-window-start"
     const val DETAILS = "guide-details"
@@ -140,6 +144,7 @@ fun GuideSection(
     onPlay: (PlaylistId, ChannelScope, ChannelId) -> Unit,
     onAddSource: () -> Unit,
     initialChannel: ChannelId? = null,
+    onEditGuideLink: (PlaylistId) -> Unit = {},
 ) {
     val graph = LocalAppGraph.current
     val coroutines = rememberCoroutineScope()
@@ -168,6 +173,14 @@ fun GuideSection(
         playlist = source?.playlistId
         channels = source?.let { graph.channels(it.playlistId, null) }.orEmpty()
     }
+    // How many programmes the guide holds; null until it has been asked. A guide with none says so once, in place of a
+    // timeline of empty rows.
+    var guideItems by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(playlist, revision) {
+        val id = playlist ?: return@LaunchedEffect
+        val state = graph.guideState(id)
+        guideItems = state?.takeIf { it.status != ImportStatus.RUNNING && it.status != ImportStatus.NEVER }?.itemCount
+    }
     // UI clock for the now-line, ticking at minute boundaries (EPG.md §5).
     LaunchedEffect(Unit) {
         while (true) {
@@ -186,6 +199,22 @@ fun GuideSection(
             GuideTags.ADD_SOURCE,
             onAddSource,
         )
+        return
+    }
+
+    if (guideItems == 0L) {
+        LuzEmptyState(
+            title = stringResource(R.string.guide_empty_title),
+            message = stringResource(R.string.guide_empty_message),
+        ) {
+            LuzButton(
+                stringResource(R.string.guide_empty_action),
+                { onEditGuideLink(current) },
+                Modifier.rememberedFocus(focus, GuideTags.ADD_GUIDE_LINK),
+                kind = ButtonKind.PRIMARY,
+                icon = LuzIcons.Add,
+            )
+        }
         return
     }
 
@@ -344,7 +373,7 @@ fun GuideSection(
                         if (all != null && cells.isEmpty()) {
                             // One block across the window, placed where the window is on the sliding layer.
                             GuideCell(
-                                stringResource(R.string.live_no_guide),
+                                "",
                                 MINUTE_WIDTH * (window.start - earliest).inWholeMinutes.toInt(),
                                 MINUTE_WIDTH * WINDOW_MINUTES - CELL_GAP,
                                 0.dp,

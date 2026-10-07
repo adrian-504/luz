@@ -250,8 +250,6 @@ fun LiveBar(info: LiveInfo, resolver: ((UrlTemplate) -> String?)?, badges: List<
                     modifier = Modifier.testTag(PlayerTags.PROGRAMME),
                 )
                 ProgrammeProgress(now)
-            } else {
-                Text(stringResource(R.string.player_no_guide), style = MaterialTheme.typography.bodyMedium, color = Tokens.textTertiary)
             }
             info.next?.let { next ->
                 Text(

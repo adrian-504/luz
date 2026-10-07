@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -27,6 +28,7 @@ import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.tv.R
+import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.RestoreFocusEffect
 import app.iptvplayer.tv.ui.guide.GuideSection
@@ -57,7 +59,7 @@ enum class Section(@param:StringRes val title: Int, val icon: ImageVector, val p
     GUIDE(R.string.section_guide, LuzIcons.Guide, 7),
     MOVIES(R.string.section_movies, LuzIcons.Movies, 8),
     SERIES(R.string.section_series, LuzIcons.Series, 8),
-    FAVORITES(R.string.section_favorites, LuzIcons.Favorites, 7),
+    FAVORITES(R.string.section_my_luz, LuzIcons.Favorites, 7),
     SEARCH(R.string.section_search, LuzIcons.Search, 8),
     SETTINGS(R.string.section_settings, LuzIcons.Settings, null),
 }
@@ -69,7 +71,7 @@ object ShellTags {
 }
 
 /** Sections whose top is a picture that runs under the navigation; the rest start clear of it. */
-private val FULL_BLEED = setOf(Section.HOME, Section.MOVIES, Section.SERIES)
+private val FULL_BLEED = setOf(Section.HOME, Section.MOVIES, Section.SERIES, Section.FAVORITES)
 
 /**
  * The shell: every section fills the screen, and the navigation rail floats over its left edge (ADR-0034).
@@ -94,6 +96,7 @@ fun MainShell(
 ) {
     var homeFirstKey by remember { mutableStateOf<String?>(null) }
     var libraryFirstKey by remember { mutableStateOf<String?>(null) }
+    var myLuzFirstKey by remember { mutableStateOf<String?>(null) }
     // A channel whose guide row was asked for from its menu in Live TV; the guide opens on it.
     var guideChannel by remember { mutableStateOf<ChannelId?>(null) }
     // A section's own step back (a grid back to its shelves), taken before Back moves the remote to the navigation.
@@ -136,9 +139,17 @@ fun MainShell(
             // Keyed so each section starts with its own scroll and focus-restoration state.
             key(selected) {
                 when (selected) {
-                    Section.LIVE_TV, Section.FAVORITES -> LiveTvSection(
+                    Section.FAVORITES -> HomeSection(
                         focus,
-                        favoritesOnly = selected == Section.FAVORITES,
+                        onPlayChannel = onPlayChannel,
+                        onOpenMovie = onOpenMovie,
+                        onOpenSeries = onOpenSeries,
+                        onPlayContent = onPlayContent,
+                        onFirstKey = { myLuzFirstKey = it },
+                        myLuz = true,
+                    ) { MyLuzEmpty(focus, onAddSource) }
+                    Section.LIVE_TV -> LiveTvSection(
+                        focus,
                         onPlay = onPlayChannel,
                         onAddSource = onAddSource,
                         onOpenGuide = { channel ->
@@ -146,7 +157,13 @@ fun MainShell(
                             selected = Section.GUIDE
                         },
                     )
-                    Section.GUIDE -> GuideSection(focus, onPlay = onPlayChannel, onAddSource = onAddSource, initialChannel = guideChannel)
+                    Section.GUIDE -> GuideSection(
+                        focus,
+                        onPlay = onPlayChannel,
+                        onAddSource = onAddSource,
+                        initialChannel = guideChannel,
+                        onEditGuideLink = onEditGuideLink,
+                    )
                     Section.HOME -> HomeSection(
                         focus,
                         onPlayChannel = onPlayChannel,
@@ -208,7 +225,7 @@ fun MainShell(
                 val candidates = when (selected) {
                     Section.SETTINGS -> listOf(SettingsTags.entry(SettingsTags.PROVIDERS), SettingsTags.ADD_SOURCE)
                     Section.LIVE_TV -> listOf(LiveTags.GROUP_ALL, LiveTags.emptyAddSource(favorites = false))
-                    Section.FAVORITES -> listOf(LiveTags.emptyAddSource(favorites = true))
+                    Section.FAVORITES -> listOfNotNull(myLuzFirstKey, ShellTags.ADD_SOURCE)
                     Section.GUIDE -> listOf(GuideTags.FIRST_CELL, GuideTags.ADD_SOURCE)
                     Section.MOVIES, Section.SERIES -> listOfNotNull(libraryFirstKey, LibraryTags.CATEGORY_ALL, LibraryTags.ADD_SOURCE)
                     Section.HOME -> listOfNotNull(homeFirstKey, ShellTags.ADD_SOURCE)
@@ -227,6 +244,20 @@ fun MainShell(
         if (focus.lastFocusedKey == null) contentFocusRequests++
     }
     if (focus.lastFocusedKey != null) RestoreFocusEffect(focus, ShellTags.rail(selected))
+}
+
+/** My Luz with nothing in it yet: with no source, the way to add one; with one, what will gather here and how. */
+@Composable
+private fun MyLuzEmpty(focus: FocusMemory, onAddSource: () -> Unit) {
+    val graph = LocalAppGraph.current
+    val revision by graph.revision.collectAsState()
+    var hasSource by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(revision) { hasSource = graph.currentSource() != null }
+    when (hasSource) {
+        null -> Unit
+        false -> NoSourceYet(focus, onAddSource)
+        true -> LuzEmptyState(title = stringResource(R.string.my_luz_empty_title), message = stringResource(R.string.my_luz_empty_message))
+    }
 }
 
 @Composable

@@ -935,6 +935,13 @@ class AppGraph(context: Context) {
     /** The version of a film that was being watched, so "Resume" carries on in it without asking which. */
     suspend fun watchedVersion(playlistId: PlaylistId, movieId: String): String? = io { library.watchedVersion(playlistId, movieId) }
 
+    /** The films watched most recently, finished or not, each once and as its shelves show it (ADR-0042). */
+    suspend fun recentlyWatchedMovies(playlistId: PlaylistId, limit: Int): List<MovieRow> = io {
+        library.recentlyWatchedMovieIds(playlistId, limit).mapNotNull { id ->
+            library.movie(playlistId, library.primaryVersion(playlistId, id)) ?: library.movie(playlistId, id)
+        }.distinctBy { it.id }
+    }
+
     /** Whether any episode of the series has been played or marked. */
     suspend fun seriesStarted(seriesId: String): Boolean = io { library.lastWatchedEpisode(seriesId) != null }
 

@@ -157,7 +157,7 @@ class RemoteNavigationTest {
             // Without sources every section offers one way forward — add a provider — except Settings, which has its list.
             val entry = when (section) {
                 Section.LIVE_TV -> LiveTags.emptyAddSource(favorites = false)
-                Section.FAVORITES -> LiveTags.emptyAddSource(favorites = true)
+                Section.FAVORITES -> ShellTags.ADD_SOURCE
                 Section.GUIDE -> GuideTags.ADD_SOURCE
                 Section.MOVIES, Section.SERIES -> LibraryTags.ADD_SOURCE
                 Section.SEARCH -> SearchTags.ADD_SOURCE

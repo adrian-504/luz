@@ -773,8 +773,6 @@ private fun InfoContent(
                         maxLines = INFO_LINES,
                         overflow = TextOverflow.Ellipsis,
                     )
-                } else {
-                    Text(stringResource(R.string.player_no_guide), style = MaterialTheme.typography.bodyLarge, color = Tokens.textSecondary)
                 }
                 live.next?.let { next ->
                     Text(

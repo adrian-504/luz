@@ -58,7 +58,6 @@
     <string name="player_channel_list">Channels</string>
     <string name="player_next_channel">Next channel</string>
     <string name="player_live">LIVE</string>
-    <string name="player_no_guide">No guide information</string>
     <string name="player_no_description">No description.</string>
     <string name="player_next_programme">Next · %1$s %2$s</string>
     <string name="player_up_next">Up next</string>
@@ -141,7 +140,6 @@
     <string name="live_no_channels">No channels in this group.</string>
     <string name="live_no_favorites">Nothing saved yet. Hold OK on a channel to keep it here.</string>
     <string name="live_now">Now: %1$s</string>
-    <string name="live_no_guide">No guide information</string>
     <string name="live_title">Live TV</string>
     <string name="favorites_title">Favorites</string>
     <string name="live_time_range">%1$s – %2$s</string>
@@ -150,6 +148,9 @@
     <string name="channel_unavailable">This channel has no playable stream.</string>
 
     <string name="guide_loading">Downloading the guide…</string>
+    <string name="guide_empty_title">No guide yet</string>
+    <string name="guide_empty_message">Your provider sends no programme guide. If you have a guide link (XMLTV), add it and every channel fills in with what is on and what is next.</string>
+    <string name="guide_empty_action">Add a guide link</string>
     <string name="guide_now">Now</string>
     <string name="guide_on_now">On now</string>
     <string name="guide_today">Today</string>
@@ -272,6 +273,11 @@
     <string name="home_good_evening">Good evening</string>
     <string name="home_minutes_left">%1$d min left</string>
     <string name="home_next_episode">Next episode</string>
+    <string name="home_favourite_channels">Favourite channels</string>
+    <string name="home_recently_watched">Recently watched</string>
+    <string name="section_my_luz">My Luz</string>
+    <string name="my_luz_empty_title">Nothing here yet</string>
+    <string name="my_luz_empty_message">Hold OK on a film, series or channel and choose My List or Add to favourites. What you keep, what you are part-way through and your own groups gather here.</string>
     <string name="home_hours_left">%1$d h %2$d min left</string>
     <string name="home_started_ago">Started %1$d min ago</string>
     <string name="home_starts_in">In %1$d min</string>
