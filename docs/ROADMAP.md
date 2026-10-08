@@ -528,7 +528,7 @@ paused. Smoothness on the Bbox decides what stays: every animation and the stage
 | 2 | The stage layout on Home, Movies, Series; cleaned names (ADR-0043) | **Built 2026-10-07** — all 38 emulator device tests, host tests (82 domain, 38 storage), seen on the owner's TV; one frame measurement only (PERFORMANCE.md §6.6). Quality badges on cards and the title page's own layout come in stage 4 |
 | 3 | My Luz, quieter Guide and channel lists, Settings (ADR-0044) | **Built 2026-10-07** — all 39 emulator device tests (one new for My Luz), seen on the owner's TV for My Luz. Not done: the search letter grid and a "See all" grid for My List; the open-menu behaviour in the audit was not reproduced |
 | 4 | Title page: one white thing, cast focus, the episode's story, Watched labels (ADR-0045) | **Built 2026-10-07** — all 39 emulator device tests, seen on the owner's TV. Not built: the poster growing into the page, the light sweep, cast roles (reasons in ADR-0045) |
-| 5 | Player: pause screen, replay with subtitles, Up next picture, speed, subtitle size | Not started |
+| 5 | Player: pause card, labelled skips, the episode's real name (ADR-0046) | **Partly built 2026-10-08** — all 40 emulator device tests, `verify.sh`, skip buttons and episode name seen on the owner's TV. NOT YET VERIFIED visually: the pause card. Not built: replay with subtitles, Up next picture, playback speed, subtitle size |
 | 6 | Live TV: last-channels strip, channel numbers, cleaned names | Not started |
 | 7 | Smart rows: Jump back in, Top 10, franchises, networks, Play something | Not started |
 | 8 | Speed: optimised release build, startup profile, preloading | Not started |

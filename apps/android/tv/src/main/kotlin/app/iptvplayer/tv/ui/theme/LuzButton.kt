@@ -19,7 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -76,10 +78,11 @@ fun LuzButton(
 
 /**
  * A round button with only a symbol, for the quiet actions beside a primary: add to favourites, more information.
- * [label] is what a screen reader says, since there is no visible text.
+ * [label] is what a screen reader says, since there is no visible text. A [badge] is a short word set inside the symbol —
+ * the "10" of a ten-second skip, which would otherwise look the same going back as going forward.
  */
 @Composable
-fun LuzIconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun LuzIconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, badge: String? = null) {
     var focused by remember { mutableStateOf(false) }
     Box(
         modifier = modifier
@@ -97,9 +100,19 @@ fun LuzIconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifie
             tint = if (focused) Color.Black else Tokens.textPrimary,
             modifier = Modifier.size(ICON_SIZE),
         )
+        badge?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = BADGE_SIZE,
+                fontWeight = FontWeight.Bold,
+                color = if (focused) Color.Black else Tokens.textPrimary,
+            )
+        }
     }
 }
 
 private const val PRIMARY_RESTING_ALPHA = 0.26f
 private val ICON_SIZE = 18.dp
 private val ICON_BUTTON_SIZE = 40.dp
+private val BADGE_SIZE = 7.sp

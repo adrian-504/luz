@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.library.NextEpisode
+import app.iptvplayer.domain.library.TitleCleaner
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.platform.playback.PlaybackRequest
 import app.iptvplayer.storage.EpisodeRow
@@ -56,7 +57,15 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
             episode = current
             val series = current?.let { graph.seriesById(playlistId, it.seriesId) }
             title = series?.title.orEmpty()
-            subtitle = current?.let { "S${it.seasonNumber} E${it.episodeNumber}" + (it.title?.let { t -> " · $t" } ?: "") }
+            // The episode's own name: the provider's with the show's name and numbering taken off, else TMDB's. Never the
+            // raw "Mad Men-S1.E8" a provider uses to label an episode it has not named.
+            val place = current?.let { "S${it.seasonNumber} E${it.episodeNumber}" }
+            val own = current?.let { TitleCleaner.episodeTitle(it.title, series?.title.orEmpty(), it.seasonNumber, it.episodeNumber) }
+            subtitle = place?.let { p -> own?.let { "$p · $it" } ?: p }
+            if (own == null && current != null && series != null) {
+                val art = graph.episodeArt(series.title, series.year, null, current.seasonNumber)
+                art[current.episodeNumber]?.name?.let { subtitle = "$place · $it" }
+            }
             description = current?.plot ?: series?.plot
             badges = series?.let { badgesOf(it.quality, it.tags, it.language) }.orEmpty()
             next = current?.let { NextEpisode.after(graph.episodes(playlistId, it.seriesId), it) }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -32,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -53,6 +55,7 @@ import app.iptvplayer.tv.ui.theme.Tokens
 import app.iptvplayer.tv.ui.theme.luzClickable
 import kotlinx.coroutines.delay
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
 /** The channel on screen, for the live bar and the information panel. */
@@ -60,6 +63,69 @@ data class LiveInfo(val number: Int?, val name: String, val logo: UrlTemplate?, 
 
 /** One row of the channel list shown over the picture. */
 data class ChannelChoice(val id: String, val number: Int?, val name: String, val logo: UrlTemplate?, val programme: String?)
+
+/**
+ * What the screen shows when a film is paused and left alone (ADR-0046): the controls give way to a calm card with what is
+ * being watched, how much is left and when it will end if it carries on now, and the time of day. OK carries on.
+ */
+@Composable
+fun PauseCard(title: String, subtitle: String?, remainingMs: Long?, modifier: Modifier = Modifier) {
+    val now = Clock.System.now()
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(
+                Brush.horizontalGradient(
+                    0f to Tokens.bgBase.copy(alpha = 0.94f),
+                    0.55f to Tokens.bgBase.copy(alpha = 0.7f),
+                    1f to Color.Transparent,
+                ),
+            ),
+    ) {
+        Column(
+            modifier = Modifier.align(
+                Alignment.CenterStart,
+            ).padding(start = Tokens.space16 + Tokens.space8).widthIn(max = PAUSE_TEXT_WIDTH),
+            verticalArrangement = Arrangement.spacedBy(Tokens.space3),
+        ) {
+            Text(stringResource(R.string.player_state_paused), style = MaterialTheme.typography.labelLarge, color = Tokens.accent)
+            Text(
+                title,
+                style = MaterialTheme.typography.displayLarge,
+                color = Tokens.textPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            subtitle?.let { Text(it, style = MaterialTheme.typography.headlineSmall, color = Tokens.textPrimary, maxLines = 1) }
+            remainingMs?.takeIf { it > 0 }?.let { left ->
+                val minutes = (left / MS_PER_MINUTE).toInt()
+                val ends = shortTime(now + left.milliseconds)
+                Text(
+                    stringResource(
+                        R.string.player_pause_left,
+                        if (minutes >=
+                            60
+                        ) {
+                            "${minutes / 60} h ${minutes % 60} min"
+                        } else {
+                            "$minutes min"
+                        },
+                        ends,
+                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Tokens.textSecondary,
+                )
+            }
+            Text(stringResource(R.string.player_pause_hint), style = MaterialTheme.typography.bodyMedium, color = Tokens.textTertiary)
+        }
+        PlayerClock(
+            Modifier.align(Alignment.TopEnd).padding(horizontal = Tokens.safeHorizontal, vertical = Tokens.safeVertical),
+        )
+    }
+}
+
+private val PAUSE_TEXT_WIDTH = 520.dp
+private const val MS_PER_MINUTE = 60_000L
 
 /** The time of day in the corner of the player, as the television writes it (item 30). */
 @Composable

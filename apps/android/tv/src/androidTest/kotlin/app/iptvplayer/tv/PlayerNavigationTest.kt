@@ -5,6 +5,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -92,11 +93,19 @@ class PlayerNavigationTest {
         awaitGone(PlayerTags.OVERLAY)
         awaitFocus(PlayerTags.ROOT)
 
-        // OK shows the overlay without also pressing the button that receives focus.
+        // Paused with the controls away, the pause card is up (ADR-0046) and OK carries on.
+        rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(PlayerTags.PAUSE_CARD)).fetchSemanticsNodes().isNotEmpty() }
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitGone(PlayerTags.PAUSE_CARD)
+
+        // Playing, OK shows the overlay without also pressing the button that receives focus.
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(PlayerTags.PLAY_PAUSE)
-        rule.onNodeWithTag(PlayerTags.STATE).assertTextEquals(string(R.string.player_state_paused))
+        rule.onNodeWithTag(PlayerTags.STATE).assertTextEquals(string(R.string.player_state_playing))
 
+        // The media key pauses and carries on, whatever has focus.
+        press(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+        awaitText(PlayerTags.STATE, string(R.string.player_state_paused))
         press(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
         awaitText(PlayerTags.STATE, string(R.string.player_state_playing))
 

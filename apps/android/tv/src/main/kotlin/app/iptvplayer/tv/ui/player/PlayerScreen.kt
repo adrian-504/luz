@@ -93,6 +93,7 @@ object PlayerTags {
     const val DIAGNOSTICS_PANEL = "player-diagnostics-panel"
     const val ERROR_MESSAGE = "player-error-message"
     const val RETRY = "player-retry"
+    const val PAUSE_CARD = "player-pause-card"
     const val BANNER = "player-banner"
     const val TITLE = "player-title"
 
@@ -299,9 +300,15 @@ fun PlayerScreen(
         }
     }
     LaunchedEffect(overlayVisible, lastInputAt, snapshot.state, panel, channelList) {
-        if (overlayVisible && panel == null && !channelList && snapshot.state == PlaybackState.PLAYING) {
-            delay(OVERLAY_TIMEOUT_MS)
-            hideOverlay()
+        if (overlayVisible && panel == null && !channelList) {
+            if (snapshot.state == PlaybackState.PLAYING) {
+                delay(OVERLAY_TIMEOUT_MS)
+                hideOverlay()
+            } else if (snapshot.state == PlaybackState.PAUSED && isVod) {
+                // Paused and left alone: the controls give way to the pause card (ADR-0046).
+                delay(PAUSE_CARD_DELAY_MS)
+                hideOverlay()
+            }
         }
     }
     LaunchedEffect(channelList, lastInputAt) {
@@ -408,7 +415,8 @@ fun PlayerScreen(
                     }
                     KeyEvent.KEYCODE_DPAD_DOWN -> bare.also { if (it) openPanel(PanelTab.INFO, null) }
                     in SELECT_KEYS -> if (!overlayVisible && !isError && panel == null && !channelList) {
-                        overlayVisible = true
+                        // On the pause card OK carries on; anywhere else it brings the controls up.
+                        if (isVod && snapshot.state == PlaybackState.PAUSED) controller.play() else overlayVisible = true
                         swallowSelectUp = true
                         true
                     } else {
@@ -467,10 +475,14 @@ fun PlayerScreen(
         }
 
         if (!overlayVisible && !isError && snapshot.state == PlaybackState.PAUSED) {
-            StateText(
-                snapshot,
-                Modifier.align(Alignment.TopEnd).padding(horizontal = Tokens.safeHorizontal, vertical = Tokens.safeVertical),
-            )
+            if (isVod) {
+                PauseCard(title, subtitle, remainingMs.takeIf { durationMs > 0 }, Modifier.testTag(PlayerTags.PAUSE_CARD))
+            } else {
+                StateText(
+                    snapshot,
+                    Modifier.align(Alignment.TopEnd).padding(horizontal = Tokens.safeHorizontal, vertical = Tokens.safeVertical),
+                )
+            }
         }
 
         if (isError) {
@@ -684,12 +696,14 @@ private fun ControlRow(
                 stringResource(R.string.player_back_10),
                 { onSkip(-SEEK_STEP) },
                 Modifier.testTag(PlayerTags.BACK_10),
+                badge = "10",
             )
             LuzIconButton(
                 LuzIcons.Forward10,
                 stringResource(R.string.player_forward_10),
                 { onSkip(SEEK_STEP) },
                 Modifier.testTag(PlayerTags.FORWARD_10),
+                badge = "10",
             )
         }
         if (onNext != null) {
@@ -1080,6 +1094,7 @@ private val FAST_SEEK_STEP = 30.seconds
 private const val SEEK_HUD_TIMEOUT_MS = 2_000L
 private const val PROGRESS_SAVE_TICKS = 10
 private const val OVERLAY_TIMEOUT_MS = 5_000L
+private const val PAUSE_CARD_DELAY_MS = 4_000L
 private const val BANNER_TIMEOUT_MS = 3_000L
 private val SELECT_KEYS = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
 

@@ -341,6 +341,25 @@ class LibraryFlowTest {
         awaitPlaying()
     }
 
+    @Test
+    fun aPausedFilmShowsTheCardAndOkCarriesOn() {
+        val movie = runBlocking { graph.movies(playlist, null, 10, 0) }.first { it.title == "Test Movie One" }
+        runBlocking {
+            graph.saveProgress(playlist, ContentType.MOVIE, movie.id, null, 12.seconds, 30.seconds, ended = false, newSession = true)
+        }
+        openSection(Section.FAVORITES, entry = HomeTags.item(HomeTags.CONTINUE, movie.id))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitPlaying()
+
+        // Paused and left alone, the controls give way to the pause card (ADR-0046).
+        press(KeyEvent.KEYCODE_MEDIA_PAUSE)
+        rule.waitUntil(20_000) { rule.onAllNodes(hasTestTag(PlayerTags.PAUSE_CARD)).fetchSemanticsNodes().isNotEmpty() }
+        // OK on the card carries on: the card goes and nothing else takes its place.
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(PlayerTags.PAUSE_CARD)).fetchSemanticsNodes().isEmpty() }
+        assertTrue(rule.onAllNodes(hasTestTag(PlayerTags.OVERLAY)).fetchSemanticsNodes().isEmpty())
+    }
+
     /** Holding OK: the remote sends repeats, and the first of them is the long press (ADR-0031). */
     private fun longPressOk() {
         val down = android.os.SystemClock.uptimeMillis()
