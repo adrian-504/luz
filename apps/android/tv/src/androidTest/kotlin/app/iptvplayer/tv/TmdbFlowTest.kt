@@ -140,8 +140,9 @@ class TmdbFlowTest {
         awaitFocus(ShellTags.rail(Section.HOME))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         rule.waitUntil(20_000) { focusedTag()?.startsWith("home-") == true }
-        repeat(4) { if (focusedTag()?.startsWith("home-${HomeTags.TRENDING_MOVIES}-") != true) press(KeyEvent.KEYCODE_DPAD_DOWN) }
-        awaitFocus(HomeTags.item(HomeTags.TRENDING_MOVIES, film.id))
+        // The Top 10 row is those same trending films, numbered, and stands in for the plain row below it (ADR-0048).
+        repeat(4) { if (focusedTag()?.startsWith("home-${HomeTags.TOP_TEN}-") != true) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitFocus(HomeTags.item(HomeTags.TOP_TEN, film.id))
     }
 
     /** Artwork for what the viewer opens (ADR-0039): a logo and portraits for a film, a biography for a person, and none of it when switched off. */

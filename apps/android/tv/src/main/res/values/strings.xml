@@ -282,6 +282,7 @@
     <string name="home_minutes_left">%1$d min left</string>
     <string name="home_next_episode">Next episode</string>
     <string name="home_favourite_channels">Favourite channels</string>
+    <string name="home_top_ten">Top 10 today</string>
     <string name="home_recently_watched">Recently watched</string>
     <string name="section_my_luz">My Luz</string>
     <string name="my_luz_empty_title">Nothing here yet</string>

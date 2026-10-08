@@ -68,3 +68,4 @@ line. Product-scope decisions still go to the owner.
 | [0045](0045-one-white-thing-and-the-episode-on-the-page.md) | One white thing at a time, and the episode's story on its page | Accepted |
 | [0046](0046-pause-card-and-skip-labels.md) | The pause card, labelled skips and the episode's own name in the player | Accepted |
 | [0047](0047-playback-speed-and-channel-numbers.md) | Playback speed for films, and channel numbers typed on the remote | Accepted |
+| [0048](0048-top-ten-today.md) | "Top 10 today" on Home | Accepted |

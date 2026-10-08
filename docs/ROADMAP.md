@@ -530,7 +530,7 @@ paused. Smoothness on the Bbox decides what stays: every animation and the stage
 | 4 | Title page: one white thing, cast focus, the episode's story, Watched labels (ADR-0045) | **Built 2026-10-07** — all 39 emulator device tests, seen on the owner's TV. Not built: the poster growing into the page, the light sweep, cast roles (reasons in ADR-0045) |
 | 5 | Player: pause card, labelled skips, the episode's real name (ADR-0046) | **Partly built 2026-10-08** — all 40 emulator device tests, `verify.sh`, skip buttons and episode name seen on the owner's TV. NOT YET VERIFIED visually: the pause card. Playback speed added (ADR-0047). Not built: replay with subtitles, Up next picture, subtitle size |
 | 6 | Live TV: typing a channel number (ADR-0047); cleaned names came with stage 2 | **Partly built 2026-10-08** — emulator device test; not yet seen on the owner's TV. Not built: the last-channels strip, quality badges on rows |
-| 7 | Smart rows: Jump back in, Top 10, franchises, networks, Play something | Not started |
+| 7 | Smart rows: Top 10 today (ADR-0048) | **Partly built 2026-10-08** — all 42 emulator device tests; not yet seen on the owner's TV. Not built: Jump back in, franchise and network tiles, Play something, the large numerals |
 | 8 | Speed: optimised release build, startup profile, preloading | Not started |
 | 9 | Backup and restore, update notice, crash record | Not started |
 | 10 | Final checks and release | Not started |

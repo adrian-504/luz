@@ -71,6 +71,7 @@ val HOME_ROW_TITLES: List<Pair<String, Int>> = listOf(
     HomeTags.CHANNELS to R.string.home_your_channels,
     HomeTags.LIVE to R.string.home_live_now,
     HomeTags.COMING_UP to R.string.home_coming_up,
+    HomeTags.TOP_TEN to R.string.home_top_ten,
     HomeTags.TRENDING_MOVIES to R.string.home_trending_movies,
     HomeTags.POPULAR_MOVIES to R.string.home_popular_movies,
     HomeTags.SERIES to R.string.home_new_episodes,
@@ -101,6 +102,7 @@ object HomeTags {
     const val BECAUSE = "because"
     const val MY_LIST = "my-list"
     const val FAVOURITE_CHANNELS = "favourite-channels"
+    const val TOP_TEN = "top-ten"
     const val RECENT = "recent"
     const val COMING_UP = "coming-up"
     const val GENRE = "genre"
@@ -271,6 +273,13 @@ fun HomeSection(
                             onPlayChannel(p, if (item.channel.isFavorite) ChannelScope.Favorites else ChannelScope.All, item.channel.id)
                         },
                     )
+                }
+            },
+            // The ten films trending today on TMDB that the viewer can play, numbered. Without TMDB's list there is no ranking,
+            // so the row is left out rather than numbering something else (ADR-0048).
+            HomeRowSpec(HomeTags.TOP_TEN, R.string.home_top_ten) { p ->
+                graph.moviesOfList(p, ExternalList.TRENDING_MOVIES, TOP_TEN_SIZE).mapIndexed { index, movie ->
+                    movieCard(p, movie).copy(caption = "#${index + 1} · ${movie.year ?: ""}".trimEnd(' ', '·'))
                 }
             },
             // Trending comes from TMDB when the viewer gave a key (ADR-0038); without one the row is empty and left out.
@@ -495,7 +504,7 @@ fun withNewRows(saved: List<String>, known: List<String>?): List<String> {
 }
 
 /** Rows added on 2026-09-18, before which Luz did not note which rows existed when the viewer saved theirs. */
-private val NEW_ROWS_2026_09 = setOf(HomeTags.COMING_UP, HomeTags.GENRE)
+private val NEW_ROWS_2026_09 = setOf(HomeTags.COMING_UP, HomeTags.GENRE, HomeTags.TOP_TEN)
 
 /** "Good morning" until noon, "Good afternoon" until six, then "Good evening" through the night. */
 internal fun greeting(resources: android.content.res.Resources, hour: Int): String = resources.getString(
@@ -605,6 +614,7 @@ private val PERSONAL_ROWS = setOf(
     HomeTags.RECENT,
 )
 private const val ROW_LIMIT = 20
+private const val TOP_TEN_SIZE = 10
 
 /** My Luz shows all of what was kept, up to this many of each; Home's shelves stay short. */
 private const val MY_LIST_LIMIT = 100

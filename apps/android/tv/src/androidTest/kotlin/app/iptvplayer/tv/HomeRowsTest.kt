@@ -20,9 +20,18 @@ class HomeRowsTest {
     @Test
     fun rowsAddedSinceTheViewerSavedTheirChoiceAppearWhereTheyBelong() {
         val saved = listOf(HomeTags.CONTINUE, HomeTags.CHANNELS, HomeTags.MOVIES, HomeTags.BECAUSE)
-        // Saved before Luz noted which rows existed: the two new rows come in after the rows they follow.
+        // Saved before Luz noted which rows existed: the new rows (Coming up, Top 10, the genre row) come in after the rows
+        // they follow.
         assertEquals(
-            listOf(HomeTags.CONTINUE, HomeTags.CHANNELS, HomeTags.COMING_UP, HomeTags.MOVIES, HomeTags.BECAUSE, HomeTags.GENRE),
+            listOf(
+                HomeTags.CONTINUE,
+                HomeTags.CHANNELS,
+                HomeTags.COMING_UP,
+                HomeTags.TOP_TEN,
+                HomeTags.MOVIES,
+                HomeTags.BECAUSE,
+                HomeTags.GENRE,
+            ),
             withNewRows(saved, known = null),
         )
         // Saved knowing every row: a row left out stays out.
