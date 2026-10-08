@@ -117,6 +117,7 @@ object PlayerTags {
     const val BACK_10 = "player-back-10"
     const val FORWARD_10 = "player-forward-10"
     const val INFO = "player-info"
+    const val TYPED_NUMBER = "player-typed-number"
     const val SPEED = "player-speed"
     const val CHANNEL_LIST = "player-channel-list"
     const val CHANNEL_LIST_BUTTON = "player-channel-list-button"
@@ -221,6 +222,14 @@ fun PlayerScreen(
     var panel by remember { mutableStateOf<PanelTab?>(null) }
     var channelList by remember { mutableStateOf(false) }
     var overlayVisible by remember { mutableStateOf(true) }
+    // A channel number being typed on the remote: it tunes once the viewer stops typing (ADR-0047).
+    var typed by remember { mutableStateOf("") }
+    LaunchedEffect(typed) {
+        if (typed.isEmpty()) return@LaunchedEffect
+        delay(NUMBER_SETTLE_MS)
+        channels?.firstOrNull { it.number?.toString() == typed }?.let { onChooseChannel?.invoke(it.id) }
+        typed = ""
+    }
     var diagnosticsVisible by remember { mutableStateOf(false) }
     var lastInputAt by remember { mutableLongStateOf(0L) }
     var swallowSelectUp by remember { mutableStateOf(false) }
@@ -408,6 +417,9 @@ fun PlayerScreen(
                             seekShownAt = System.nanoTime()
                         }
                     }
+                    in DIGIT_KEYS -> (isLive && channels != null && panel == null).also {
+                        if (it) typed = (typed + digitOf(keyCode)).takeLast(MAX_NUMBER_DIGITS)
+                    }
                     KeyEvent.KEYCODE_LAST_CHANNEL -> (onLastChannel != null).also { if (it) onLastChannel?.invoke() }
                     KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> isLive.also { if (it) onZap?.invoke(+1) }
                     KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> isLive.also { if (it) onZap?.invoke(-1) }
@@ -430,6 +442,13 @@ fun PlayerScreen(
     ) {
         VideoSurface(controller)
         SubtitleCues(cues, raised = overlayVisible && !isError, modifier = Modifier.align(Alignment.BottomCenter))
+        if (typed.isNotEmpty()) {
+            TypedNumber(
+                typed,
+                channels?.firstOrNull { it.number?.toString() == typed }?.name,
+                Modifier.align(Alignment.TopEnd).padding(horizontal = Tokens.safeHorizontal, vertical = Tokens.space16),
+            )
+        }
         // Focus target while the overlay is hidden. It is a sibling, not a parent, of the overlay buttons: Compose moves
         // focus to a focusable parent on Back, which would swallow the first Back press.
         Box(modifier = Modifier.fillMaxSize().testTag(PlayerTags.ROOT).focusRequester(rootFocus).focusable())
@@ -1104,6 +1123,15 @@ private val FAST_SEEK_STEP = 30.seconds
 private const val SEEK_HUD_TIMEOUT_MS = 2_000L
 private const val PROGRESS_SAVE_TICKS = 10
 private const val OVERLAY_TIMEOUT_MS = 5_000L
+private const val NUMBER_SETTLE_MS = 1_300L
+private const val MAX_NUMBER_DIGITS = 4
+private val DIGIT_KEYS = (KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9) + (KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9)
+
+private fun digitOf(keyCode: Int): Int = if (keyCode in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9) {
+    keyCode - KeyEvent.KEYCODE_0
+} else {
+    keyCode - KeyEvent.KEYCODE_NUMPAD_0
+}
 private const val PAUSE_CARD_DELAY_MS = 4_000L
 private const val BANNER_TIMEOUT_MS = 3_000L
 private val SELECT_KEYS = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)

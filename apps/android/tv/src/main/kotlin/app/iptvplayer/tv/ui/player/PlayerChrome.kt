@@ -127,6 +127,29 @@ fun PauseCard(title: String, subtitle: String?, remainingMs: Long?, modifier: Mo
 private val PAUSE_TEXT_WIDTH = 520.dp
 private const val MS_PER_MINUTE = 60_000L
 
+/** The channel number being typed, with the channel it would tune to underneath once the digits name one. */
+@Composable
+fun TypedNumber(digits: String, name: String?, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(Tokens.radiusLarge))
+            .background(Tokens.panel)
+            .border(1.dp, Tokens.hairline, RoundedCornerShape(Tokens.radiusLarge))
+            .padding(horizontal = Tokens.space6, vertical = Tokens.space4)
+            .testTag(PlayerTags.TYPED_NUMBER),
+        verticalArrangement = Arrangement.spacedBy(Tokens.space1),
+    ) {
+        Text(digits, style = MaterialTheme.typography.displayMedium, color = Tokens.textPrimary)
+        Text(
+            name ?: "…",
+            style = MaterialTheme.typography.bodyLarge,
+            color = Tokens.textSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
 /** The time of day in the corner of the player, as the television writes it (item 30). */
 @Composable
 fun PlayerClock(modifier: Modifier = Modifier) {

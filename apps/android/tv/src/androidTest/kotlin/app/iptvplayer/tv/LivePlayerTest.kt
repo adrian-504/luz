@@ -77,6 +77,26 @@ class LivePlayerTest {
     }
 
     @Test
+    fun aChannelNumberTypedOnTheRemoteTunesToThatChannel() {
+        awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
+        val channels = runBlocking { graph.channels(playlist, null) }
+        val first = channels.first()
+        val target = channels.drop(1).first { it.number != null }
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        awaitFocus(LiveTags.channel(first.id))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(PlayerTags.PLAY_PAUSE, timeout = 20_000)
+        press(KeyEvent.KEYCODE_BACK)
+        awaitFocus(PlayerTags.ROOT)
+
+        // The digits tune once the viewer stops typing (the box that shows them is gone by the time the test looks).
+        target.number.toString().forEach { digit -> press(KeyEvent.KEYCODE_0 + (digit - '0')) }
+        awaitGone(PlayerTags.TYPED_NUMBER)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitExists(PlayerTags.TITLE, target.label)
+    }
+
+    @Test
     fun theChannelListComesUpOverThePictureAndThePanelComesDown() {
         awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
         val channels = runBlocking { graph.channels(playlist, null) }
