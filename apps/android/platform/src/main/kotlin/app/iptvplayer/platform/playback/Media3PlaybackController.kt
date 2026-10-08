@@ -136,6 +136,11 @@ interface PlaybackController {
     /** Width / height of the current video (pixel aspect applied), or null before the first video format. */
     val videoAspectRatio: StateFlow<Float?>
 
+    /** How fast the current film plays: 1 is normal. Back to 1 for every new item; live streams are never sped up. */
+    val playbackSpeed: StateFlow<Float>
+
+    fun setPlaybackSpeed(speed: Float)
+
     /** Renders video into [view]; pass null to detach. */
     fun attachSurfaceView(view: SurfaceView?)
 
@@ -168,6 +173,14 @@ class Media3PlaybackController(
     private val mutableTracks = MutableStateFlow(TrackSet())
     override val tracks: StateFlow<TrackSet> = mutableTracks.asStateFlow()
 
+    private val mutableSpeed = MutableStateFlow(1f)
+    override val playbackSpeed: StateFlow<Float> = mutableSpeed.asStateFlow()
+
+    override fun setPlaybackSpeed(speed: Float) {
+        player.setPlaybackSpeed(speed)
+        mutableSpeed.value = speed
+    }
+
     private val mutableCues = MutableStateFlow<List<SubtitleCue>>(emptyList())
     override val subtitleCues: StateFlow<List<SubtitleCue>> = mutableCues.asStateFlow()
 
@@ -196,6 +209,7 @@ class Media3PlaybackController(
             preparedHit = request.prepared.takeIf { request.intentAtMs != null },
         )
         session.prepare(request.mode)
+        setPlaybackSpeed(1f)
         mutableTracks.value = TrackSet()
         mutableCues.value = emptyList()
 

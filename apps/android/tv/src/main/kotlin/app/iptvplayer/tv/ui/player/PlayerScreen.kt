@@ -117,6 +117,7 @@ object PlayerTags {
     const val BACK_10 = "player-back-10"
     const val FORWARD_10 = "player-forward-10"
     const val INFO = "player-info"
+    const val SPEED = "player-speed"
     const val CHANNEL_LIST = "player-channel-list"
     const val CHANNEL_LIST_BUTTON = "player-channel-list-button"
     const val NEXT_CHANNEL = "player-next-channel"
@@ -215,6 +216,7 @@ fun PlayerScreen(
     val snapshot by controller.snapshot.collectAsState()
     val diagnostics by controller.diagnostics.collectAsState()
     val tracks by controller.tracks.collectAsState()
+    val speed by controller.playbackSpeed.collectAsState()
     val cues by controller.subtitleCues.collectAsState()
     var panel by remember { mutableStateOf<PanelTab?>(null) }
     var channelList by remember { mutableStateOf(false) }
@@ -590,6 +592,8 @@ fun PlayerScreen(
                     onChannelList = if (channels != null) ({ channelList = true }) else null,
                     hasSubtitles = tracks.subtitles.isNotEmpty(),
                     hasAudioChoice = tracks.audio.size > 1,
+                    speed = speed,
+                    onSpeed = { controller.setPlaybackSpeed(nextSpeed(speed)) },
                     onPanel = ::openPanel,
                 )
             }
@@ -678,6 +682,8 @@ private fun ControlRow(
     onChannelList: (() -> Unit)?,
     hasSubtitles: Boolean,
     hasAudioChoice: Boolean,
+    speed: Float,
+    onSpeed: () -> Unit,
     onPanel: (PanelTab, FocusRequester?) -> Unit,
 ) {
     val subtitlesFocus = remember { FocusRequester() }
@@ -732,6 +738,10 @@ private fun ControlRow(
                 onChannelList,
                 Modifier.testTag(PlayerTags.CHANNEL_LIST_BUTTON),
             )
+        }
+        // Films play at the speed the viewer picks; each press moves to the next one and back to normal after the last.
+        if (isVod) {
+            LuzButton(speedLabel(speed), onSpeed, Modifier.testTag(PlayerTags.SPEED))
         }
         if (hasSubtitles) {
             LuzIconButton(
@@ -1104,3 +1114,12 @@ private val OVERLAY_GRADIENT = Brush.verticalGradient(
 )
 private const val ERROR_FADE = 0.7f
 private const val ERROR_DIM = 0.6f
+
+/** The speeds a film can be played at, in the order the button steps through them. */
+private val SPEEDS = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
+
+private fun nextSpeed(current: Float): Float = SPEEDS[(SPEEDS.indexOfFirst { it == current } + 1) % SPEEDS.size]
+
+/** "1×", "1.25×": the speed as it is said. */
+private fun speedLabel(speed: Float): String =
+    (if (speed % 1f == 0f) speed.toInt().toString() else speed.toString().trimEnd('0')) + "\u00D7"

@@ -4,6 +4,7 @@ import android.view.KeyEvent
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.isFocused
@@ -78,6 +79,32 @@ class PlayerNavigationTest {
         repeat(order.indexOf(id)) { press(KeyEvent.KEYCODE_DPAD_RIGHT) }
         awaitFocus(SettingsTags.developerStream(id))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
+    }
+
+    @Test
+    fun aFilmCanBePlayedFasterAndTheSpeedGoesBackAroundToNormal() {
+        openDeveloperStream("hls-vod")
+        awaitText(PlayerTags.STATE, string(R.string.player_state_playing))
+        awaitFocus(PlayerTags.PLAY_PAUSE)
+        repeat(8) { if (focusedTag() != PlayerTags.SPEED) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        awaitFocus(PlayerTags.SPEED)
+        rule.onNodeWithTag(PlayerTags.SPEED).assertTextContains("1\u00D7")
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitSpeed("1.25\u00D7")
+        // 1.5, 2, 0.75 and back to normal: five presses in all.
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitSpeed("1.5\u00D7")
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitSpeed("2\u00D7")
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitSpeed("0.75\u00D7")
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitSpeed("1\u00D7")
+    }
+
+    private fun awaitSpeed(label: String) {
+        runCatching { rule.waitUntil(5_000) { runCatching { rule.onNodeWithTag(PlayerTags.SPEED).assertTextContains(label) }.isSuccess } }
+            .onFailure { throw AssertionError("expected the speed button to read $label", it) }
     }
 
     @Test
