@@ -83,3 +83,31 @@ Runs docs/fixture/secret/source-text checks, reference vectors, `./gradlew check
 Build passes · unit tests pass · integration tests pass where applicable · lint/static analysis passes ·
 `tooling/scripts/verify.sh` passes · no secrets committed · no credentials in logs ·
 relevant runtime behavior verified · docs updated.
+
+## Handover notes (2026-10-10, account migration)
+
+Full handover, with the half-finished work and next steps: [docs/handover/luz-iptv-redesign-and-apple-start.md](docs/handover/luz-iptv-redesign-and-apple-start.md).
+Read it before touching the working tree: there is uncommitted, non-compiling work in `TextInput.kt` on purpose.
+
+Durable rules and gotchas learned the hard way:
+
+- **Disconnect the owner's TV from adb before `verify.sh` or any `connected*` task** (`adb disconnect <ip>:5555`); those
+  tasks run on every connected device, and the TV app's device tests delete every configured source. Use the
+  `googletv34` emulator for tests and restart it if Gradle says "Unknown API Level".
+- **Check the install result before telling the owner something is installed** (`adb install -r …` prints `Success`;
+  confirm with `dumpsys package app.iptvplayer.tv | grep lastUpdateTime`). Don't open the app or start playback on the
+  owner's TV unless needed: they listen to music on it.
+- **Send a phone notification (PushNotification) at the end of every task**, saying what actually happened. Report
+  VERIFIED vs NOT YET VERIFIED. The owner is non-technical: plain language, decide technical matters yourself.
+- **The owner pushes to GitHub** (give them `cd "/Volumes/DevSSD/IPTV App" && git push origin main`) unless they ask you to.
+  The repository is public: no credentials, provider URLs, signing material or personal data, ever.
+- **Put everything big on `/Volumes/DevSSD`** (toolchains, caches, build output, review screenshots).
+- **New SQL column ⇒ a new `shared/storage/.../N.sqm` migration and an upgrade test**; a film's watch state and My List are
+  keyed by its work (`movie.work_key`), an episode's by its id (ADR-0042).
+- **Every material change gets an ADR** with Context / Decision / Consequences / Alternatives considered, listed in
+  `docs/ADR/README.md` (`tooling/scripts/check_docs.py` enforces it). Unused string resources and imports fail lint.
+- **Design rules:** one white thing at a time (buttons are white only under the remote), words never sit on artwork, no
+  colour wash; the one-line search letter strip stays (owner's choice). Home/Movies/Series use `LuzStage`; My Luz is
+  Home with `myLuz = true`.
+- **macOS shell:** `sed` has no `\b` (use `perl -pi -e`); quote globs in zsh; Gradle task conditions must not capture the
+  build script (configuration cache).
