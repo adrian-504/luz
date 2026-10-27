@@ -150,7 +150,10 @@ into the screen behind), and give it back on Back.
 
 ### 5.11 Text — `TvTextField`
 A glass field in forms; `large` draws it as one line of display type for Search. OK opens the system keyboard; Up and
-Down move focus; Back leaves.
+Down move focus; Back leaves. Focus alone never brings the keyboard up: only an OK that was pressed *on* the field counts
+(not the release of the OK that opened the page), and for half a second after focus arrives the search line puts away a
+keyboard the platform raised on its own, because `showKeyboardOnFocus = false` is not honoured when focus is moved by the
+code (Search opening, 2026-10-10). Only the search line does this: doing it under a name prompt closed the prompt.
 
 ## 6. Focus
 

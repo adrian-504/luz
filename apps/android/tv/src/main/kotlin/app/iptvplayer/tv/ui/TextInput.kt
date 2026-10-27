@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.tv.ui.theme.Tokens
+import kotlinx.coroutines.delay
 
 /**
  * A TV text field: a label above a single-line input that shows the focus ring. OK opens the system keyboard. Passwords
@@ -55,9 +57,27 @@ fun TvTextField(
     large: Boolean = false,
 ) {
     var focused by remember { mutableStateOf(false) }
+    val okPressedHere = remember { mutableStateOf(false) }
+    // Whether the viewer has asked for the keyboard on this visit to the field (by pressing OK on it).
+    val keyboardAsked = remember { mutableStateOf(false) }
     val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    LaunchedEffect(focused) {
+        if (!focused) {
+            keyboardAsked.value = false
+            return@LaunchedEffect
+        }
+        // The search line takes focus without being asked — the remote arrives on it as Search opens — and the platform can
+        // raise the keyboard over it even though it asks not to. For the moment after focus arrives, put the keyboard away
+        // again unless the viewer asked for it. Only the search line: putting the keyboard away under a name prompt closed
+        // the prompt.
+        if (!large) return@LaunchedEffect
+        repeat(AUTO_HIDE_ATTEMPTS) {
+            delay(AUTO_HIDE_STEP_MS)
+            if (!keyboardAsked.value) keyboard?.hide()
+        }
+    }
     Column(modifier = if (large) Modifier.fillMaxWidth() else Modifier.widthIn(max = 760.dp)) {
         if (!large) Text(label, style = MaterialTheme.typography.labelLarge, color = Tokens.textSecondary)
         BasicTextField(
@@ -99,7 +119,16 @@ fun TvTextField(
                 .onPreviewKeyEvent { event ->
                     when (event.nativeKeyEvent.keyCode) {
                         android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER -> {
-                            if (event.type == KeyEventType.KeyUp) keyboard?.show()
+                            // Only a press that began on this field opens the keyboard. The OK that chose "Search" in the
+                            // navigation ends, a moment later, on the field that has just taken focus; counting that release
+                            // raised the keyboard over a page whose own letter strip is the way to type.
+                            if (event.type == KeyEventType.KeyDown) {
+                                okPressedHere.value = true
+                            } else if (event.type == KeyEventType.KeyUp && okPressedHere.value) {
+                                okPressedHere.value = false
+                                keyboardAsked.value = true
+                                keyboard?.show()
+                            }
                             true
                         }
                         // Single-line fields: Compose would use Up/Down to move the cursor and keep focus; on a remote they
@@ -155,3 +184,6 @@ fun TvTextField(
         }
     }
 }
+
+private const val AUTO_HIDE_ATTEMPTS = 4
+private const val AUTO_HIDE_STEP_MS = 120L

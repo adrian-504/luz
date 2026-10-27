@@ -30,6 +30,7 @@ import app.iptvplayer.tv.ui.shell.ShellTags
 import app.iptvplayer.tv.ui.theme.LuzMenuTags
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -142,6 +143,17 @@ class LibraryFlowTest {
         awaitFocus(ShellTags.rail(section))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         entry?.let { awaitFocus(it) }
+    }
+
+    @Test
+    fun openingSearchDoesNotRaiseTheKeyboardButOkOnTheFieldDoes() {
+        openSection(Section.SEARCH, SearchTags.FIELD)
+        // The letter strip is how Luz types; the system keyboard covers the results, so it stays away until asked for.
+        Thread.sleep(1_500)
+        rule.waitForIdle()
+        assertFalse("the keyboard came up on its own when Search opened", keyboardShown())
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.waitUntil(5_000) { keyboardShown() }
     }
 
     @Test
