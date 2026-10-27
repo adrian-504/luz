@@ -300,3 +300,18 @@ reasons a single run proves nothing. **Moving along a shelf was not measured**: 
 reached the end of the row, and the next press opened the navigation, so their counts (1 to 15 frames) say nothing.
 Next: three runs each way along a poster shelf in Movies, as in §6.5, before this layout is called as fast as or faster than
 the one it replaced.
+
+### 6.7 The shrunk build and the recorded profile (ADR-0049, 2026-10-28)
+
+Cold start to the first frame of the shrunk build (R8, recorded baseline profile), Macrobenchmark `StartupTimingMetric`,
+five runs each, on the `googletv34` **emulator** (M1 Mac host), test provider loaded:
+
+| Build | Min | Median | Max |
+|---|---|---|---|
+| With the baseline profile (`CompilationMode.Partial`, profile required) | 222 ms | 239 ms | 362 ms |
+| Without it (`CompilationMode.None`) | 206 ms | 221 ms | 249 ms |
+
+**Informational only, and no gain shows**: the emulator runs on the Mac's fast cores, where interpreting code costs little;
+the profile exists for slow devices. The release APK went from 17.4 MB to 10.5 MB. The numbers that decide are a before
+and after on the owner's Bbox, NOT YET taken: the owner asked for no work on the TV for now.
+

@@ -215,6 +215,8 @@ committed). Candidate dependencies already named in docs (kotlinx.coroutines, ko
 kotlinx-io, SQLDelight or Room KMP, OkHttp, Media3, Coil) are **not yet approved** — each passes this policy
 when first introduced.
 
+**Speed round (2026-10-28):** test-only module `apps/android/benchmark` adds `androidx.benchmark:benchmark-macro-junit4`
+1.5.0 and `androidx.test.uiautomator` 2.4.0 (Google, Apache-2.0; never in the app), evaluated in ADR-0049.
 **Current dependency set (Phase 8):** adds Coil 3.6.2 (`coil-compose`, `coil-network-okhttp`) for artwork (ADR-0028).
 **Phase 10 (2026-09-24):** module `apps/apple/platform` (Apple-only Kotlin/Native adapters: Keychain, URLSession),
 included only when Xcode is present; no new library; the Kotlin/Native toolchain and the Apple variants of the libraries already

@@ -52,6 +52,7 @@ if (androidAppsSetting == "true" || (androidAppsSetting == "auto" && androidSdkF
     include(":apps:android:platform")
     include(":apps:android:testing")
     include(":apps:android:tv")
+    include(":apps:android:benchmark")
 }
 
 // The Apple platform adapters need a full Xcode (the iOS simulator SDK); same "auto" rule as the shared modules'

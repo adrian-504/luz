@@ -38,10 +38,13 @@ android {
 
     buildTypes {
         // The performance targets of docs/PERFORMANCE.md apply to the release build, so it has to be installable to be
-        // measured. Code shrinking stays off until it is enabled deliberately, with the rules the reflective libraries
-        // need and a device-test run against the shrunk build.
+        // measured. R8 shrinks and optimises it (ADR-0049); every device test runs against a shrunk build ("shrunk", in the
+        // app's own build file) before a release goes out.
         getByName("release") {
             signingConfig = if (keystore != null) signingConfigs.getByName("sharing") else signingConfigs.getByName("debug")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 

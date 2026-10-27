@@ -199,6 +199,14 @@ Verification reports use two explicit lists: **VERIFIED** (with the command/devi
 
 ## 9. Before release (§25.3)
 
+The shrunk build passes the robot's smoke run (ADR-0049):
+`./gradlew :apps:android:tv:assembleShrunk :apps:android:benchmark:assembleShrunk`, install both APKs on the emulator, then
+`adb shell am instrument -w -e class app.iptvplayer.benchmark.ShrunkBuildSmokeTest app.iptvplayer.benchmark/androidx.test.runner.AndroidJUnitRunner`.
+Startup timing: the same, with `-e class app.iptvplayer.benchmark.StartupBenchmark`, plus
+`-e androidx.benchmark.suppressErrors EMULATOR` on the emulator (Gradle passes that itself; `am instrument` does not).
+After a change to the screens an evening passes through, record the baseline profile again from the "profiling" build
+(`BaselineProfileGenerator`) and replace `apps/android/tv/src/main/baselineProfiles/baseline-prof.txt` with the result.
+
 Clean install · upgrade install · fresh playlist import · large playlist import · bad credentials · provider
 unavailable · EPG unavailable · stream unavailable · subtitle/audio switching · long playback session ·
 background/foreground lifecycle · remote navigation · touch navigation · accessibility · privacy/security review.
