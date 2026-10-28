@@ -120,6 +120,17 @@ Credentials over cleartext: the setup flow warns that the provider transmits cre
 can proceed. This is an explicit, documented deviation from spec §14.1 "TLS for network communication" —
 see [SPEC_REVIEW.md](SPEC_REVIEW.md#12-tls-requirement-versus-cleartext-iptv-providers).
 
+### 5.1 The phone companion's server — ADR-0050
+
+Luz listens on the home network only while the viewer has switched the phone companion on (Settings, off by default),
+on port 8765. It answers only requests whose `Host` is the TV's own private address or the TV itself (DNS rebinding),
+serves one page with no outside requests, and needs a paired token for everything else. Pairing codes are 8 characters,
+one-time, valid five minutes, replaced after 10 wrong tries; tokens are 32 random bytes, stored only as SHA-256 hashes,
+listed and forgettable in Settings; a forgotten phone's live connection ends at once. Limits: 8 KB of headers, 16 KB of
+body, 500 characters of typed text, 8 connections, 10-second reads. A password field's contents are never sent to the
+phone. The traffic is cleartext HTTP inside the home network (no trusted certificate is possible for a LAN address);
+the setting says so. Keys from the phone are played only into Luz's own window.
+
 ## 6. Resource limits (initial values; tuned by stress tests)
 
 | Limit | M3U | XMLTV | Xtream JSON |

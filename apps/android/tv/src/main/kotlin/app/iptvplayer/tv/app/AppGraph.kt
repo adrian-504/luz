@@ -51,6 +51,7 @@ import app.iptvplayer.storage.SourceRecord
 import app.iptvplayer.storage.TitleDetailRow
 import app.iptvplayer.storage.UnitStateRecord
 import app.iptvplayer.storage.db.IptvDatabase
+import app.iptvplayer.tv.companion.PhoneCompanion
 import app.iptvplayer.tv.developer.DeveloperStreams
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -202,6 +203,9 @@ class AppGraph(context: Context) {
 
     // The source Live TV and the guide show. A UI preference (a playlist id, nothing secret); falls back to the first source.
     private val preferences by lazy { appContext.getSharedPreferences("ui", Context.MODE_PRIVATE) }
+
+    /** The phone companion (ADR-0050): off until the viewer switches it on in Settings. */
+    val companion by lazy { PhoneCompanion(appContext, preferences) }
 
     suspend fun currentSource(): SourceRecord? = io {
         val all = content.sources()

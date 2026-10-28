@@ -13,10 +13,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -36,6 +38,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import app.iptvplayer.tv.companion.CompanionField
+import app.iptvplayer.tv.companion.CompanionHub
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
 
@@ -78,6 +82,27 @@ fun TvTextField(
             if (!keyboardAsked.value) keyboard?.hide()
         }
     }
+    // The phone companion (ADR-0050) types into whichever field the remote is on: it is told about this one while it has
+    // focus, with what it holds, and hands text back through the same path as the remote's own typing.
+    val companionId = remember { CompanionHub.nextId() }
+    val currentOnValueChange by rememberUpdatedState(onValueChange)
+    LaunchedEffect(focused, value, label) {
+        if (focused) {
+            CompanionHub.show(
+                CompanionField(
+                    id = companionId,
+                    label = label,
+                    value = value,
+                    password = password,
+                    onText = { currentOnValueChange(it) },
+                    onDone = { focusManager.moveFocus(FocusDirection.Down) },
+                ),
+            )
+        } else {
+            CompanionHub.clear(companionId)
+        }
+    }
+    DisposableEffect(companionId) { onDispose { CompanionHub.clear(companionId) } }
     Column(modifier = if (large) Modifier.fillMaxWidth() else Modifier.widthIn(max = 760.dp)) {
         if (!large) Text(label, style = MaterialTheme.typography.labelLarge, color = Tokens.textSecondary)
         BasicTextField(

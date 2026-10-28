@@ -288,6 +288,11 @@ object LuzIcons {
         curveTo(19.4f, 4.5f, 20.5f, 5.6f, 20.5f, 7f)
         lineTo(20.5f, 15.5f)
     }
+    val Phone = icon("phone") {
+        roundRect(6.5f, 2.5f, 17.5f, 21.5f, 2.5f)
+        moveTo(10.5f, 18.5f)
+        lineTo(13.5f, 18.5f)
+    }
     val Restart = icon("restart") {
         moveTo(4.5f, 12f)
         curveTo(4.5f, 7.9f, 7.9f, 4.5f, 12f, 4.5f)

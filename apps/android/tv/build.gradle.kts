@@ -48,6 +48,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.coil.svg)
+    implementation(libs.qrcodegen)
     debugImplementation(project(":apps:android:testing"))
     "shrunkImplementation"(project(":apps:android:testing"))
     "shrunkImplementation"(libs.compose.ui.test.manifest)

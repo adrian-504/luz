@@ -91,6 +91,10 @@ object SettingsTags {
 
     fun homeRow(id: String) = "settings-home-$id"
     const val DEVELOPER = "settings-developer"
+    const val COMPANION = "settings-companion"
+    const val COMPANION_SWITCH = "settings-companion-switch"
+
+    fun companionPhone(id: String) = "settings-companion-phone-$id"
 
     fun hiddenItem(id: String) = "settings-hidden-$id"
     const val ADD_SOURCE = "settings-add-source"
@@ -175,6 +179,7 @@ fun SettingsSection(
                 add(SettingsEntry(SettingsTags.DETAILS, R.string.settings_details, R.string.settings_details_summary, LuzIcons.Movies))
             }
             add(SettingsEntry(SettingsTags.TMDB, R.string.settings_tmdb, R.string.settings_tmdb_summary, LuzIcons.Star))
+            add(SettingsEntry(SettingsTags.COMPANION, R.string.settings_companion, R.string.settings_companion_summary, LuzIcons.Phone))
             add(SettingsEntry(SettingsTags.ABOUT, R.string.settings_about, R.string.settings_about_summary, LuzIcons.Info))
             if (hasDeveloperStreams) {
                 add(
@@ -270,6 +275,7 @@ fun SettingsSection(
                     SettingsTags.ABOUT -> About()
                     SettingsTags.DETAILS -> playlist?.let { DetailCoveragePane(focus, it) }
                     SettingsTags.TMDB -> TmdbPane(focus)
+                    SettingsTags.COMPANION -> CompanionPane(focus)
                     SettingsTags.DEVELOPER -> DeveloperStreamsPane(focus, onPlayDeveloperStream, onSourceAdded)
                     else -> {
                         ActionButton(
@@ -288,7 +294,7 @@ fun SettingsSection(
 
 /** The name at the top of a settings pane. */
 @Composable
-private fun PaneHeading(text: String) {
+internal fun PaneHeading(text: String) {
     Text(text, style = MaterialTheme.typography.headlineMedium, color = Tokens.textPrimary)
 }
 

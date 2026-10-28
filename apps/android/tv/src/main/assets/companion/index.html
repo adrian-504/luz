@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#07080b">
+<meta name="referrer" content="no-referrer">
+<title>Luz</title>
+<!-- The phone companion (ADR-0050). Served by Luz on the home network; makes no request anywhere else. -->
+<style>
+  :root {
+    --room: #07080b; --surface: #0f1116; --raised: #161920; --line: #2a2e37;
+    --text: #f5f5f7; --text-2: #a1a1a8; --text-3: #6e6e76; --amber: #ffa24b; --on-amber: #140c04;
+    --ok: #3fb950; --error: #f85149;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--room); color: var(--text); }
+  body {
+    font: 17px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100dvh; display: flex; flex-direction: column;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+    background: radial-gradient(120% 60% at 0% 0%, #12141b 0%, var(--room) 60%);
+  }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .brand { font-weight: 600; font-size: 22px; letter-spacing: -0.01em; }
+  .brand::before {
+    content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 10px;
+    background: var(--amber); box-shadow: 0 0 14px var(--amber); vertical-align: 2px;
+  }
+  .status { font-size: 14px; color: var(--text-3); display: flex; align-items: center; gap: 8px; }
+  .status i { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); }
+  .status.on i { background: var(--ok); }
+  .status.off i { background: var(--error); }
+  [hidden] { display: none !important; }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }
+  .label { font-size: 14px; color: var(--text-2); margin: 0 0 10px; }
+  .row { display: flex; gap: 10px; }
+  input {
+    flex: 1; min-width: 0; font: inherit; font-size: 20px; color: var(--text); background: var(--raised);
+    border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; outline: none;
+  }
+  input:focus { border-color: var(--amber); }
+  button {
+    font: inherit; color: var(--text); background: var(--raised); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px 16px; cursor: pointer; touch-action: manipulation;
+  }
+  button:active { transform: scale(0.97); }
+  button.primary { background: var(--text); color: var(--room); border-color: var(--text); font-weight: 600; }
+  .quiet { color: var(--text-3); margin: 0; }
+  .hint { font-size: 14px; color: var(--text-3); margin: 12px 0 0; }
+
+  .pad { margin: auto 0 0; padding-top: 28px; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+  .ring {
+    position: relative; width: min(78vw, 300px); aspect-ratio: 1; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--line);
+  }
+  .ring button {
+    position: absolute; border: 0; background: transparent; color: var(--text-2); width: 34%; height: 34%;
+    font-size: 26px; border-radius: 50%;
+  }
+  .ring button:active { background: var(--raised); color: var(--text); }
+  .ring .up { top: 0; left: 33%; } .ring .down { bottom: 0; left: 33%; }
+  .ring .left { left: 0; top: 33%; } .ring .right { right: 0; top: 33%; }
+  .ring .ok {
+    top: 31%; left: 31%; width: 38%; height: 38%; background: var(--raised); color: var(--text);
+    border: 1px solid var(--line); font-size: 18px; font-weight: 600;
+  }
+  .keys { display: flex; gap: 14px; width: min(78vw, 300px); }
+  .keys button { flex: 1; padding: 14px 0; }
+
+  .pairing { margin: auto 0; text-align: center; }
+  .pairing h1 { font-size: 26px; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .pairing p { color: var(--text-2); margin: 0 0 22px; }
+  .pairing input { text-align: center; letter-spacing: 0.2em; text-transform: uppercase; }
+  .error { color: var(--error); font-size: 15px; min-height: 1.4em; margin: 10px 0 0; }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">Luz</span>
+  <span class="status" id="status"><i></i><span id="status-text">Connecting…</span></span>
+</header>
+
+<section class="pairing" id="pairing" hidden>
+  <h1>Connect to your TV</h1>
+  <p>Enter the code shown on the TV, under Settings › Phone companion.</p>
+  <form id="pair-form" class="row">
+    <input id="code" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false"
+           maxlength="9" placeholder="ABCD2345" aria-label="Code from the TV">
+    <button class="primary" type="submit">Connect</button>
+  </form>
+  <p class="error" id="pair-error"></p>
+</section>
+
+<main id="main" hidden>
+  <section class="card" id="typing">
+    <div id="field" hidden>
+      <p class="label" id="field-label"></p>
+      <form class="row" id="field-form">
+        <input id="field-input" dir="auto" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
+        <button class="primary" type="submit">Done</button>
+      </form>
+      <p class="hint" id="field-hint" hidden>Type the password here. It is sent to the TV and never shown back.</p>
+    </div>
+    <p class="quiet" id="no-field">Move to a text box on the TV, such as Search, and type here.</p>
+  </section>
+
+  <section class="pad" aria-label="Remote">
+    <div class="ring">
+      <button class="up" data-key="up" aria-label="Up">&#8963;</button>
+      <button class="left" data-key="left" aria-label="Left">&#8249;</button>
+      <button class="ok" data-key="ok">OK</button>
+      <button class="right" data-key="right" aria-label="Right">&#8250;</button>
+      <button class="down" data-key="down" aria-label="Down">&#8964;</button>
+    </div>
+    <div class="keys">
+      <button data-key="back">Back</button>
+      <button data-key="playpause">Play / Pause</button>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const TOKEN_KEY = "luz-companion-token";
+  const INPUT_TYPES = { hidden: "password", shown: "text" };
+  const $ = (id) => document.getElementById(id);
+  let token = null;
+  try { token = localStorage.getItem(TOKEN_KEY); } catch (e) {}
+  let field = null;
+  let events = null;
+
+  function setStatus(state, text) {
+    $("status").className = "status " + state;
+    $("status-text").textContent = text;
+  }
+
+  function show(which) {
+    $("pairing").hidden = which !== "pairing";
+    $("main").hidden = which !== "main";
+  }
+
+  async function post(path, body) {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.assign({ token }, body)),
+    });
+    if (response.status === 401) forget();
+    return response;
+  }
+
+  function forget() {
+    token = null;
+    try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+    if (events) { events.close(); events = null; }
+    setStatus("off", "Not connected");
+    show("pairing");
+  }
+
+  function phoneName() {
+    const ua = navigator.userAgent;
+    if (/iPhone/.test(ua)) return "iPhone";
+    if (/iPad/.test(ua)) return "iPad";
+    if (/Android/.test(ua)) return "Android phone";
+    return "Phone";
+  }
+
+  async function pair(code) {
+    $("pair-error").textContent = "";
+    try {
+      const response = await fetch("/api/pair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, name: phoneName() }),
+      });
+      if (!response.ok) {
+        $("pair-error").textContent = "That code didn't work. Check the TV for the current one.";
+        show("pairing");
+        return;
+      }
+      token = (await response.json()).token;
+      try { localStorage.setItem(TOKEN_KEY, token); } catch (e) {}
+      connect();
+    } catch (e) {
+      $("pair-error").textContent = "Can't reach Luz. Is your phone on the same Wi-Fi as the TV?";
+      show("pairing");
+    }
+  }
+
+  function connect() {
+    show("main");
+    setStatus("", "Connecting…");
+    if (events) events.close();
+    events = new EventSource("/api/events?token=" + encodeURIComponent(token));
+    events.addEventListener("field", (e) => showField(JSON.parse(e.data)));
+    events.onopen = () => setStatus("on", "Connected");
+    events.onerror = () => {
+      setStatus("off", "Can't reach Luz");
+      // A forgotten phone gets 401 and the stream stops; check, so it can pair again instead of retrying forever.
+      fetch("/api/key", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, key: "none" }) })
+        .then((r) => { if (r.status === 401) forget(); })
+        .catch(() => {});
+    };
+  }
+
+  function showField(next) {
+    const input = $("field-input");
+    if (next.id === undefined) {
+      field = null;
+      $("field").hidden = true;
+      $("no-field").hidden = false;
+      return;
+    }
+    const changed = !field || field.id !== next.id;
+    field = next;
+    $("field").hidden = false;
+    $("no-field").hidden = true;
+    $("field-label").textContent = next.label;
+    $("field-hint").hidden = !next.password;
+    input.type = next.password ? INPUT_TYPES.hidden : INPUT_TYPES.shown;
+    // While the viewer types here, the TV's echo of each letter would move the cursor: leave the box alone.
+    if (changed || document.activeElement !== input) input.value = next.password ? "" : (next.value || "");
+  }
+
+  // One request at a time, always with the latest text, so fast typing never arrives out of order.
+  let sending = false;
+  let pending = null;
+  async function sendText(text) {
+    pending = text;
+    if (sending) return;
+    sending = true;
+    while (pending !== null && field) {
+      const value = pending;
+      pending = null;
+      try { await post("/api/text", { field: field.id, text: value }); } catch (e) { break; }
+    }
+    sending = false;
+  }
+
+  $("field-input").addEventListener("input", (e) => sendText(e.target.value));
+  $("field-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (field) post("/api/done", { field: field.id }).catch(() => {});
+    $("field-input").blur();
+  });
+  $("pair-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    pair($("code").value.trim());
+  });
+  document.querySelectorAll("[data-key]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (navigator.vibrate) navigator.vibrate(8);
+      post("/api/key", { key: button.dataset.key }).catch(() => {});
+    });
+  });
+
+  // A code in the address (from the TV's QR code) pairs at once; it is then removed so it is not kept in history.
+  const fromQr = location.hash.replace(/^#/, "");
+  if (fromQr) {
+    history.replaceState(null, "", location.pathname);
+    pair(fromQr);
+  } else if (token) {
+    connect();
+  } else {
+    setStatus("off", "Not connected");
+    show("pairing");
+  }
+})();
+</script>
+</body>
+</html>

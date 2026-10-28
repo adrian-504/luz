@@ -17,6 +17,8 @@ import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.tv.app.IptvApplication
+import app.iptvplayer.tv.companion.CompanionHub
+import app.iptvplayer.tv.companion.PhoneCompanion
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.library.Browse
 import app.iptvplayer.tv.ui.library.DetailTags
@@ -29,6 +31,7 @@ import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
 import app.iptvplayer.tv.ui.theme.LuzMenuTags
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -37,6 +40,7 @@ import org.junit.Test
 import org.junit.rules.ExternalResource
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
+import java.net.Socket
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -155,6 +159,48 @@ class LibraryFlowTest {
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         rule.waitUntil(5_000) { keyboardShown() }
     }
+
+    /** The phone companion (ADR-0050): a phone pairs with the code, types into Search and presses keys; strangers get nothing. */
+    @Test
+    fun aPairedPhoneTypesIntoSearchAndMovesTheRemote() {
+        val companion = graph.companion
+        companion.setOn(true)
+        try {
+            openSection(Section.SEARCH, SearchTags.FIELD)
+            assertEquals(401, companionCall("/api/key", """{"token":"made-up","key":"down"}""").first)
+            assertEquals(403, companionCall("/api/pair", """{"code":"WRONG234","name":"Test"}""").first)
+            assertEquals(421, companionCall("/api/key", """{"key":"down"}""", host = "luz.example.com").first)
+            val paired = companionCall("/api/pair", """{"code":"${companion.pairing.code()}","name":"Test phone"}""")
+            assertEquals(200, paired.first)
+            val token = JSONObject(paired.second).getString("token")
+
+            rule.waitUntil(5_000) { CompanionHub.field.value != null }
+            val field = CompanionHub.field.value!!.id
+            assertEquals(200, companionCall("/api/text", """{"token":"$token","field":$field,"text":"test"}""").first)
+            rule.waitUntil(5_000) {
+                rule.onNodeWithTag(SearchTags.FIELD).fetchSemanticsNode().config[SemanticsProperties.EditableText].text == "test"
+            }
+            assertEquals(200, companionCall("/api/key", """{"token":"$token","key":"down"}""").first)
+            rule.waitUntil(5_000) { focusedTag() != SearchTags.FIELD }
+        } finally {
+            companion.pairing.phones.value.forEach { companion.pairing.forget(it.id) }
+            companion.setOn(false)
+        }
+    }
+
+    /** One request to the companion over a plain socket, so the test can also send a Host it chooses. Status and body. */
+    private fun companionCall(path: String, body: String, host: String = "127.0.0.1:${PhoneCompanion.PORT}"): Pair<Int, String> =
+        Socket("127.0.0.1", PhoneCompanion.PORT).use { socket ->
+            val bytes = body.toByteArray()
+            socket.getOutputStream().apply {
+                write("POST $path HTTP/1.1\r\nHost: $host\r\nContent-Type: application/json\r\n".toByteArray())
+                write("Content-Length: ${bytes.size}\r\n\r\n".toByteArray())
+                write(bytes)
+                flush()
+            }
+            val response = socket.getInputStream().readBytes().toString(Charsets.UTF_8)
+            response.substringAfter(' ').substringBefore(' ').toInt() to response.substringAfter("\r\n\r\n")
+        }
 
     @Test
     fun searchFindsChannelsMoviesAndSeriesAsYouType() {

@@ -14,6 +14,7 @@ import coil3.svg.SvgDecoder
 import coil3.util.DebugLogger
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toOkioPath
+import kotlin.concurrent.thread
 
 class IptvApplication :
     Application(),
@@ -24,6 +25,8 @@ class IptvApplication :
         super.onCreate()
         // Debug builds only: the synthetic test provider's in-process server (no-op in release builds).
         DeveloperStreams.start(this)
+        // The phone companion, if the viewer left it on; off the main thread, so it never delays the first screen.
+        thread(name = "companion-start", isDaemon = true) { graph.companion.resume() }
     }
 
     /**

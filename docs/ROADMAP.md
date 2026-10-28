@@ -535,6 +535,15 @@ paused. Smoothness on the Bbox decides what stays: every animation and the stage
 | 9 | Backup and restore, update notice, crash record | Not started |
 | 10 | Final checks and release | Not started |
 
+**Owner's plan of 2026-10-27** (*Luz full plan.md* in /Volumes/DevSSD/reports): after the speed stage, the **phone
+companion** comes next (owner's order), then Live TV, sport and Arabic, films and series, discovery, Simple TV mode and
+backup, the finishing layer, faster channel changes, and release.
+
+| Round | What | Status |
+|---|---|---|
+| Phone companion, step 1 | Pair a phone by QR code; type into any text field from it; a remote pad (ADR-0050) | **Built 2026-10-28** — device test `aPairedPhoneTypesIntoSearchAndMovesTheRemote` on the emulator; the page tried from a browser through the emulator (typing, Arabic, the pad). NOT YET VERIFIED from a real phone or on the owner's Bbox |
+| Phone companion, steps 2–4 | What is playing and its controls; browse on the phone, play on the TV; provider setup from the phone | Not started |
+
 Skip intro and credits (TheIntroDB) is not in the plan until its terms are read.
 
 ## Proposed interim gate: Android TV personal alpha
