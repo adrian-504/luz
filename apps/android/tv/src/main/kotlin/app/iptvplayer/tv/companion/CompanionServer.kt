@@ -131,7 +131,7 @@ class CompanionServer(
         respond(out, 200, JSON, """{"ok":true}""".toByteArray())
     }
 
-    /** Tells the phone about the field under the remote whenever it changes, and that the TV is still there. */
+    /** Tells the phone about the field under the remote and what is playing whenever they change, and that the TV is there. */
     private fun streamEvents(out: OutputStream, token: String) {
         out.write(
             (
@@ -140,26 +140,25 @@ class CompanionServer(
                 ).toByteArray(),
         )
         out.flush()
-        var sent: String? = null
+        var sentField: String? = null
+        var sentPlaying: String? = null
         var lastWriteMs = 0L
         // Ends when the server stops or the viewer forgets this phone in Settings.
         while (!socket.isClosed && pairing.allows(token)) {
-            val field = CompanionHub.field.value
-            val event = JSONObject().apply {
-                if (field != null) {
-                    put("id", field.id)
-                    put("label", field.label)
-                    put("password", field.password)
-                    if (field.password) put("length", field.value.length) else put("value", field.value)
-                }
-            }.toString()
             val now = System.currentTimeMillis()
-            if (event != sent) {
-                out.write("event: field\ndata: $event\n\n".toByteArray(Charsets.UTF_8))
-                out.flush()
-                sent = event
+            val field = fieldEvent(CompanionHub.field.value)
+            val playing = playingEvent(CompanionHub.playing.value)
+            if (field != sentField) {
+                send(out, "field", field)
+                sentField = field
                 lastWriteMs = now
-            } else if (now - lastWriteMs > HEARTBEAT_MS) {
+            }
+            if (playing != sentPlaying) {
+                send(out, "playing", playing)
+                sentPlaying = playing
+                lastWriteMs = now
+            }
+            if (now - lastWriteMs > HEARTBEAT_MS) {
                 // A comment line: keeps the connection open through home routers and shows a dead phone as a failed write.
                 out.write(": still here\n\n".toByteArray())
                 out.flush()
@@ -168,6 +167,36 @@ class CompanionServer(
             Thread.sleep(POLL_MS)
         }
     }
+
+    private fun send(out: OutputStream, event: String, data: String) {
+        out.write("event: $event\ndata: $data\n\n".toByteArray(Charsets.UTF_8))
+        out.flush()
+    }
+
+    private fun fieldEvent(field: CompanionField?): String = JSONObject().apply {
+        if (field != null) {
+            put("id", field.id)
+            put("label", field.label)
+            put("password", field.password)
+            if (field.password) put("length", field.value.length) else put("value", field.value)
+        }
+    }.toString()
+
+    private fun playingEvent(playing: CompanionPlaying?): String = JSONObject().apply {
+        if (playing != null) {
+            put("title", playing.title)
+            playing.subtitle?.let { put("subtitle", it) }
+            put("live", playing.live)
+            playing.channelNumber?.let { put("number", it) }
+            playing.programme?.let { put("programme", it) }
+            playing.programmeStartMs?.let { put("start", it) }
+            playing.programmeEndMs?.let { put("end", it) }
+            // Whole seconds: the position would otherwise change the event every poll and flood the phone.
+            playing.positionMs?.let { put("position", it / 1000 * 1000) }
+            playing.durationMs?.let { put("duration", it) }
+            put("playing", playing.playing)
+        }
+    }.toString()
 
     /** The request line and headers, up to the blank line; null if they run past [MAX_HEAD]. */
     private fun readHead(input: InputStream): String? {
@@ -239,6 +268,11 @@ class CompanionServer(
             "ok" to KeyEvent.KEYCODE_DPAD_CENTER,
             "back" to KeyEvent.KEYCODE_BACK,
             "playpause" to KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+            "rewind" to KeyEvent.KEYCODE_MEDIA_REWIND,
+            "forward" to KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+            "channel-up" to KeyEvent.KEYCODE_CHANNEL_UP,
+            "channel-down" to KeyEvent.KEYCODE_CHANNEL_DOWN,
+            "last-channel" to KeyEvent.KEYCODE_LAST_CHANNEL,
         )
     }
 }

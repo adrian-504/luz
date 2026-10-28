@@ -11,10 +11,13 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.tv.app.IptvApplication
+import app.iptvplayer.tv.companion.CompanionHub
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.live.LiveTags
 import app.iptvplayer.tv.ui.player.PlayerTags
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -74,6 +77,32 @@ class LivePlayerTest {
     private fun shot(name: String) {
         rule.waitForIdle()
         screenshot(name)
+    }
+
+    /** The phone companion's "now playing" (ADR-0050): the phone sees the channel and changes it. */
+    @Test
+    fun aPairedPhoneSeesTheChannelAndChangesIt() {
+        val companion = graph.companion
+        companion.setOn(true)
+        try {
+            awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
+            val channels = runBlocking { graph.channels(playlist, null) }
+            press(KeyEvent.KEYCODE_DPAD_RIGHT)
+            awaitFocus(LiveTags.channel(channels.first().id))
+            press(KeyEvent.KEYCODE_DPAD_CENTER)
+            awaitFocus(PlayerTags.PLAY_PAUSE, timeout = 20_000)
+            val token = JSONObject(
+                companionCall("/api/pair", """{"code":"${companion.pairing.code()}","name":"Test phone"}""").second,
+            ).getString("token")
+
+            rule.waitUntil(5_000) { CompanionHub.playing.value?.title == channels.first().label }
+            assertTrue(CompanionHub.playing.value!!.live)
+            assertEquals(200, companionCall("/api/key", """{"token":"$token","key":"channel-up"}""").first)
+            rule.waitUntil(10_000) { CompanionHub.playing.value?.title == channels[1].label }
+        } finally {
+            companion.pairing.phones.value.forEach { companion.pairing.forget(it.id) }
+            companion.setOn(false)
+        }
     }
 
     @Test

@@ -18,7 +18,6 @@ import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.tv.app.IptvApplication
 import app.iptvplayer.tv.companion.CompanionHub
-import app.iptvplayer.tv.companion.PhoneCompanion
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.library.Browse
 import app.iptvplayer.tv.ui.library.DetailTags
@@ -40,7 +39,6 @@ import org.junit.Test
 import org.junit.rules.ExternalResource
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
-import java.net.Socket
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -187,20 +185,6 @@ class LibraryFlowTest {
             companion.setOn(false)
         }
     }
-
-    /** One request to the companion over a plain socket, so the test can also send a Host it chooses. Status and body. */
-    private fun companionCall(path: String, body: String, host: String = "127.0.0.1:${PhoneCompanion.PORT}"): Pair<Int, String> =
-        Socket("127.0.0.1", PhoneCompanion.PORT).use { socket ->
-            val bytes = body.toByteArray()
-            socket.getOutputStream().apply {
-                write("POST $path HTTP/1.1\r\nHost: $host\r\nContent-Type: application/json\r\n".toByteArray())
-                write("Content-Length: ${bytes.size}\r\n\r\n".toByteArray())
-                write(bytes)
-                flush()
-            }
-            val response = socket.getInputStream().readBytes().toString(Charsets.UTF_8)
-            response.substringAfter(' ').substringBefore(' ').toInt() to response.substringAfter("\r\n\r\n")
-        }
 
     @Test
     fun searchFindsChannelsMoviesAndSeriesAsYouType() {

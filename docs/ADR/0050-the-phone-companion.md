@@ -1,6 +1,6 @@
 # ADR-0050: The phone companion, a page Luz serves on the home network
 
-- **Status:** Accepted (step 1 built 2026-10-28; NOT YET tried from a real phone or on the owner's TV)
+- **Status:** Accepted (steps 1 and 2 built 2026-10-28; NOT YET tried from a real phone or on the owner's TV)
 - **Date:** 2026-10-28
 - **Spec:** owner's plan of 2026-10-27, round 2 (*Luz full plan.md*); SECURITY.md; ARCHITECTURE.md §14
 
@@ -33,7 +33,10 @@ companion must work on any phone, the owner's or a guest's, without installing a
      does what the keyboard's action key does. Password fields show as dots on the phone and are never sent back to it.
    - **A remote pad.** Up, down, left, right, OK, Back and Play/Pause, sent to Luz as key presses. They act only inside
      Luz, never on the rest of the TV.
-   Steps 2 to 4 (what is playing, browse and play, provider setup) follow as their own changes.
+   - **Step 2, what is playing** (built the same day): the channel's number, name and programme with its times and
+     progress, or the film or episode with its position and length, and Play/Pause, ±30 s, Ch −/+ and Last. Words and
+     times only: no addresses or pictures, since a provider's links can carry the login.
+   Steps 3 and 4 (browse and play, provider setup) follow as their own changes.
 6. **No encryption on the wire, and what follows from it.** A page on a home-network address cannot have a trusted
    certificate, and browsers only give cryptography to secure pages. So the companion is plain HTTP inside the home, like
    the provider links most viewers already use. In step 1 nothing secret travels except what the viewer types; the

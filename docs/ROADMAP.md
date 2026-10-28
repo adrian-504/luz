@@ -542,7 +542,8 @@ backup, the finishing layer, faster channel changes, and release.
 | Round | What | Status |
 |---|---|---|
 | Phone companion, step 1 | Pair a phone by QR code; type into any text field from it; a remote pad (ADR-0050) | **Built 2026-10-28** — device test `aPairedPhoneTypesIntoSearchAndMovesTheRemote` on the emulator; the page tried from a browser through the emulator (typing, Arabic, the pad). NOT YET VERIFIED from a real phone or on the owner's Bbox |
-| Phone companion, steps 2–4 | What is playing and its controls; browse on the phone, play on the TV; provider setup from the phone | Not started |
+| Phone companion, step 2 | What is playing on the phone (channel, programme and its progress, or the film's time) with Play/Pause, ±30 s, Ch −/+ and Last | **Built 2026-10-28** — device test `aPairedPhoneSeesTheChannelAndChangesIt`; tried from a browser through the emulator. NOT YET VERIFIED from a real phone or on the owner's Bbox |
+| Phone companion, steps 3–4 | Browse on the phone, play on the TV; provider setup from the phone | Not started |
 
 Skip intro and credits (TheIntroDB) is not in the plan until its terms are read.
 

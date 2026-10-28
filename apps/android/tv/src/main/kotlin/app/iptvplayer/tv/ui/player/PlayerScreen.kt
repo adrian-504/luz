@@ -70,6 +70,8 @@ import app.iptvplayer.platform.playback.PlaybackMediaSession
 import app.iptvplayer.platform.playback.PlaybackRequest
 import app.iptvplayer.platform.playback.PlaybackSnapshot
 import app.iptvplayer.tv.R
+import app.iptvplayer.tv.companion.CompanionHub
+import app.iptvplayer.tv.companion.CompanionPlaying
 import app.iptvplayer.tv.ui.shortTime
 import app.iptvplayer.tv.ui.theme.ButtonKind
 import app.iptvplayer.tv.ui.theme.LuzBadge
@@ -241,6 +243,27 @@ fun PlayerScreen(
     val isError = snapshot.state == PlaybackState.ERROR || unavailable
     val isVod = request?.mode == PlaybackMode.VOD
     val isLive = onZap != null
+    // The phone companion's "now playing" card (ADR-0050): words and times only, read again every second.
+    LaunchedEffect(controller, title, subtitle, live, isLive) {
+        while (true) {
+            CompanionHub.showPlaying(
+                CompanionPlaying(
+                    title = live?.name ?: title,
+                    subtitle = if (isLive) null else subtitle,
+                    live = isLive,
+                    channelNumber = live?.number,
+                    programme = live?.now?.title,
+                    programmeStartMs = live?.now?.start?.toEpochMilliseconds(),
+                    programmeEndMs = live?.now?.end?.toEpochMilliseconds(),
+                    positionMs = if (isLive) null else controller.currentPosition()?.inWholeMilliseconds,
+                    durationMs = if (isLive) null else controller.duration()?.inWholeMilliseconds,
+                    playing = controller.snapshot.value.state == PlaybackState.PLAYING,
+                ),
+            )
+            delay(COMPANION_REFRESH_MS)
+        }
+    }
+    DisposableEffect(controller) { onDispose { CompanionHub.showPlaying(null) } }
     var bannerShownAt by remember { mutableLongStateOf(0L) }
     var seekShownAt by remember { mutableLongStateOf(0L) }
     var scrubMs by remember { mutableStateOf<Long?>(null) }
@@ -1142,6 +1165,7 @@ private val OVERLAY_GRADIENT = Brush.verticalGradient(
 )
 private const val ERROR_FADE = 0.7f
 private const val ERROR_DIM = 0.6f
+private const val COMPANION_REFRESH_MS = 1_000L
 
 /** The speeds a film can be played at, in the order the button steps through them. */
 private val SPEEDS = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)

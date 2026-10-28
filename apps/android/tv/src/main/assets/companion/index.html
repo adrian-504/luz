@@ -51,6 +51,16 @@
   .quiet { color: var(--text-3); margin: 0; }
   .hint { font-size: 14px; color: var(--text-3); margin: 12px 0 0; }
 
+  .now { margin-bottom: 14px; }
+  .now h2 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .now .number { color: var(--text-3); font-weight: 500; margin-right: 8px; }
+  .now .line { color: var(--text-2); margin: 4px 0 0; }
+  .bar { height: 4px; border-radius: 2px; background: var(--raised); margin: 14px 0 6px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--amber); }
+  .times { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .controls { display: flex; gap: 10px; margin-top: 14px; }
+  .controls button { flex: 1; padding: 12px 0; }
+  .live-mark { color: var(--error); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; margin-left: 8px; vertical-align: 3px; }
   .pad { margin: auto 0 0; padding-top: 28px; display: flex; flex-direction: column; align-items: center; gap: 22px; }
   .ring {
     position: relative; width: min(78vw, 300px); aspect-ratio: 1; border-radius: 50%;
@@ -95,6 +105,23 @@
 </section>
 
 <main id="main" hidden>
+  <section class="card now" id="now" hidden>
+    <h2><span class="number" id="now-number"></span><span id="now-title"></span><span class="live-mark" id="now-live" hidden>LIVE</span></h2>
+    <p class="line" id="now-line"></p>
+    <div class="bar"><i id="now-bar"></i></div>
+    <div class="times"><span id="now-from"></span><span id="now-to"></span></div>
+    <div class="controls" id="vod-controls">
+      <button data-key="rewind" aria-label="Back 30 seconds">&minus;30 s</button>
+      <button data-key="playpause" id="vod-play">Pause</button>
+      <button data-key="forward" aria-label="Forward 30 seconds">+30 s</button>
+    </div>
+    <div class="controls" id="live-controls" hidden>
+      <button data-key="channel-down" aria-label="Previous channel">Ch &minus;</button>
+      <button data-key="last-channel">Last</button>
+      <button data-key="channel-up" aria-label="Next channel">Ch +</button>
+    </div>
+  </section>
+
   <section class="card" id="typing">
     <div id="field" hidden>
       <p class="label" id="field-label"></p>
@@ -196,6 +223,7 @@
     if (events) events.close();
     events = new EventSource("/api/events?token=" + encodeURIComponent(token));
     events.addEventListener("field", (e) => showField(JSON.parse(e.data)));
+    events.addEventListener("playing", (e) => showPlaying(JSON.parse(e.data)));
     events.onopen = () => setStatus("on", "Connected");
     events.onerror = () => {
       setStatus("off", "Can't reach Luz");
@@ -204,6 +232,43 @@
         .then((r) => { if (r.status === 401) forget(); })
         .catch(() => {});
     };
+  }
+
+  function clock(ms) {
+    const total = Math.max(0, Math.round(ms / 1000));
+    const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), sec = total % 60;
+    const two = (n) => String(n).padStart(2, "0");
+    return h > 0 ? h + ":" + two(m) + ":" + two(sec) : m + ":" + two(sec);
+  }
+
+  function timeOfDay(ms) {
+    return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function showPlaying(p) {
+    if (p.title === undefined) { $("now").hidden = true; return; }
+    $("now").hidden = false;
+    $("now-number").textContent = p.number !== undefined ? p.number : "";
+    $("now-title").textContent = p.title;
+    $("now-live").hidden = !p.live;
+    $("live-controls").hidden = !p.live;
+    $("vod-controls").hidden = p.live;
+    $("vod-play").textContent = p.playing ? "Pause" : "Play";
+    let share = 0;
+    if (p.live) {
+      $("now-line").textContent = p.programme || "";
+      const known = p.start !== undefined && p.end !== undefined;
+      if (known) share = (Date.now() - p.start) / (p.end - p.start);
+      $("now-from").textContent = known ? timeOfDay(p.start) : "";
+      $("now-to").textContent = known ? timeOfDay(p.end) : "";
+    } else {
+      $("now-line").textContent = p.subtitle || "";
+      const known = p.position !== undefined && p.duration;
+      if (known) share = p.position / p.duration;
+      $("now-from").textContent = p.position !== undefined ? clock(p.position) : "";
+      $("now-to").textContent = known ? "\u2212" + clock(p.duration - p.position) : "";
+    }
+    $("now-bar").style.width = Math.min(100, Math.max(0, share * 100)) + "%";
   }
 
   function showField(next) {
