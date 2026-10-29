@@ -211,6 +211,7 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, startScope: ChannelScope, startCh
     val recentWord = stringResource(R.string.strip_recent)
     val favouritesWord = stringResource(R.string.live_favorites)
     val newsWord = stringResource(R.string.strip_news)
+    val sportWord = stringResource(R.string.home_sport_now)
     val recentEmpty = stringResource(R.string.strip_empty_recent)
     val favouritesEmpty = stringResource(R.string.strip_empty_fav_title) to stringResource(R.string.strip_empty_fav_body)
     val newsLabels = mapOf(
@@ -239,6 +240,7 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, startScope: ChannelScope, startCh
                 list.subList((index - STRIP_CARDS / 2).coerceAtLeast(0), (index + STRIP_CARDS / 2).coerceAtMost(list.size))
             }
             val news = graph.newsChannels(playlistId).mapValues { it.value.take(STRIP_CARDS) }
+            val sport = graph.sportGuide(playlistId, Clock.System.now()).take(STRIP_CARDS)
             val rows = (recent + favourites + own.orEmpty() + news.values.flatten()).distinctBy { it.id }
             val guide = graph.storedNowNext(playlistId, rows, Clock.System.now())
             fun cards(rows: List<ChannelRow>) = rows.map {
@@ -258,6 +260,28 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, startScope: ChannelScope, startCh
                         at += channels.size
                     }
                     add(StripTab(ChannelScope.News.key(), newsWord, cards(news.values.flatten()), runs))
+                }
+                // Last, so round 3's order is never disturbed; hidden when the guide names no followed team (4.6). The
+                // guide's own words and times on each card. Choosing one zaps through all channels.
+                if (sport.isNotEmpty()) {
+                    add(
+                        StripTab(
+                            SPORT_TAB,
+                            sportWord,
+                            sport.map { found ->
+                                val channel = found.channel
+                                StripCard(
+                                    channel.id.value,
+                                    channel.label,
+                                    channel.logo,
+                                    channel.quality,
+                                    found.title,
+                                    found.start,
+                                    found.end,
+                                )
+                            },
+                        ),
+                    )
                 }
             }
         },
@@ -346,3 +370,6 @@ private const val GUIDE_AROUND = 60
 
 /** The app setting for 3.9, "Open on the last channel": on unless it holds "false". */
 const val OPEN_LAST_CHANNEL = "open_last_channel"
+
+/** The strip's Sport now tab: not a channel list of its own, so choosing from it zaps through all channels. */
+private const val SPORT_TAB = "sport"

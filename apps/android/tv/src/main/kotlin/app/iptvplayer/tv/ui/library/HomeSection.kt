@@ -48,10 +48,12 @@ import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.AppGraph
 import app.iptvplayer.tv.app.ContinueCard
 import app.iptvplayer.tv.app.LocalAppGraph
+import app.iptvplayer.tv.app.MatchCard
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.live.ChannelScope
 import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.shortTime
+import app.iptvplayer.tv.ui.sport.MatchCardView
 import app.iptvplayer.tv.ui.theme.ButtonKind
 import app.iptvplayer.tv.ui.theme.CalmScrolling
 import app.iptvplayer.tv.ui.theme.CardShape
@@ -72,6 +74,7 @@ val HOME_ROW_TITLES: List<Pair<String, Int>> = listOf(
     HomeTags.CONTINUE to R.string.home_continue,
     HomeTags.CHANNELS to R.string.home_your_channels,
     HomeTags.LIVE to R.string.home_live_now,
+    HomeTags.SPORT_NOW to R.string.home_sport_now,
     HomeTags.COMING_UP to R.string.home_coming_up,
     HomeTags.TOP_TEN to R.string.home_top_ten,
     HomeTags.TRENDING_MOVIES to R.string.home_trending_movies,
@@ -107,6 +110,8 @@ object HomeTags {
     const val TOP_TEN = "top-ten"
     const val RECENT = "recent"
     const val COMING_UP = "coming-up"
+    const val SPORT_NOW = "sport-now"
+    const val MATCH_DAY = "match-day"
     const val GENRE = "genre"
 }
 
@@ -139,6 +144,8 @@ private data class HomeCard(
     val details: (() -> Unit)? = null,
     /** On "Continue watching": what a long press can mark as watched or take off the row. */
     val continuing: ContinueCard? = null,
+    /** A followed match (Sport now, ADR-0057), drawn as a match card. */
+    val match: MatchCard? = null,
 )
 
 private data class HomeRow(val id: String, val title: String, val cards: List<HomeCard>, val landscape: Boolean = false)
@@ -174,6 +181,8 @@ fun HomeSection(
     onOpenSeries: (PlaylistId, String) -> Unit,
     onPlayContent: (PlaylistId, ContentType, String) -> Unit,
     onFirstKey: (String?) -> Unit,
+    /** "In your guide" for a match (4.16). */
+    onOpenMatch: (PlaylistId, String) -> Unit = { _, _ -> },
     /** My Luz (ADR-0044): the same screen, holding only what the viewer has made their own. */
     myLuz: Boolean = false,
     placeholder: @Composable () -> Unit,
@@ -187,12 +196,13 @@ fun HomeSection(
     val details by graph.detailRevision.collectAsState()
     val detailsStep = details / DETAIL_REFRESH_STEP
     val lists by graph.listRevision.collectAsState()
+    val sport by graph.sportRevision.collectAsState()
     var playlist by remember { mutableStateOf<PlaylistId?>(null) }
     var rows by remember { mutableStateOf<List<HomeRow>?>(null) }
     val movieKind = stringResource(R.string.home_kind_movie)
     val seriesKind = stringResource(R.string.home_kind_series)
 
-    LaunchedEffect(revision, watched, detailsStep, lists) {
+    LaunchedEffect(revision, watched, detailsStep, lists, sport) {
         val source = graph.currentSource()
         playlist = source?.playlistId
         val id = source?.playlistId
@@ -266,6 +276,21 @@ fun HomeSection(
             },
             HomeRowSpec(HomeTags.LIVE, R.string.home_live_now, landscape = true) { p ->
                 channelCards(graph, p, mine = false, onPlay = onPlayChannel)
+            },
+            // Followed matches live now or starting in the next three hours (4.17): no score, no minute, no channel. OK opens
+            // "In your guide" for the match. Left out when there are none, so a day without matches changes nothing.
+            HomeRowSpec(HomeTags.SPORT_NOW, R.string.home_sport_now, landscape = true) { p ->
+                graph.sportNow(now).map { match ->
+                    HomeCard(
+                        key = match.fixture.id,
+                        title = resources.getString(R.string.match_teams, match.fixture.homeName, match.fixture.awayName),
+                        caption = match.fixture.competitionName,
+                        poster = null,
+                        fraction = null,
+                        open = { onOpenMatch(p, match.fixture.id) },
+                        match = match,
+                    )
+                }
             },
             // What starts soon (or just started) on the viewer's own channels, from the stored guide; OK jumps to it.
             HomeRowSpec(HomeTags.COMING_UP, R.string.home_coming_up, landscape = true) { p ->
@@ -374,6 +399,30 @@ fun HomeSection(
             }
             // The viewer's own choice of rows and their order, when they have made one; otherwise Home's own order.
             val wanted = myLuzSpecs ?: chosen?.mapNotNull { key -> specs.firstOrNull { it.id == key } } ?: specs
+            // Match day (s1): today's match of a followed team leads Home, so the stage opens on it, from the first
+            // row shown; on other days nothing changes.
+            val matchDay = if (myLuz) {
+                null
+            } else {
+                graph.matchDay(now)?.let { match ->
+                    HomeRow(
+                        HomeTags.MATCH_DAY,
+                        resources.getString(R.string.matchday_row),
+                        listOf(
+                            HomeCard(
+                                key = match.fixture.id,
+                                title = resources.getString(R.string.match_teams, match.fixture.homeName, match.fixture.awayName),
+                                caption = match.fixture.competitionName,
+                                poster = null,
+                                fraction = null,
+                                open = { onOpenMatch(id, match.fixture.id) },
+                                match = match,
+                            ),
+                        ),
+                        landscape = true,
+                    )
+                }
+            }
             // The first time Home opens, each row appears as soon as it is read, rather than all of them after the slowest.
             // Later reloads replace the rows in one step, so nothing on screen shrinks and grows again under the viewer.
             val firstLoad = rows == null
@@ -382,13 +431,14 @@ fun HomeSection(
                 val cards = spec.load(id)
                 loaded += HomeRow(spec.id, spec.titleOf?.invoke() ?: resources.getString(spec.title), cards, spec.landscape)
                 if (firstLoad) {
-                    arranged(loaded).takeIf { it.isNotEmpty() }?.let {
+                    (listOfNotNull(matchDay) + arranged(loaded)).takeIf { it.isNotEmpty() }?.let {
                         rows = it
                         onFirstKey(firstCardKey(it))
                     }
                 }
             }
-            arranged(loaded)
+            // Sport now stays below it, the day's match among the others (Design 4.5).
+            listOfNotNull(matchDay) + arranged(loaded)
         }
         onFirstKey(rows?.takeIf { it.isNotEmpty() }?.let(::firstCardKey))
     }
@@ -406,7 +456,19 @@ fun HomeSection(
 
     // The greeting shows once, on the first stage after Luz opens (D6): gone as soon as the remote moves.
     fun greetNow(row: HomeRow) = row.id == shown.first().id && !myLuz && !HomeGreeting.done
-    fun stageOf(row: HomeRow, card: HomeCard) = card.now?.let { now -> channelStage(card, now, resources) } ?: StageInfo(
+    fun stageOf(row: HomeRow, card: HomeCard) = card.match?.let { match ->
+        // A match: its league and teams, the countdown on match day, and nothing pretending to be a picture (s1, 4.17).
+        StageInfo(
+            eyebrow = if (row.id == HomeTags.MATCH_DAY) {
+                resources.getString(R.string.matchday_line, match.fixture.competitionName)
+            } else {
+                row.title
+            },
+            title = card.title,
+            facts = if (row.id == HomeTags.MATCH_DAY) emptyList() else listOf(match.fixture.competitionName),
+            kickoff = match.fixture.kickoff.takeIf { row.id == HomeTags.MATCH_DAY },
+        )
+    } ?: card.now?.let { now -> channelStage(card, now, resources) } ?: StageInfo(
         eyebrow = if (greetNow(row)) "$greeting · ${row.title}" else row.title,
         greeting = greetNow(row),
         title = card.title,
@@ -448,20 +510,26 @@ fun HomeSection(
                             items(row.cards.size, key = { row.cards[it].key }) { cardIndex ->
                                 val card = row.cards[cardIndex]
                                 val channel = card.channelName != null
+                                val cardModifier = Modifier
+                                    .rememberedFocus(focus, HomeTags.item(row.id, card.key))
+                                    .onFocusChanged {
+                                        if (it.isFocused) {
+                                            if (onCardKey.value != null && onCardKey.value != card.key) HomeGreeting.done = true
+                                            onCard.value = stageOf(row, card)
+                                            onCardKey.value = card.key
+                                        }
+                                    }
+                                val match = card.match
+                                if (match != null) {
+                                    MatchCardView(match, cardModifier, onClick = card.open, onLongClick = card.open)
+                                    return@items
+                                }
                                 LuzCard(
                                     title = card.title,
                                     subtitle = card.caption,
                                     shape = if (row.landscape) CardShape.LANDSCAPE else CardShape.POSTER,
                                     progress = card.fraction,
-                                    modifier = Modifier
-                                        .rememberedFocus(focus, HomeTags.item(row.id, card.key))
-                                        .onFocusChanged {
-                                            if (it.isFocused) {
-                                                if (onCardKey.value != null && onCardKey.value != card.key) HomeGreeting.done = true
-                                                onCard.value = stageOf(row, card)
-                                                onCardKey.value = card.key
-                                            }
-                                        },
+                                    modifier = cardModifier,
                                     onLongClick = if (hasMenu(card)) ({ menuFor = row.id to card }) else null,
                                     onClick = card.open,
                                 ) { modifier ->

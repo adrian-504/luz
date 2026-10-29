@@ -339,6 +339,13 @@
     <string name="settings_tmdb_summary">Trending and ratings, with your own key</string>
     <!-- Sport (ADR-0057, Design 4.1 and 4.8). -->
     <string name="search_matches">Matches</string>
+    <string name="home_sport_now">Sport now</string>
+    <string name="matchday_live">Live now</string>
+    <string name="matchday_row">Your match today</string>
+    <string name="matchday_line">Your match today · %1$s</string>
+    <string name="matchday_when">Today %1$s · in %2$s</string>
+    <string name="matchday_in_hours">%1$d h %2$d min</string>
+    <string name="matchday_in_minutes">%1$d min</string>
     <string name="match_when_day">%1$s %2$s</string>
     <string name="match_when_date">%1$s, %2$s</string>
     <string name="match_teams">%1$s – %2$s</string>
@@ -553,6 +560,7 @@
     <string name="strip_news_fr" translatable="false">Français</string>
     <string name="strip_news_en" translatable="false">English</string>
     <string name="strip_until">Until %1$s</string>
+    <string name="strip_from_to">%1$s – %2$s</string>
     <string name="strip_empty_fav_title">No favourites yet</string>
     <string name="strip_empty_fav_body">Hold OK on a channel to keep it here.</string>
     <string name="strip_empty_recent">Channels you watch will appear here.</string>

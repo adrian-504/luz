@@ -19,7 +19,10 @@ import app.iptvplayer.storage.FollowKind
 import app.iptvplayer.testing.TestPanel
 import app.iptvplayer.tv.app.IptvApplication
 import app.iptvplayer.tv.developer.DeveloperStreams
+import app.iptvplayer.tv.ui.library.HomeTags
 import app.iptvplayer.tv.ui.library.SearchTags
+import app.iptvplayer.tv.ui.player.PlayerTags
+import app.iptvplayer.tv.ui.player.StripTags
 import app.iptvplayer.tv.ui.settings.SettingsTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
@@ -63,6 +66,8 @@ class SportFlowTest {
     @get:Rule
     val chain: RuleChain = RuleChain.outerRule(NoSourcesRule()).around(provider).around(rule)
 
+    private val playlist get() = runBlocking { graph.sources().single().playlistId }
+
     @After
     fun forget() {
         graph.reminderLead = 2.minutes
@@ -92,9 +97,11 @@ class SportFlowTest {
             .onFailure { throw AssertionError("expected focus on $tag, but focused: ${focusedTag()}", it) }
     }
 
-    private fun openSection(section: Section) {
-        rule.waitUntil(20_000) { focusedTag()?.startsWith("live-") == true }
-        press(KeyEvent.KEYCODE_BACK)
+    private fun openSection(section: Section, waitForLive: Boolean = true) {
+        if (waitForLive) {
+            rule.waitUntil(20_000) { focusedTag()?.startsWith("live-") == true }
+            press(KeyEvent.KEYCODE_BACK)
+        }
         rule.waitUntil(5_000) { focusedTag()?.startsWith("rail-") == true }
         walkTabsTo(
             section,
@@ -187,7 +194,9 @@ class SportFlowTest {
             val at = focusedTag()
             when {
                 at == card -> Unit
-                at?.startsWith("search-match-") == true -> press(KeyEvent.KEYCODE_DPAD_LEFT)
+                // Matches are soonest first: a later one is to the right of the one wanted.
+                at?.startsWith("search-match-") == true ->
+                    press(if (at.removePrefix("search-match-") > "70001") KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT)
                 else -> press(KeyEvent.KEYCODE_DPAD_DOWN)
             }
         }
@@ -242,5 +251,53 @@ class SportFlowTest {
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(MatchGuideTags.SCREEN)).fetchSemanticsNodes().isNotEmpty() }
         assertTrue(rule.onAllNodes(hasTestTag(KickOffTags.CARD)).fetchSemanticsNodes().isEmpty())
+    }
+
+    /**
+     * Match day and Sport now (s1, 4.17): with a followed team's match under way, Home leads with it ("Live now" on the
+     * stage), Sport now lists it, and the strip gains a Sport now tab of what the guide names.
+     */
+    @Test
+    fun aFollowedTeamsMatchLeadsHomeAndSportNow() {
+        assertNull(runBlocking { graph.setSportToken(TestPanel.FOOTBALL_TOKEN) })
+        graph.follow(FollowKind.TEAM, "9065", "Example City FC")
+        rule.waitUntil(60_000) { runBlocking { graph.fixture("70000") } != null && graph.sportRevision.value > 0 }
+        // The team's names (Arabic too) arrive with the follow; the strip's tab searches the guide by them.
+        rule.waitUntil(30_000) { runBlocking { graph.sportGuide(playlist, kotlin.time.Clock.System.now()) }.isNotEmpty() }
+        openSection(Section.HOME)
+        val first = HomeTags.item(HomeTags.MATCH_DAY, "70000")
+        runCatching { rule.waitUntil(20_000) { rule.onAllNodes(hasTestTag(first)).fetchSemanticsNodes().isNotEmpty() } }
+            .onFailure {
+                shot("r4-matchday-missing")
+                val day = runBlocking { graph.matchDay(kotlin.time.Clock.System.now()) }
+                throw AssertionError("match day: $day; focused ${focusedTag()}", it)
+            }
+        awaitFocus(first, timeout = 20_000)
+        rule.waitUntil(10_000) { rule.onAllNodes(hasText("Live now"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        shot("r4-matchday-home")
+        // Sport now, further down: the day's match among the others.
+        val sportNow = HomeTags.item(HomeTags.SPORT_NOW, "70000")
+        repeat(6) { if (focusedTag()?.startsWith("home-${HomeTags.SPORT_NOW}") != true) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(sportNow)).fetchSemanticsNodes().isNotEmpty() }
+        shot("r4-sport-now-row")
+
+        // On live television, Down: the strip's last tab is Sport now.
+        press(KeyEvent.KEYCODE_BACK)
+        rule.waitUntil(5_000) { focusedTag()?.startsWith("rail-") == true }
+        openSection(Section.LIVE_TV, waitForLive = false)
+        rule.waitUntil(20_000) { focusedTag()?.startsWith("live-") == true }
+        repeat(3) { if (focusedTag()?.startsWith("live-channel-") != true) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.waitUntil(20_000) { rule.onAllNodes(hasTestTag(PlayerTags.ROOT)).fetchSemanticsNodes().isNotEmpty() }
+        press(KeyEvent.KEYCODE_BACK)
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.waitUntil(20_000) { rule.onAllNodes(hasTestTag(StripTags.tab("sport"))).fetchSemanticsNodes().isNotEmpty() }
+        repeat(6) {
+            val at = focusedTag()
+            if (at != StripTags.tab("sport")) {
+                press(if (at?.startsWith("player-strip-tab") == true) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_UP)
+            }
+        }
+        shot("r4-strip-sport")
     }
 }

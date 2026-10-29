@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -67,13 +68,26 @@ fun MatchCardView(match: MatchCard, modifier: Modifier, onClick: () -> Unit, onL
             TeamLine(match.home, fixture.homeName)
             TeamLine(match.away, fixture.awayName)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    matchWhen(fixture.kickoff),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Tokens.textSecondary,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f),
-                )
+                if (fixture.kickoff <= Clock.System.now()) {
+                    // Under way: the red mark and the word, never colour alone; no score or minute (no live data).
+                    Box(Modifier.size(LIVE_DOT).clip(CircleShape).background(Tokens.stateLive))
+                    Spacer(Modifier.size(Tokens.space1))
+                    Text(
+                        stringResource(R.string.matchday_live),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Tokens.textPrimary,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    Text(
+                        matchWhen(fixture.kickoff),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Tokens.textSecondary,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 if (match.reminder) {
                     Icon(
                         LuzIcons.Bell,
@@ -134,6 +148,7 @@ private val DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM")
 private const val WEEK_DAYS = 7L
 private val CREST = 24.dp
 private val BELL = 14.dp
+private val LIVE_DOT = 6.dp
 private val TEAM_TEXT = 15.sp
 private val TLA_TEXT = 8.sp
 private const val TLA_LETTERS = 3

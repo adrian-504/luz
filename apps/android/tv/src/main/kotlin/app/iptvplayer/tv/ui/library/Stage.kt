@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -28,12 +30,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.security.UrlTemplate
+import app.iptvplayer.tv.R
 import app.iptvplayer.tv.ui.theme.HeroTitle
 import app.iptvplayer.tv.ui.theme.LuzBadge
 import app.iptvplayer.tv.ui.theme.MetadataLine
@@ -65,6 +69,8 @@ data class StageInfo(
     val logoOf: ContentType? = null,
     val year: Int? = null,
     val isChannel: Boolean = false,
+    /** Match day (s1): the kick-off, counted down in amber once a minute, then "Live now" with the red mark. */
+    val kickoff: kotlin.time.Instant? = null,
 )
 
 /**
@@ -171,6 +177,7 @@ private fun StageScene(info: StageInfo, resolver: ((UrlTemplate) -> String?)?) {
                 rememberTitlePageArt(type, info.title, info.year, null, emptyList(), ask = rested).logoUrl
             }
             if (info.logoOf != null) TitleLogo(logo, info.title) else HeroTitle(info.title)
+            info.kickoff?.let { Countdown(it) }
             if (info.facts.isNotEmpty() || info.badges.isNotEmpty()) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(Tokens.space3),
@@ -245,3 +252,43 @@ fun StageShelves(modifier: Modifier = Modifier, content: @Composable () -> Unit)
 private val TOP_FADE = 36.dp
 
 private const val LOGO_REST_MS = 350L
+
+/**
+ * "Today 21:00 · in 2 h 10 min" in amber, the one warm thing on screen, changing once a minute (no seconds ticking); from
+ * kick-off "Live now" with the red mark and the word. No score or minute: Luz has no live data (s1).
+ */
+@Composable
+private fun Countdown(kickoff: kotlin.time.Instant) {
+    var now by remember { mutableStateOf(kotlin.time.Clock.System.now()) }
+    LaunchedEffect(kickoff) {
+        while (true) {
+            // To the next minute boundary, so the words change on the minute like the clock (EPG.md §5).
+            delay(MINUTE_MS - now.toEpochMilliseconds() % MINUTE_MS)
+            now = kotlin.time.Clock.System.now()
+        }
+    }
+    if (now >= kickoff) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.space2)) {
+            Box(Modifier.size(LIVE_DOT).clip(CircleShape).background(Tokens.stateLive))
+            Text(stringResource(R.string.matchday_live), style = MaterialTheme.typography.titleMedium, color = Tokens.textPrimary)
+        }
+    } else {
+        val left = kickoff - now
+        val hours = left.inWholeHours
+        val minutes = (left.inWholeMinutes % MINUTES_PER_HOUR) + 1
+        val inText = if (hours > 0) {
+            stringResource(R.string.matchday_in_hours, hours, minutes)
+        } else {
+            stringResource(R.string.matchday_in_minutes, minutes)
+        }
+        Text(
+            stringResource(R.string.matchday_when, app.iptvplayer.tv.ui.shortTime(kickoff), inText),
+            style = MaterialTheme.typography.titleMedium,
+            color = Tokens.accent,
+        )
+    }
+}
+
+private const val MINUTE_MS = 60_000L
+private const val MINUTES_PER_HOUR = 60
+private val LIVE_DOT = 8.dp

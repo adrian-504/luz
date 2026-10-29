@@ -764,6 +764,57 @@ class AppGraph(context: Context) {
 
     suspend fun fixture(id: String): Fixture? = io { sportStore.fixture(id) }
 
+    /**
+     * Sport now (4.17): matches of followed teams and competitions under way (kick-off in the last [MATCH_LENGTH]) or
+     * starting within [SPORT_NOW_AHEAD], followed teams' first, soonest first. One indexed read of the stored matches.
+     */
+    suspend fun sportNow(now: Instant): List<MatchCard> = io {
+        val follows = sportStore.follows()
+        val teams = follows.filter { it.kind == FollowKind.TEAM }.map { it.ref }.toSet()
+        val leagues = follows.filter { it.kind == FollowKind.COMPETITION }.map { it.ref }.toSet()
+        if (teams.isEmpty() && leagues.isEmpty()) return@io emptyList()
+        val reminded = sportStore.reminders().map { it.id }.toSet()
+        sportStore.fixtures(now - MATCH_LENGTH, now + SPORT_NOW_AHEAD)
+            .filter { it.homeRef in teams || it.awayRef in teams || it.competition in leagues }
+            .sortedWith(compareBy({ if (it.homeRef in teams || it.awayRef in teams) 0 else 1 }, { it.kickoff }))
+            .take(MAX_SEARCH_MATCHES)
+            .map { MatchCard(it, sportStore.team(it.homeRef), sportStore.team(it.awayRef), it.id in reminded) }
+    }
+
+    /**
+     * The strip's Sport now tab (4.17): what the viewer's guide lists now or in the next [SPORT_NOW_AHEAD] that names a
+     * followed team, one programme per channel, soonest first. The guide's words, not a Luz claim (ADR-0057). Read when the
+     * strip opens; kept [SPORT_GUIDE_KEEP].
+     */
+    suspend fun sportGuide(playlistId: PlaylistId, now: Instant): List<MatchProgramme> = io {
+        sportGuideCache?.takeIf { it.first == playlistId && now - it.second < SPORT_GUIDE_KEEP }?.let { return@io it.third }
+        val teams = sportStore.follows().filter { it.kind == FollowKind.TEAM }
+        val names = teams.flatMap { sportStore.aliases(it.ref) + it.name }
+        val query = MatchGuide.query(names, emptyList()) ?: return@io emptyList()
+        val hits = epg.searchProgrammes(playlistId.value, query, now, now + SPORT_NOW_AHEAD, MAX_GUIDE_HITS)
+        val channels = content.channelsByIds(playlistId, hits.map { it.channelId }.distinct()).associateBy { it.id.value }
+        hits.distinctBy { it.channelId }
+            .mapNotNull { hit -> channels[hit.channelId]?.let { MatchProgramme(it, hit.title, hit.start, hit.end) } }
+            .also { sportGuideCache = Triple(playlistId, now, it) }
+    }
+
+    private var sportGuideCache: Triple<PlaylistId, Instant, List<MatchProgramme>>? = null
+
+    /**
+     * Match day (s1): today's match of a followed team (in the TV's time zone), until it ends ([MATCH_LENGTH] after kick-off),
+     * the soonest if there are two. Null on a day without one, so Home is unchanged.
+     */
+    suspend fun matchDay(now: Instant): MatchCard? = io {
+        val teams = sportStore.follows().filter { it.kind == FollowKind.TEAM }.map { it.ref }.toSet()
+        if (teams.isEmpty()) return@io null
+        val zone = java.time.ZoneId.systemDefault()
+        val today = java.time.Instant.ofEpochMilli(now.toEpochMilliseconds()).atZone(zone).toLocalDate()
+        val endOfDay = Instant.fromEpochMilliseconds(today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli())
+        val fixture = sportStore.fixturesFor(teams, now - MATCH_LENGTH, endOfDay).firstOrNull() ?: return@io null
+        val reminded = sportStore.reminders().any { it.id == fixture.id }
+        MatchCard(fixture, sportStore.team(fixture.homeRef), sportStore.team(fixture.awayRef), reminded)
+    }
+
     /** A match as a card shows it, read again (its reminder may have changed). */
     suspend fun matchCard(id: String): MatchCard? = io {
         val fixture = sportStore.fixture(id) ?: return@io null
@@ -1429,6 +1480,8 @@ class AppGraph(context: Context) {
         const val MAX_LOOKUPS = 3
         const val MAX_GUIDE_HITS = 60L
         val REMINDER_LEAD = 2.minutes
+        val SPORT_NOW_AHEAD = 3.hours
+        val SPORT_GUIDE_KEEP = 5.minutes
         const val LOG_TAG = "IptvImport"
 
         /** Channels compared when measuring a guide's time shift (ADR-0056), the short-guide limit. */

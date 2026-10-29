@@ -175,7 +175,9 @@ object TestPanel {
             """{"id":$id,"utcDate":"${tonight.plus(hoursAhead, ChronoUnit.HOURS)}","status":"TIMED",""" +
                 """"competition":{"code":"EXL","name":"Example League"},"homeTeam":$home,"awayTeam":$away}"""
         // 70004 is a match no programme in the test guide names: "In your guide" has nothing to show for it.
+        // 70000 kicked off this hour: under way now, whatever the time of the run (match day, "Live now", Sport now).
         val matches = listOf(
+            match(70000, CITY, ROVERS, -3),
             match(70001, CITY, UNITED, 0),
             match(70002, ROVERS, CITY, 72),
             match(70003, UNITED, ROVERS, 96),

@@ -283,7 +283,14 @@ private fun StripCardView(
             )
             val begin = card.start
             val end = card.end
-            if (begin != null && end != null) {
+            if (begin != null && end != null && begin > Clock.System.now()) {
+                // Not started yet (the Sport now tab, 4.6): its times, and no bar.
+                Text(
+                    stringResource(R.string.strip_from_to, shortTime(begin), shortTime(end)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Tokens.textTertiary,
+                )
+            } else if (begin != null && end != null) {
                 val total = (end - begin).inWholeSeconds.coerceAtLeast(1)
                 val fraction = ((Clock.System.now() - begin).inWholeSeconds.toFloat() / total).coerceIn(0f, 1f)
                 Box(Modifier.fillMaxWidth().height(BAR).background(Color.White.copy(alpha = TRACK_ALPHA))) {

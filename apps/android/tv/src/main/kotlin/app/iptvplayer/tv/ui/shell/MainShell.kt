@@ -147,6 +147,7 @@ fun MainShell(
                         onOpenMovie = onOpenMovie,
                         onOpenSeries = onOpenSeries,
                         onPlayContent = onPlayContent,
+                        onOpenMatch = onOpenMatch,
                         onFirstKey = { myLuzFirstKey = it },
                         myLuz = true,
                     ) { MyLuzEmpty(focus, onAddSource) }
@@ -172,6 +173,7 @@ fun MainShell(
                         onOpenMovie = onOpenMovie,
                         onOpenSeries = onOpenSeries,
                         onPlayContent = onPlayContent,
+                        onOpenMatch = onOpenMatch,
                         onFirstKey = { homeFirstKey = it },
                     ) { NoSourceYet(focus, onAddSource) }
                     Section.SEARCH -> SearchSection(
