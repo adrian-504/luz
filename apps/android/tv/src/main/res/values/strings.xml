@@ -345,6 +345,12 @@
     <string name="match_page_line">%1$s · %2$s</string>
     <string name="match_remind">Remind me</string>
     <string name="match_reminder_set">Reminder set</string>
+    <plurals name="kickoff_card">
+        <item quantity="one">%1$s starts in %2$d min</item>
+        <item quantity="other">%1$s starts in %2$d min</item>
+    </plurals>
+    <string name="kickoff_find">Find it in your guide</string>
+    <string name="kickoff_not_now">Not now</string>
     <string name="match_remind_help">2 minutes before kick-off, while Luz is open</string>
     <string name="search_in_guide">In your guide</string>
     <string name="match_guide_intro">Programmes your guide lists for these teams, as it writes them.</string>

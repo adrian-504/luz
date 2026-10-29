@@ -224,7 +224,7 @@ public class SportStore(private val content: ContentStore, private val clock: Cl
         queries.setFetched(resource, clock.now().toEpochMilliseconds())
     }
 
-    /** Forgets everything read with the token (fixtures, tables, when each was read); what is followed stays. */
+    /** Forgets everything read with the token (matches and their reminders, tables, the catalogue); what is followed stays. */
     public fun clearFetched() {
         content.database.transaction {
             queries.clearFetched()
@@ -232,6 +232,8 @@ public class SportStore(private val content: ContentStore, private val clock: Cl
             queries.clearStandings()
             queries.clearCatalogue()
             queries.clearMemberships()
+            // A reminder is for a match read with the token: it goes with it.
+            queries.clearReminders()
         }
     }
 

@@ -788,6 +788,16 @@ class AppGraph(context: Context) {
 
     suspend fun team(ref: String): SportTeam? = io { sportStore.team(ref) }
 
+    /** How long before kick-off the reminder card rises (4.4); device tests move it so a match tonight is due now. */
+    @Volatile
+    var reminderLead: kotlin.time.Duration = REMINDER_LEAD
+
+    /** The soonest reminded match still to kick off that is not in [shown], as a card shows it. */
+    suspend fun nextReminder(shown: Set<String>): MatchCard? = io {
+        val fixture = sportStore.reminders().firstOrNull { it.id !in shown } ?: return@io null
+        MatchCard(fixture, sportStore.team(fixture.homeRef), sportStore.team(fixture.awayRef), true)
+    }
+
     suspend fun hasReminder(fixtureId: String): Boolean = io { sportStore.reminders().any { it.id == fixtureId } }
 
     suspend fun remind(fixtureId: String, on: Boolean) {
@@ -1418,6 +1428,7 @@ class AppGraph(context: Context) {
         const val MAX_SEARCH_MATCHES = 12
         const val MAX_LOOKUPS = 3
         const val MAX_GUIDE_HITS = 60L
+        val REMINDER_LEAD = 2.minutes
         const val LOG_TAG = "IptvImport"
 
         /** Channels compared when measuring a guide's time shift (ADR-0056), the short-guide limit. */

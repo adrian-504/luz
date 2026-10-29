@@ -411,7 +411,7 @@ fun ProgrammeProgress(programme: GuideProgramme, now: Instant = Clock.System.now
 }
 
 @Composable
-private fun LiveBadge(arabic: Boolean = false) {
+internal fun LiveBadge(arabic: Boolean = false) {
     // Always a word, never colour alone; in Arabic when what is on is Arabic (x13).
     Text(
         stringResource(if (arabic) R.string.player_live_ar else R.string.player_live),

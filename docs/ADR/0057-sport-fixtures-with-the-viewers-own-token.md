@@ -51,5 +51,7 @@ lists.
   fixtures. NOT YET VERIFIED with a real token: the competitions a free token can read, and whether `/competitions`
   lists only those, are unchecked.
 - `HttpFetcher.get` gained `sensitiveHeaders`, passed to the transport's existing redacted headers.
+- "In your guide" (4.3) is built: OK on a programme on now tunes its channel. **Open:** OK on a later programme opens the
+  Guide at the present time; it should jump to that hour with the programme focused.
 - Screens (follow, Matches and "In your guide" shelves, reminders, Sport now, match-day Home, the table, the phone's
   calendar) follow in this round, each under its own go/no-go in the round 4 brief.

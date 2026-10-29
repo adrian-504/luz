@@ -180,3 +180,6 @@ DELETE FROM sport_competition;
 
 clearMemberships:
 DELETE FROM sport_team_competition;
+
+clearReminders:
+DELETE FROM sport_reminder;

@@ -11,6 +11,7 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.iptvplayer.ingestion.AddSourceResult
@@ -22,6 +23,7 @@ import app.iptvplayer.tv.ui.library.SearchTags
 import app.iptvplayer.tv.ui.settings.SettingsTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
+import app.iptvplayer.tv.ui.sport.KickOffTags
 import app.iptvplayer.tv.ui.sport.MatchGuideTags
 import app.iptvplayer.tv.ui.theme.LuzPromptTags
 import kotlinx.coroutines.runBlocking
@@ -34,6 +36,8 @@ import org.junit.Test
 import org.junit.rules.ExternalResource
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Sport with the viewer's own football-data.org key (ADR-0057), against the test server's fakes of football-data.org and
@@ -61,6 +65,7 @@ class SportFlowTest {
 
     @After
     fun forget() {
+        graph.reminderLead = 2.minutes
         forgetSport()
         DeveloperStreams.useTestSport = false
     }
@@ -209,5 +214,33 @@ class SportFlowTest {
         rule.waitUntil(10_000) { runBlocking { graph.hasReminder("70001") } }
         rule.waitUntil(5_000) { rule.onAllNodes(hasText("Reminder set")).fetchSemanticsNodes().isNotEmpty() }
         shot("r4-match-guide-reminder")
+
+        // A match no programme in the guide names: one quiet sentence, and why.
+        press(KeyEvent.KEYCODE_BACK)
+        rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(SearchTags.FIELD)).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag(SearchTags.FIELD).performTextReplacement("wanderers")
+        val unlisted = SearchTags.result("match", "70004")
+        rule.waitUntil(40_000) { rule.onAllNodes(hasTestTag(unlisted)).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag(unlisted).performClick()
+        rule.waitUntil(20_000) { rule.onAllNodes(hasTestTag(MatchGuideTags.EMPTY)).fetchSemanticsNodes().isNotEmpty() }
+        shot("r4-match-guide-empty")
+    }
+
+    /** A reminded match raises the kick-off card wherever the viewer is (4.4); "Find it in your guide" opens its page. */
+    @Test
+    fun aReminderRaisesTheKickOffCardAndItsGuide() {
+        assertNull(runBlocking { graph.setSportToken(TestPanel.FOOTBALL_TOKEN) })
+        graph.follow(FollowKind.TEAM, "9065", "Example City FC")
+        rule.waitUntil(60_000) { runBlocking { graph.fixture("70001") } != null }
+        rule.waitUntil(20_000) { focusedTag()?.startsWith("live-") == true }
+        // Tonight's match is due now: the card rises over Live TV.
+        graph.reminderLead = 24.hours
+        runBlocking { graph.remind("70001", true) }
+        rule.waitUntil(20_000) { rule.onAllNodes(hasTestTag(KickOffTags.CARD)).fetchSemanticsNodes().isNotEmpty() }
+        awaitFocus(KickOffTags.FIND)
+        shot("r4-kickoff-card")
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(MatchGuideTags.SCREEN)).fetchSemanticsNodes().isNotEmpty() }
+        assertTrue(rule.onAllNodes(hasTestTag(KickOffTags.CARD)).fetchSemanticsNodes().isEmpty())
     }
 }

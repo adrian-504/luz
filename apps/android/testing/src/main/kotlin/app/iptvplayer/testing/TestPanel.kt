@@ -147,6 +147,10 @@ object TestPanel {
             """"episodes":{"1":[${episode(8101, 1, 1)},${episode(8102, 1, 2)},${episode(8103, 1, 3)}],"2":[${episode(8201, 2, 1)}]}}"""
     }
 
+    /** "Mithal Siti: today's meeting", in Arabic letters. */
+    private const val ARABIC_MAGAZINE = "\u0645\u062b\u0627\u0644 \u0633\u064a\u062a\u064a:" +
+        " \u0644\u0642\u0627\u0621 \u0627\u0644\u064a\u0648\u0645"
+
     /** The guide's half hours (from two hours ago) holding the fake match and a magazine about one of its teams. */
     private const val MATCH_SLOT = 10
     private const val MAGAZINE_SLOT = 4
@@ -157,6 +161,7 @@ object TestPanel {
     private const val CITY = """{"id":9065,"name":"Example City FC","shortName":"Example City","tla":"EXC"}"""
     private const val UNITED = """{"id":9066,"name":"Sample United","shortName":"Sample Utd","tla":"SAM"}"""
     private const val ROVERS = """{"id":9067,"name":"Test Rovers","shortName":"Rovers","tla":"TRV"}"""
+    private const val WANDERERS = """{"id":9068,"name":"Test Wanderers","shortName":"Wanderers","tla":"TWA"}"""
 
     /**
      * football-data.org as far as the device tests need it (ADR-0057): one league ("Example League", EXL) with three
@@ -169,14 +174,21 @@ object TestPanel {
         fun match(id: Int, home: String, away: String, hoursAhead: Long) =
             """{"id":$id,"utcDate":"${tonight.plus(hoursAhead, ChronoUnit.HOURS)}","status":"TIMED",""" +
                 """"competition":{"code":"EXL","name":"Example League"},"homeTeam":$home,"awayTeam":$away}"""
-        val matches = listOf(match(70001, CITY, UNITED, 0), match(70002, ROVERS, CITY, 72), match(70003, UNITED, ROVERS, 96))
+        // 70004 is a match no programme in the test guide names: "In your guide" has nothing to show for it.
+        val matches = listOf(
+            match(70001, CITY, UNITED, 0),
+            match(70002, ROVERS, CITY, 72),
+            match(70003, UNITED, ROVERS, 96),
+            match(70004, WANDERERS, ROVERS, 120),
+        )
             .joinToString(",", """{"matches":[""", "]}")
         return when (route.removePrefix("/football/v4/")) {
             "competitions" ->
                 200 to """{"competitions":[{"id":901,"code":"EXL","name":"Example League","area":{"name":"Example Land"}},""" +
                     """{"id":902,"code":"XCP","name":"Example Cup","area":{"name":"Example Land"}}]}"""
-            "competitions/EXL/teams" -> 200 to """{"teams":[$CITY,$UNITED,$ROVERS]}"""
-            "competitions/EXL/matches", "teams/9065/matches", "teams/9066/matches", "teams/9067/matches" -> 200 to matches
+            "competitions/EXL/teams" -> 200 to """{"teams":[$CITY,$UNITED,$ROVERS,$WANDERERS]}"""
+            "competitions/EXL/matches", "teams/9065/matches", "teams/9066/matches", "teams/9067/matches", "teams/9068/matches" ->
+                200 to matches
             "competitions/EXL/standings" ->
                 200 to """{"standings":[{"type":"TOTAL","table":[""" +
                     """{"position":1,"team":$CITY,"playedGames":10,"points":25,"goalDifference":12},""" +
@@ -306,6 +318,8 @@ object TestPanel {
                     val title = when {
                         id == "sports.test" && slot == MATCH_SLOT -> "Example City v Sample United"
                         id == "docs.test" && slot == MAGAZINE_SLOT -> "Example City magazine"
+                        // On now, in Arabic: "Mithal Siti: today's meeting", for the Arabic row and its Live mark.
+                        id == "kids.test" && slot == MAGAZINE_SLOT -> ARABIC_MAGAZINE
                         else -> "$name programme ${slot + 1}"
                     }
                     append("<title>$title</title></programme>\n")

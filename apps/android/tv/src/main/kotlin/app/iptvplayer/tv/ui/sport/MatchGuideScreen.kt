@@ -36,6 +36,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.text.ArabicText.isArabic
 import app.iptvplayer.storage.SportTeam
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.LocalAppGraph
@@ -43,6 +44,7 @@ import app.iptvplayer.tv.app.MatchCard
 import app.iptvplayer.tv.app.MatchProgramme
 import app.iptvplayer.tv.ui.library.ArtworkImage
 import app.iptvplayer.tv.ui.library.rememberArtworkResolver
+import app.iptvplayer.tv.ui.player.LiveBadge
 import app.iptvplayer.tv.ui.shortTime
 import app.iptvplayer.tv.ui.theme.LuzButton
 import app.iptvplayer.tv.ui.theme.LuzIcons
@@ -164,7 +166,7 @@ fun MatchGuideScreen(playlist: PlaylistId, fixtureId: String, onPlayChannel: (Ch
                         inset = Tokens.space1,
                         name = programme.channel.label,
                     )
-                    Column(Modifier.padding(start = Tokens.space3).weight(1f)) {
+                    Column(Modifier.weight(1f)) {
                         // The guide's own words, in whatever language it writes them (x13).
                         LuzText(
                             programme.title,
@@ -180,6 +182,8 @@ fun MatchGuideScreen(playlist: PlaylistId, fixtureId: String, onPlayChannel: (Ch
                             maxLines = 1,
                         )
                     }
+                    // On now: the red Live mark at the right, in Arabic when the programme is (4.3, x13).
+                    if (onNow) LiveBadge(isArabic(programme.title))
                 }
             }
         }
@@ -187,7 +191,7 @@ fun MatchGuideScreen(playlist: PlaylistId, fixtureId: String, onPlayChannel: (Ch
 }
 
 @Composable
-private fun TeamPlate(team: SportTeam?, name: String, size: Dp) {
+internal fun TeamPlate(team: SportTeam?, name: String, size: Dp) {
     Box(
         Modifier.size(size).clip(RoundedCornerShape(Tokens.radiusSmall)).background(Tokens.raised),
         contentAlignment = Alignment.Center,

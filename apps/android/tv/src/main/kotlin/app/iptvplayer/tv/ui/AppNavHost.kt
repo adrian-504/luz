@@ -13,8 +13,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -47,8 +54,10 @@ import app.iptvplayer.tv.ui.player.OPEN_LAST_CHANNEL
 import app.iptvplayer.tv.ui.player.PlayerScreen
 import app.iptvplayer.tv.ui.shell.MainShell
 import app.iptvplayer.tv.ui.shell.Section
+import app.iptvplayer.tv.ui.sport.KickOffReminders
 import app.iptvplayer.tv.ui.sport.MatchGuideScreen
 import app.iptvplayer.tv.ui.theme.Tokens
+import kotlinx.coroutines.launch
 
 object Routes {
     const val START = "start"
@@ -110,179 +119,205 @@ fun AppNavHost() {
             navController.navigate(route) { popUpTo(Routes.MAIN) }
         }
     }
-    NavHost(
-        navController = navController,
-        startDestination = Routes.START,
-        // motion.emphasized cross-fade (DESIGN_SYSTEM.md §3.5) instead of the 700 ms default; input is never blocked.
-        enterTransition = { fadeIn(tween(Tokens.MOTION_EMPHASIZED_MS)) },
-        exitTransition = { fadeOut(tween(Tokens.MOTION_EMPHASIZED_MS)) },
-        popEnterTransition = { fadeIn(tween(Tokens.MOTION_EMPHASIZED_MS)) },
-        popExitTransition = { fadeOut(tween(Tokens.MOTION_EMPHASIZED_MS)) },
-    ) {
-        composable(Routes.START) {
-            Box(Modifier.fillMaxSize().background(Tokens.bgBase))
-            LaunchedEffect(Unit) {
-                val target = if (graph.sources().isEmpty()) Routes.WELCOME else Routes.main(Section.LIVE_TV)
-                // Film pages keep arriving in the background from where the last session stopped (ADR-0035).
-                graph.currentSource()?.let {
-                    graph.startDetailFetch(it.playlistId)
-                    graph.keepFresh(it.playlistId)
+    // The kick-off card (4.4) rises over every screen; when it goes, the remote returns to where it was.
+    val content = remember { FocusRequester() }
+    val kickOffScope = rememberCoroutineScope()
+    // Only while the card is up: the screens move focus themselves, and a restorer left on would pull it back mid-change.
+    var holdingFocus by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize()) {
+        NavHost(
+            modifier = Modifier.focusRequester(content).then(if (holdingFocus) Modifier.focusRestorer() else Modifier),
+            navController = navController,
+            startDestination = Routes.START,
+            // motion.emphasized cross-fade (DESIGN_SYSTEM.md §3.5) instead of the 700 ms default; input is never blocked.
+            enterTransition = { fadeIn(tween(Tokens.MOTION_EMPHASIZED_MS)) },
+            exitTransition = { fadeOut(tween(Tokens.MOTION_EMPHASIZED_MS)) },
+            popEnterTransition = { fadeIn(tween(Tokens.MOTION_EMPHASIZED_MS)) },
+            popExitTransition = { fadeOut(tween(Tokens.MOTION_EMPHASIZED_MS)) },
+        ) {
+            composable(Routes.START) {
+                Box(Modifier.fillMaxSize().background(Tokens.bgBase))
+                LaunchedEffect(Unit) {
+                    val target = if (graph.sources().isEmpty()) Routes.WELCOME else Routes.main(Section.LIVE_TV)
+                    // Film pages keep arriving in the background from where the last session stopped (ADR-0035).
+                    graph.currentSource()?.let {
+                        graph.startDetailFetch(it.playlistId)
+                        graph.keepFresh(it.playlistId)
+                    }
+                    // TMDB lists, when the viewer gave a key: read again when more than a day old (ADR-0038).
+                    graph.refreshTmdb()
+                    // Sport, when the viewer gave a token: what can be followed weekly, what is followed once per six hours (ADR-0057).
+                    graph.refreshSport()
+                    // Titles from before Arabic search, folded once in the background (ADR-0055).
+                    graph.foldTitles()
+                    // Opening Luz plays the channel watched last, with Live TV behind it for Back (3.9). Only here, on a cold
+                    // start: coming back to Luz from the background resumes where the viewer was.
+                    val source = graph.currentSource()
+                    val last = source?.takeIf { graph.preference(OPEN_LAST_CHANNEL) != "false" }?.let { graph.lastChannel(it.playlistId) }
+                    navController.navigate(target) { popUpTo(Routes.START) { inclusive = true } }
+                    if (source != null && last != null) {
+                        val scope = ChannelScope.of(graph.preference(LAST_CHANNEL_SCOPE) ?: ChannelScope.All.key())
+                        navController.navigate(Routes.channel(source.playlistId, scope, last))
+                    }
                 }
-                // TMDB lists, when the viewer gave a key: read again when more than a day old (ADR-0038).
-                graph.refreshTmdb()
-                // Sport, when the viewer gave a token: what can be followed weekly, what is followed once per six hours (ADR-0057).
-                graph.refreshSport()
-                // Titles from before Arabic search, folded once in the background (ADR-0055).
-                graph.foldTitles()
-                // Opening Luz plays the channel watched last, with Live TV behind it for Back (3.9). Only here, on a cold
-                // start: coming back to Luz from the background resumes where the viewer was.
-                val source = graph.currentSource()
-                val last = source?.takeIf { graph.preference(OPEN_LAST_CHANNEL) != "false" }?.let { graph.lastChannel(it.playlistId) }
-                navController.navigate(target) { popUpTo(Routes.START) { inclusive = true } }
-                if (source != null && last != null) {
-                    val scope = ChannelScope.of(graph.preference(LAST_CHANNEL_SCOPE) ?: ChannelScope.All.key())
-                    navController.navigate(Routes.channel(source.playlistId, scope, last))
+            }
+            composable(Routes.WELCOME) {
+                WelcomeScreen(
+                    onAddSource = { navController.navigate(Routes.SOURCE_TYPE) },
+                    onExplore = { navController.navigate(Routes.main()) { popUpTo(Routes.WELCOME) { inclusive = true } } },
+                    onPhoneSetup = { navController.navigate(Routes.sourceForm(it)) },
+                )
+            }
+            composable(Routes.SOURCE_TYPE) {
+                SourceTypeScreen(onSelect = { navController.navigate(Routes.sourceForm(it)) })
+            }
+            composable(Routes.SOURCE_FORM) { entry ->
+                val type =
+                    entry.arguments?.getString("type")?.let { name -> SourceType.entries.firstOrNull { it.name == name } }
+                        ?: SourceType.XTREAM
+                when (type) {
+                    SourceType.XTREAM -> XtreamFormScreen(onAdded = { navController.showLiveTv() })
+                    SourceType.M3U_URL -> M3uFormScreen(onAdded = { navController.showLiveTv() })
+                    SourceType.M3U_FILE -> SourceFormPlaceholderScreen(type = type, onBack = { navController.popBackStack() })
+                }
+            }
+            composable(Routes.MAIN) { entry ->
+                val section =
+                    entry.arguments?.getString("section")?.let { name -> Section.entries.firstOrNull { it.name == name } } ?: Section.HOME
+                MainShell(
+                    initialSection = section,
+                    onAddSource = { navController.navigate(Routes.SOURCE_TYPE) },
+                    onPlayDeveloperStream = { navController.navigate(Routes.player(it)) },
+                    onPlayChannel = { playlist, scope, channel -> navController.navigate(Routes.channel(playlist, scope, channel)) },
+                    onSourceAdded = { navController.showLiveTv() },
+                    onEditGuideLink = { navController.navigate(Routes.guideLink(it)) },
+                    onOpenMovie = { playlist, id -> navController.navigate(Routes.movie(playlist, id)) },
+                    onOpenSeries = { playlist, id -> navController.navigate(Routes.series(playlist, id)) },
+                    onPlayContent = { playlist, type, id -> navController.navigate(Routes.content(playlist, type, id, fromStart = false)) },
+                    onOpenPerson = { playlist, name -> navController.navigate(Routes.person(playlist, name)) },
+                    onOpenMatch = { playlist, fixture -> navController.navigate(Routes.match(playlist, fixture)) },
+                )
+            }
+            composable(
+                Routes.MATCH,
+                enterTransition = { pageEnter() },
+                popExitTransition = { pageExit() },
+            ) { entry ->
+                val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
+                MatchGuideScreen(
+                    playlist,
+                    Uri.decode(entry.arguments?.getString("fixture").orEmpty()),
+                    onPlayChannel = { channel -> navController.navigate(Routes.channel(playlist, ChannelScope.All, channel)) },
+                    onOpenGuide = { navController.navigate(Routes.main(Section.GUIDE)) },
+                )
+            }
+            composable(
+                Routes.MOVIE,
+                enterTransition = { pageEnter() },
+                popExitTransition = { pageExit() },
+            ) { entry ->
+                val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
+                val id = Uri.decode(entry.arguments?.getString("id").orEmpty())
+                MovieDetailScreen(
+                    playlist,
+                    id,
+                    onPlay = { version, fromStart ->
+                        navController.navigate(
+                            Routes.content(playlist, ContentType.MOVIE, version, fromStart),
+                        )
+                    },
+                    onPerson = { navController.navigate(Routes.person(playlist, it)) },
+                    onOpenMovie = { navController.navigate(Routes.movie(playlist, it)) },
+                )
+            }
+            composable(
+                Routes.SERIES,
+                enterTransition = { pageEnter() },
+                popExitTransition = { pageExit() },
+            ) { entry ->
+                val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
+                val id = Uri.decode(entry.arguments?.getString("id").orEmpty())
+                SeriesDetailScreen(
+                    playlist,
+                    id,
+                    onPlayEpisode = { episode, fromStart ->
+                        navController.navigate(
+                            Routes.content(playlist, ContentType.EPISODE, episode, fromStart),
+                        )
+                    },
+                    onPerson = { navController.navigate(Routes.person(playlist, it)) },
+                    onOpenSeries = { navController.navigate(Routes.series(playlist, it)) },
+                )
+            }
+            composable(
+                Routes.PERSON,
+                enterTransition = { pageEnter() },
+                popExitTransition = { pageExit() },
+            ) { entry ->
+                val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
+                PersonScreen(
+                    playlist,
+                    Uri.decode(entry.arguments?.getString("name").orEmpty()),
+                    onOpenMovie = { navController.navigate(Routes.movie(playlist, it)) },
+                    onOpenSeries = { navController.navigate(Routes.series(playlist, it)) },
+                )
+            }
+            composable(
+                Routes.CONTENT,
+                arguments = listOf(
+                    navArgument("fromStart") {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    },
+                ),
+            ) { entry ->
+                val arguments = entry.arguments
+                ContentPlayerRoute(
+                    PlaylistId(Uri.decode(arguments?.getString("playlist").orEmpty())),
+                    ContentType.valueOf(arguments?.getString("type") ?: ContentType.MOVIE.name),
+                    Uri.decode(arguments?.getString("id").orEmpty()),
+                    arguments?.getBoolean("fromStart") ?: false,
+                )
+            }
+            composable(Routes.GUIDE_LINK) { entry ->
+                GuideLinkFormScreen(
+                    PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty())),
+                    onDone = { navController.popBackStack() },
+                )
+            }
+            composable(Routes.CHANNEL) { entry ->
+                val arguments = entry.arguments
+                ChannelPlayerRoute(
+                    PlaylistId(Uri.decode(arguments?.getString("playlist").orEmpty())),
+                    ChannelScope.of(Uri.decode(arguments?.getString("scope").orEmpty())),
+                    ChannelId(Uri.decode(arguments?.getString("channel").orEmpty())),
+                )
+            }
+            composable(Routes.PLAYER) { entry ->
+                val context = LocalContext.current
+                val streamId = entry.arguments?.getString("streamId")
+                val stream = remember(streamId) { DeveloperStreams.list(context).firstOrNull { it.id == streamId } }
+                if (stream == null) {
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                } else {
+                    val request = remember(stream) { stream.request() }
+                    PlayerScreen(request = request, title = stream.label)
                 }
             }
         }
-        composable(Routes.WELCOME) {
-            WelcomeScreen(
-                onAddSource = { navController.navigate(Routes.SOURCE_TYPE) },
-                onExplore = { navController.navigate(Routes.main()) { popUpTo(Routes.WELCOME) { inclusive = true } } },
-                onPhoneSetup = { navController.navigate(Routes.sourceForm(it)) },
-            )
-        }
-        composable(Routes.SOURCE_TYPE) {
-            SourceTypeScreen(onSelect = { navController.navigate(Routes.sourceForm(it)) })
-        }
-        composable(Routes.SOURCE_FORM) { entry ->
-            val type =
-                entry.arguments?.getString("type")?.let { name -> SourceType.entries.firstOrNull { it.name == name } } ?: SourceType.XTREAM
-            when (type) {
-                SourceType.XTREAM -> XtreamFormScreen(onAdded = { navController.showLiveTv() })
-                SourceType.M3U_URL -> M3uFormScreen(onAdded = { navController.showLiveTv() })
-                SourceType.M3U_FILE -> SourceFormPlaceholderScreen(type = type, onBack = { navController.popBackStack() })
-            }
-        }
-        composable(Routes.MAIN) { entry ->
-            val section =
-                entry.arguments?.getString("section")?.let { name -> Section.entries.firstOrNull { it.name == name } } ?: Section.HOME
-            MainShell(
-                initialSection = section,
-                onAddSource = { navController.navigate(Routes.SOURCE_TYPE) },
-                onPlayDeveloperStream = { navController.navigate(Routes.player(it)) },
-                onPlayChannel = { playlist, scope, channel -> navController.navigate(Routes.channel(playlist, scope, channel)) },
-                onSourceAdded = { navController.showLiveTv() },
-                onEditGuideLink = { navController.navigate(Routes.guideLink(it)) },
-                onOpenMovie = { playlist, id -> navController.navigate(Routes.movie(playlist, id)) },
-                onOpenSeries = { playlist, id -> navController.navigate(Routes.series(playlist, id)) },
-                onPlayContent = { playlist, type, id -> navController.navigate(Routes.content(playlist, type, id, fromStart = false)) },
-                onOpenPerson = { playlist, name -> navController.navigate(Routes.person(playlist, name)) },
-                onOpenMatch = { playlist, fixture -> navController.navigate(Routes.match(playlist, fixture)) },
-            )
-        }
-        composable(
-            Routes.MATCH,
-            enterTransition = { pageEnter() },
-            popExitTransition = { pageExit() },
-        ) { entry ->
-            val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
-            MatchGuideScreen(
-                playlist,
-                Uri.decode(entry.arguments?.getString("fixture").orEmpty()),
-                onPlayChannel = { channel -> navController.navigate(Routes.channel(playlist, ChannelScope.All, channel)) },
-                onOpenGuide = { navController.navigate(Routes.main(Section.GUIDE)) },
-            )
-        }
-        composable(
-            Routes.MOVIE,
-            enterTransition = { pageEnter() },
-            popExitTransition = { pageExit() },
-        ) { entry ->
-            val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
-            val id = Uri.decode(entry.arguments?.getString("id").orEmpty())
-            MovieDetailScreen(
-                playlist,
-                id,
-                onPlay = { version, fromStart -> navController.navigate(Routes.content(playlist, ContentType.MOVIE, version, fromStart)) },
-                onPerson = { navController.navigate(Routes.person(playlist, it)) },
-                onOpenMovie = { navController.navigate(Routes.movie(playlist, it)) },
-            )
-        }
-        composable(
-            Routes.SERIES,
-            enterTransition = { pageEnter() },
-            popExitTransition = { pageExit() },
-        ) { entry ->
-            val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
-            val id = Uri.decode(entry.arguments?.getString("id").orEmpty())
-            SeriesDetailScreen(
-                playlist,
-                id,
-                onPlayEpisode = { episode, fromStart ->
-                    navController.navigate(
-                        Routes.content(playlist, ContentType.EPISODE, episode, fromStart),
-                    )
-                },
-                onPerson = { navController.navigate(Routes.person(playlist, it)) },
-                onOpenSeries = { navController.navigate(Routes.series(playlist, it)) },
-            )
-        }
-        composable(
-            Routes.PERSON,
-            enterTransition = { pageEnter() },
-            popExitTransition = { pageExit() },
-        ) { entry ->
-            val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
-            PersonScreen(
-                playlist,
-                Uri.decode(entry.arguments?.getString("name").orEmpty()),
-                onOpenMovie = { navController.navigate(Routes.movie(playlist, it)) },
-                onOpenSeries = { navController.navigate(Routes.series(playlist, it)) },
-            )
-        }
-        composable(
-            Routes.CONTENT,
-            arguments = listOf(
-                navArgument("fromStart") {
-                    type = NavType.BoolType
-                    defaultValue = false
-                },
-            ),
-        ) { entry ->
-            val arguments = entry.arguments
-            ContentPlayerRoute(
-                PlaylistId(Uri.decode(arguments?.getString("playlist").orEmpty())),
-                ContentType.valueOf(arguments?.getString("type") ?: ContentType.MOVIE.name),
-                Uri.decode(arguments?.getString("id").orEmpty()),
-                arguments?.getBoolean("fromStart") ?: false,
-            )
-        }
-        composable(Routes.GUIDE_LINK) { entry ->
-            GuideLinkFormScreen(
-                PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty())),
-                onDone = { navController.popBackStack() },
-            )
-        }
-        composable(Routes.CHANNEL) { entry ->
-            val arguments = entry.arguments
-            ChannelPlayerRoute(
-                PlaylistId(Uri.decode(arguments?.getString("playlist").orEmpty())),
-                ChannelScope.of(Uri.decode(arguments?.getString("scope").orEmpty())),
-                ChannelId(Uri.decode(arguments?.getString("channel").orEmpty())),
-            )
-        }
-        composable(Routes.PLAYER) { entry ->
-            val context = LocalContext.current
-            val streamId = entry.arguments?.getString("streamId")
-            val stream = remember(streamId) { DeveloperStreams.list(context).firstOrNull { it.id == streamId } }
-            if (stream == null) {
-                LaunchedEffect(Unit) { navController.popBackStack() }
-            } else {
-                val request = remember(stream) { stream.request() }
-                PlayerScreen(request = request, title = stream.label)
-            }
-        }
+        KickOffReminders(
+            onFind = { match ->
+                holdingFocus = false
+                kickOffScope.launch {
+                    graph.currentSource()?.let { navController.navigate(Routes.match(it.playlistId, match.fixture.id)) }
+                }
+            },
+            onRise = { holdingFocus = true },
+            onClosed = {
+                runCatching { content.requestFocus() }
+                holdingFocus = false
+            },
+        )
     }
 }
 
