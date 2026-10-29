@@ -28,6 +28,7 @@ import app.iptvplayer.tv.ui.library.HomeTags
 import app.iptvplayer.tv.ui.library.LibraryTags
 import app.iptvplayer.tv.ui.library.PersonTags
 import app.iptvplayer.tv.ui.library.SearchTags
+import app.iptvplayer.tv.ui.player.EpisodesSheetTags
 import app.iptvplayer.tv.ui.player.PlayerTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
@@ -424,6 +425,40 @@ class LibraryFlowTest {
         awaitFocus(HomeTags.item(HomeTags.CONTINUE, movie.id), timeout = 20_000)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitPlaying()
+    }
+
+    /** Down during an episode (5.21): the sheet opens on Episodes on the playing one; OK on another plays it. */
+    @Test
+    fun downDuringAnEpisodePlaysAnotherFromTheSheet() {
+        val series = runBlocking { graph.series(playlist, null, 10, 0) }.single()
+        val episodes = runBlocking { graph.episodes(playlist, series.id) }.ifEmpty {
+            // Episodes are read when the series page opens.
+            emptyList()
+        }
+        openSection(Section.SERIES, entry = null)
+        openFullGrid()
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        awaitFocus(LibraryTags.item(series.id))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitText(DetailTags.PLAY, "S1 E1")
+        awaitFocus(DetailTags.PLAY)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitPlaying()
+        val all = episodes.ifEmpty { runBlocking { graph.episodes(playlist, series.id) } }
+        val first = all.first { it.seasonNumber == 1 && it.episodeNumber == 1 }
+        val second = all.first { it.seasonNumber == 1 && it.episodeNumber == 2 }
+
+        press(KeyEvent.KEYCODE_BACK)
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(EpisodesSheetTags.SHEET)).fetchSemanticsNodes().isNotEmpty() }
+        awaitFocus(EpisodesSheetTags.episode(first.id))
+        rule.waitForIdle()
+        screenshot("r5-episodes-sheet")
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        awaitFocus(EpisodesSheetTags.episode(second.id))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(EpisodesSheetTags.SHEET)).fetchSemanticsNodes().isEmpty() }
+        rule.waitUntil(20_000) { CompanionHub.playing.value?.subtitle?.startsWith("S1 E2") == true }
     }
 
     @Test

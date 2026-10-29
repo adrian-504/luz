@@ -263,7 +263,14 @@ class LivePlayerTest {
             awaitGone(ListMakerTags.SCREEN)
             assertEquals(null, CompanionHub.addingTo.value)
             // Focus moves to the new list's row as soon as it is on screen.
-            awaitFocus(LiveTags.group(list.id))
+            val seen = mutableListOf<String>()
+            runCatching {
+                rule.waitUntil(10_000) {
+                    val row = rule.onAllNodes(hasTestTag(LiveTags.group(list.id))).fetchSemanticsNodes().isNotEmpty()
+                    "${focusedTag()}${if (row) "+row" else ""}".let { if (seen.lastOrNull() != it) seen += it }
+                    rule.onAllNodes(hasTestTag(LiveTags.group(list.id)).and(isFocused())).fetchSemanticsNodes().isNotEmpty()
+                }
+            }.onFailure { throw AssertionError("focus after the maker closed: $seen", it) }
         } finally {
             runBlocking { graph.userGroups(playlist).forEach { graph.deleteGroup(playlist, it.id) } }
         }

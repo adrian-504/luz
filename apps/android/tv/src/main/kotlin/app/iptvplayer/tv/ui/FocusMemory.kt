@@ -57,12 +57,13 @@ class FocusMemory internal constructor(private val saved: MutableState<String?>)
      */
     suspend fun awaitFocus(key: String, timeoutMs: Long): Boolean = withTimeoutOrNull(timeoutMs) {
         snapshotFlow { key in attached }.first { it }
-        // Attached with the composition; the focus target may need one more frame.
-        repeat(ATTACH_FRAMES) {
-            if (requestFocus(key)) return@withTimeoutOrNull true
-            delay(FRAME_MS)
-        }
-        false
+        // Attached with the composition; the request may still be refused for a while — a dialog that is closing holds
+        // the remote until it has gone — so it is asked again each frame until it is taken or the time runs out.
+        while (!requestFocus(key)) delay(FRAME_MS)
+        // Asked from outside a list with a focus restorer, the request enters the list and the restorer sends it to the
+        // child it last remembered; asked again from inside, it goes where it was meant to.
+        requestFocus(key)
+        true
     } ?: false
 }
 
@@ -104,6 +105,5 @@ fun RestoreFocusEffect(memory: FocusMemory, defaultKey: String) {
 }
 
 private const val RESTORE_ATTEMPTS = 20
-private const val ATTACH_FRAMES = 5
 private const val FRAME_MS = 16L
 private const val RESTORE_INTERVAL_MS = 50L

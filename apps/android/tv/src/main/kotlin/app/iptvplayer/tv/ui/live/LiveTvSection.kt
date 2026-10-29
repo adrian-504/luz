@@ -479,7 +479,11 @@ fun LiveTvSection(
         making?.let { make ->
             ListMaker(current, make.listId) { made ->
                 making = null
-                if (made != null) scopeKey = ChannelScope.Mine(made).key()
+                if (made != null) {
+                    scopeKey = ChannelScope.Mine(made).key()
+                    // Also what Live TV remembers, so any restore of focus lands on the new list, not on "New list…".
+                    focus.record(LiveTags.group(made))
+                }
                 coroutines.launch {
                     // Once the maker has left the screen: asked while it is still there, focus would return to where the
                     // maker was opened from as it goes.

@@ -18,6 +18,7 @@ import app.iptvplayer.tv.ui.player.PlayerTags
 import app.iptvplayer.tv.ui.settings.SettingsTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -106,6 +107,23 @@ class PlayerNavigationTest {
     private fun awaitSpeed(label: String) {
         runCatching { rule.waitUntil(5_000) { runCatching { rule.onNodeWithTag(PlayerTags.SPEED).assertTextContains(label) }.isSuccess } }
             .onFailure { throw AssertionError("expected the speed button to read $label", it) }
+    }
+
+    /** Up or Down on a film's bare picture (5.2): the title and bar for a moment, nothing pauses, nothing takes focus. */
+    @Test
+    fun downOnAFilmShowsProgressWithoutPausing() {
+        openDeveloperStream("tracks")
+        awaitText(PlayerTags.STATE, string(R.string.player_state_playing))
+        press(KeyEvent.KEYCODE_BACK)
+        awaitGone(PlayerTags.OVERLAY)
+        awaitFocus(PlayerTags.ROOT)
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.waitUntil(5_000) { rule.onAllNodes(hasTestTag(PlayerTags.PEEK)).fetchSemanticsNodes().isNotEmpty() }
+        screenshot("r5-film-peek")
+        awaitFocus(PlayerTags.ROOT)
+        // Still playing: a paused film would show its pause card.
+        rule.waitUntil(6_000) { rule.onAllNodes(hasTestTag(PlayerTags.PEEK)).fetchSemanticsNodes().isEmpty() }
+        assertTrue(rule.onAllNodes(hasTestTag(PlayerTags.PAUSE_CARD)).fetchSemanticsNodes().isEmpty())
     }
 
     /** Right on a film's bare picture (x16): the bar, the step and the time it will jump to, then one jump. */

@@ -121,6 +121,7 @@ object PlayerTags {
     const val NEXT = "player-next"
     const val PROGRESS = "player-progress"
     const val SEEK_HUD = "player-seek-hud"
+    const val PEEK = "player-peek"
     const val AUDIO = "player-audio"
     const val SUBTITLES = "player-subtitles"
     const val TRACK_PANEL = "player-track-panel"
@@ -183,6 +184,8 @@ fun PlayerScreen(
     /** Label and action of the next episode, offered as the current one ends. */
     nextLabel: String? = null,
     onNext: (() -> Unit)? = null,
+    /** A series: the Episodes sheet Down raises (Design 5.4, 5.21), drawn by the caller; it calls back to close. */
+    episodesSheet: (@Composable (onClose: () -> Unit) -> Unit)? = null,
     /** What a film or episode is about, for the Info panel. */
     description: String? = null,
     /** The picture the phone companion shows beside what is playing: a reference (`CompanionLibrary.art`), never an address. */
@@ -251,6 +254,15 @@ fun PlayerScreen(
     var panel by remember { mutableStateOf<PanelTab?>(null) }
     var channelList by remember { mutableStateOf(false) }
     var strip by remember { mutableStateOf(false) }
+    var sheet by remember { mutableStateOf(false) }
+    // Up or Down on a film's bare picture: the title and bar for 3 s, without pausing or taking focus (Design 5.2).
+    var peekShownAt by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(peekShownAt) {
+        if (peekShownAt != 0L) {
+            delay(PEEK_MS)
+            peekShownAt = 0L
+        }
+    }
     var stripTabs by remember { mutableStateOf<List<StripTab>?>(null) }
     LaunchedEffect(strip) { stripTabs = if (strip) loadStrip?.invoke() else null }
     var overlayVisible by remember { mutableStateOf(true) }
@@ -487,7 +499,7 @@ fun PlayerScreen(
                 }
                 if (event.type != ComposeKeyEventType.KeyDown) return@onPreviewKeyEvent false
                 lastInputAt = System.nanoTime()
-                val bare = !overlayVisible && panel == null && !channelList && !strip && !diagnosticsVisible && !isError
+                val bare = !overlayVisible && panel == null && !channelList && !strip && !sheet && !diagnosticsVisible && !isError
                 when (keyCode) {
                     KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                         if (snapshot.state == PlaybackState.PAUSED) controller.play() else controller.pause()
@@ -528,15 +540,26 @@ fun PlayerScreen(
                     KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> isLive.also { if (it) onZap?.invoke(-1) }
                     KeyEvent.KEYCODE_DPAD_UP -> (bare && (channels != null || !isLive)).also {
                         if (!it) return@also
-                        if (channels != null) channelList = true else overlayVisible = true
+                        when {
+                            channels != null -> channelList = true
+                            // A film or an episode: the peek, nothing pauses (Design 5.2).
+                            isVod -> peekShownAt = System.nanoTime()
+                            else -> overlayVisible = true
+                        }
                     }
                     // Live TV: Down raises the channel strip; the Info panel moved to the Info button (ADR-0053).
                     KeyEvent.KEYCODE_DPAD_DOWN -> bare.also {
                         if (!it) return@also
-                        if (isLive && loadStrip != null) strip = true else openPanel(PanelTab.INFO, null)
+                        when {
+                            isLive && loadStrip != null -> strip = true
+                            // A series: the sheet on Episodes (5.21). A film: the peek (5.2).
+                            episodesSheet != null -> sheet = true
+                            isVod -> peekShownAt = System.nanoTime()
+                            else -> openPanel(PanelTab.INFO, null)
+                        }
                     }
                     // Not under the strip: OK there belongs to the card under the remote.
-                    in SELECT_KEYS -> if (!overlayVisible && !isError && panel == null && !channelList && !strip) {
+                    in SELECT_KEYS -> if (!overlayVisible && !isError && panel == null && !channelList && !strip && !sheet) {
                         // On the pause card OK carries on; anywhere else it brings the controls up.
                         if (isVod && snapshot.state == PlaybackState.PAUSED) controller.play() else overlayVisible = true
                         swallowSelectUp = true
@@ -590,6 +613,35 @@ fun PlayerScreen(
             ) {
                 Text(title, style = MaterialTheme.typography.headlineMedium, color = Tokens.textPrimary)
                 subtitle?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = Tokens.textSecondary) }
+            }
+        }
+
+        if (peekShownAt != 0L && seekShownAt == 0L && !overlayVisible && !sheet && durationMs > 0) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(OVERLAY_GRADIENT)
+                    .padding(start = Tokens.space16, end = Tokens.space16, top = Tokens.space16, bottom = Tokens.space10)
+                    .testTag(PlayerTags.PEEK),
+                verticalArrangement = Arrangement.spacedBy(Tokens.space3),
+            ) {
+                Text(title, style = MaterialTheme.typography.headlineSmall, color = Tokens.textPrimary, maxLines = 1)
+                ScrubBar(positionMs, durationMs, null, focused = false)
+            }
+        }
+
+        episodesSheet?.let { content ->
+            AnimatedVisibility(
+                visible = sheet,
+                enter = slideInVertically(luzTween(Tokens.MOTION_STANDARD_MS)) { it } + fadeIn(luzTween(Tokens.MOTION_STANDARD_MS)),
+                exit = slideOutVertically(luzTween(Tokens.MOTION_FOCUS_MS)) { it } + fadeOut(luzTween(Tokens.MOTION_FOCUS_MS)),
+                modifier = Modifier.align(Alignment.BottomCenter),
+            ) {
+                content {
+                    sheet = false
+                    runCatching { rootFocus.requestFocus() }
+                }
             }
         }
 
@@ -1295,6 +1347,7 @@ private fun stepLabel(step: Duration): String {
 
 private val SEEK_STEP = 10.seconds
 private const val SKIP_COMMIT_MS = 400L
+private const val PEEK_MS = 3_000L
 private val SKIP_TIME_TEXT = 30.sp
 private const val SECONDS_PER_MINUTE = 60L
 private const val MINUS = "\u2212"

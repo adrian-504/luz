@@ -24,6 +24,7 @@ import app.iptvplayer.storage.EpisodeRow
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.companion.CompanionLibrary
+import app.iptvplayer.tv.ui.player.EpisodesSheet
 import app.iptvplayer.tv.ui.player.PlayerScreen
 import kotlinx.coroutines.launch
 
@@ -51,6 +52,8 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
     var subtitle by remember { mutableStateOf<String?>(null) }
     var episode by remember { mutableStateOf<EpisodeRow?>(null) }
     var next by remember { mutableStateOf<EpisodeRow?>(null) }
+    // Every episode of the series, for the Episodes sheet (5.21); read with the episode.
+    var allEpisodes by remember { mutableStateOf<List<EpisodeRow>>(emptyList()) }
     var description by remember { mutableStateOf<String?>(null) }
     var badges by remember { mutableStateOf<List<String>>(emptyList()) }
     var companionArt by remember { mutableStateOf<String?>(null) }
@@ -111,7 +114,8 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
                 series?.poster != null -> CompanionLibrary.art(CompanionLibrary.SERIES, series.id)
                 else -> null
             }
-            next = current?.let { NextEpisode.after(graph.episodes(playlistId, it.seriesId), it) }
+            allEpisodes = current?.let { graph.episodes(playlistId, it.seriesId) }.orEmpty()
+            next = current?.let { NextEpisode.after(allEpisodes, it) }
         }
         val resolved = graph.contentPlaybackRequest(playlistId, type, id, startFromBeginning)
         unavailable = resolved == null
@@ -123,6 +127,7 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
     }
 
     val following = next
+    val resolver = rememberArtworkResolver(playlistId)
     PlayerScreen(
         request = request,
         title = title,
@@ -149,6 +154,17 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
                 startFromBeginning = false
                 id = it.id
             }
+        },
+        episodesSheet = if (type == ContentType.EPISODE && allEpisodes.isNotEmpty()) {
+            { onClose ->
+                EpisodesSheet(allEpisodes, id, resolver, onPlay = { chosen ->
+                    // From its saved place; a watched one from the start (Design 5.4).
+                    startFromBeginning = allEpisodes.firstOrNull { it.id == chosen }?.progress?.completed == true
+                    id = chosen
+                }, onClose = onClose)
+            }
+        } else {
+            null
         },
     )
 }
