@@ -39,6 +39,10 @@ object TestPanel {
     @Volatile
     var dropped: Set<Int> = emptySet()
 
+    /** Channel ids the panel's short guide leaves empty, so a test can see a channel with no listings. */
+    @Volatile
+    var withoutGuide: Set<Int> = emptySet()
+
     /** When on, the panel sends one more category and channel, as a provider adding a category after setup does. */
     @Volatile
     var lateCategory: Boolean = false
@@ -202,7 +206,7 @@ object TestPanel {
 
     /** Per-channel guide (`get_short_epg`): 30-minute programmes from the current half hour, base64 titles as panels send them. */
     private fun shortEpg(streamId: String?): String {
-        val channel = channels.firstOrNull { it.id.toString() == streamId } ?: return """{"epg_listings":[]}"""
+        val channel = channels.firstOrNull { it.id.toString() == streamId && it.id !in withoutGuide } ?: return """{"epg_listings":[]}"""
         val start = Instant.now().epochSecond.let { it - it % 1800 }
         return (0 until 4).joinToString(",", """{"epg_listings":[""", "]}") { slot ->
             val from = start + slot * 1800

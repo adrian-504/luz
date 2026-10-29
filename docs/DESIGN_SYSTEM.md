@@ -235,6 +235,8 @@ last with that source. While a refresh runs longer than a second, *Updating chan
 beside the title in caption grey, and fades out when done (ADR-0051).
 
 ## 12. Guide (ADR-0037)
+Rows are 40 dp (ADR-0054); the guide opens on the category last used in Live TV, named in a chip beside the title that
+lists the categories on OK; a channel without listings is one quiet bar, "beIN Sports 1 · no listings".
 A screen title with the focused programme large, its channel, times and "On now" beneath, and two lines of its
 description; a glass *Now* button. The day ("Today", "Tomorrow", a date) and the half-hour marks over a hairline; each
 channel's number, logo plate and name, the focused row's name brighter; programmes as soft glass blocks as long as they

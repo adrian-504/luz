@@ -534,4 +534,6 @@
     <string name="settings_news_help">News channels Luz found for the News tab, in Arabic, French and English.</string>
     <string name="live_no_listings">No listings for this channel</string>
     <string name="menu_header_line">Channel %1$d · %2$s</string>
+    <string name="menu_header_number">Channel %1$d</string>
+    <string name="guide_no_listings">%1$s · no listings</string>
 </resources>

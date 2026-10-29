@@ -64,11 +64,13 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.live.GroupNames
 import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.epg.GuideMath
 import app.iptvplayer.epg.TimeWindow
 import app.iptvplayer.storage.ChannelRow
+import app.iptvplayer.storage.GroupRow
 import app.iptvplayer.storage.GuideProgramme
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.LocalAppGraph
@@ -84,6 +86,8 @@ import app.iptvplayer.tv.ui.theme.ButtonKind
 import app.iptvplayer.tv.ui.theme.LuzButton
 import app.iptvplayer.tv.ui.theme.LuzEmptyState
 import app.iptvplayer.tv.ui.theme.LuzIcons
+import app.iptvplayer.tv.ui.theme.LuzMenu
+import app.iptvplayer.tv.ui.theme.LuzMenuItem
 import app.iptvplayer.tv.ui.theme.MetadataLine
 import app.iptvplayer.tv.ui.theme.Tokens
 import app.iptvplayer.tv.ui.theme.luzClickable
@@ -104,6 +108,7 @@ object GuideTags {
     const val ADD_SOURCE = "guide-add-source"
     const val ADD_GUIDE_LINK = "guide-add-link"
     const val NOW = "guide-now"
+    const val SCOPE = "guide-scope"
     const val WINDOW_START = "guide-window-start"
     const val DETAILS = "guide-details"
 
@@ -120,7 +125,9 @@ private const val PAGE_MINUTES = 90
 // Wide enough that three hours fill the space beside the channel column on a 960 dp television.
 private val MINUTE_WIDTH: Dp = 3.3.dp
 private val CHANNEL_COLUMN: Dp = 220.dp
-private val ROW_HEIGHT: Dp = 52.dp
+
+// x10: 40 dp rows, about eight channels under the header; fixed, so the list never measures a row while it scrolls.
+private val ROW_HEIGHT: Dp = 40.dp
 
 /** Channels whose programmes are read together; the provider's per-channel guide allows this many at once (AppGraph). */
 private const val LOAD_BLOCK = 20
@@ -148,11 +155,18 @@ fun GuideSection(
     onEditGuideLink: (PlaylistId) -> Unit = {},
 ) {
     val graph = LocalAppGraph.current
+    val favouritesWord = stringResource(R.string.live_favorites)
     val coroutines = rememberCoroutineScope()
     val revision by graph.revision.collectAsState()
     val activity by graph.activity.collectAsState()
     var playlist by remember { mutableStateOf<PlaylistId?>(null) }
     var channels by remember { mutableStateOf<List<ChannelRow>?>(null) }
+    // The category the guide shows (x10): Live TV's last one for this source, named in the chip; Ch +/− from here stays
+    // in it (x4). Null until read.
+    var scopeKey by remember { mutableStateOf<String?>(null) }
+    var scopeName by remember { mutableStateOf<String?>(null) }
+    var choosingScope by remember { mutableStateOf(false) }
+    var categories by remember { mutableStateOf<List<GroupRow>>(emptyList()) }
 
     val earliest = remember { halfHourFloor(Clock.System.now()) }
     val latest = earliest + GUIDE_DAYS.days
@@ -167,12 +181,36 @@ fun GuideSection(
     val loadedBlocks = remember { mutableSetOf<Int>() }
     val listState = rememberLazyListState()
 
-    LaunchedEffect(revision) {
+    LaunchedEffect(revision, scopeKey) {
         val source = graph.currentSource()
         if (source?.playlistId != playlist) programmes.clear()
         loadedBlocks.clear()
         playlist = source?.playlistId
-        channels = source?.let { graph.channels(it.playlistId, null) }.orEmpty()
+        if (source == null) {
+            channels = emptyList()
+            return@LaunchedEffect
+        }
+        val p = source.playlistId
+        categories = graph.groups(p)
+        val key = scopeKey ?: (graph.preference(graph.liveScopeKey(p)) ?: ChannelScope.All.key()).also { scopeKey = it }
+        val scope = ChannelScope.of(key)
+        val scoped = when (scope) {
+            is ChannelScope.Group -> graph.channels(p, scope.id)
+            is ChannelScope.Mine -> graph.channelsInUserGroup(p, scope.id)
+            ChannelScope.Favorites -> graph.favoriteChannels(p)
+            else -> emptyList()
+        }
+        // A category that is gone, or one without the channel the guide was opened on, gives way to all channels.
+        val usable = scoped.isNotEmpty() && (initialChannel == null || scoped.any { it.id == initialChannel })
+        channels = if (usable) scoped else graph.channels(p, null)
+        if (!usable && scope != ChannelScope.All) scopeKey = ChannelScope.All.key()
+        scopeName = when {
+            !usable -> null
+            scope is ChannelScope.Group -> categories.firstOrNull { it.id == scope.id }?.title?.let(GroupNames::display)
+            scope is ChannelScope.Mine -> graph.userGroups(p).firstOrNull { it.id == scope.id }?.title
+            scope == ChannelScope.Favorites -> favouritesWord
+            else -> null
+        }
     }
     // How many programmes the guide holds; null until it has been asked. A guide with none says so once, in place of a
     // timeline of empty rows.
@@ -332,7 +370,16 @@ fun GuideSection(
     ) {
         Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(start = Tokens.space4)) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.space2)) {
-                Text(stringResource(R.string.section_guide), style = MaterialTheme.typography.displaySmall, color = Tokens.textPrimary)
+                Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space4), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.section_guide), style = MaterialTheme.typography.displaySmall, color = Tokens.textPrimary)
+                    // The chip names what the guide shows; OK on it chooses another category (x10).
+                    LuzButton(
+                        scopeName ?: stringResource(R.string.live_all_channels),
+                        { choosingScope = true },
+                        Modifier.rememberedFocus(focus, GuideTags.SCOPE),
+                        ButtonKind.SECONDARY,
+                    )
+                }
                 // Read inside the details line, so a focus move rebuilds that line and not the grid beneath it.
                 ProgrammeDetails({ rows.getOrNull(focusedRow) }, { focusedProgramme }, now)
             }
@@ -370,9 +417,9 @@ fun GuideSection(
                     val isCurrent by remember(rowIndex) { derivedStateOf { focusedRow == rowIndex } }
                     GuideRow(channel, isCurrent, resolver, slide = { slidePx }) {
                         if (all != null && cells.isEmpty()) {
-                            // One block across the window, placed where the window is on the sliding layer.
+                            // One quiet block across the window with the channel's name (x10), never "No information" cells.
                             GuideCell(
-                                "",
+                                stringResource(R.string.guide_no_listings, channel.label),
                                 MINUTE_WIDTH * (window.start - earliest).inWholeMinutes.toInt(),
                                 MINUTE_WIDTH * WINDOW_MINUTES - CELL_GAP,
                                 0.dp,
@@ -384,7 +431,7 @@ fun GuideSection(
                                         horizontalMove = false
                                     }
                                 },
-                            ) { onPlay(current, ChannelScope.All, channel.id) }
+                            ) { onPlay(current, ChannelScope.of(scopeKey ?: ChannelScope.All.key()), channel.id) }
                         }
                         all.orEmpty().filter { it.end > built.start && it.start < built.end }.forEach { programme ->
                             key(programme.start.epochSeconds) {
@@ -422,7 +469,7 @@ fun GuideSection(
                                         null
                                     },
                                     cellModifier,
-                                ) { onPlay(current, ChannelScope.All, channel.id) }
+                                ) { onPlay(current, ChannelScope.of(scopeKey ?: ChannelScope.All.key()), channel.id) }
                             }
                         }
                     }
@@ -439,6 +486,35 @@ fun GuideSection(
                 )
             }
         }
+    }
+    if (choosingScope) {
+        val p = playlist
+        LuzMenu(
+            title = stringResource(R.string.section_guide),
+            items = listOf(
+                LuzMenuItem(
+                    ChannelScope.All.key(),
+                    stringResource(R.string.live_all_channels),
+                    checked = scopeKey == ChannelScope.All.key(),
+                ) {
+                    scopeKey = ChannelScope.All.key()
+                },
+                LuzMenuItem(ChannelScope.Favorites.key(), favouritesWord, checked = scopeKey == ChannelScope.Favorites.key()) {
+                    scopeKey = ChannelScope.Favorites.key()
+                },
+            ) + categories.map { group ->
+                val key = ChannelScope.Group(group.id).key()
+                LuzMenuItem(key, GroupNames.display(group.title), checked = scopeKey == key) {
+                    scopeKey = key
+                    // The guide and Live TV agree on where you are (x4, x10).
+                    if (p != null) coroutines.launch { graph.setPreference(graph.liveScopeKey(p), key) }
+                }
+            },
+            onDismiss = {
+                choosingScope = false
+                coroutines.launch { focus.requestFocus(GuideTags.SCOPE) }
+            },
+        )
     }
 }
 

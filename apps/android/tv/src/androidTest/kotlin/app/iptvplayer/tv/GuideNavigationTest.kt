@@ -13,9 +13,12 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.storage.ChannelRow
+import app.iptvplayer.testing.TestPanel
 import app.iptvplayer.tv.app.IptvApplication
+import app.iptvplayer.tv.companion.CompanionHub
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.guide.GuideTags
+import app.iptvplayer.tv.ui.live.ChannelScope
 import app.iptvplayer.tv.ui.live.LiveTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
@@ -183,6 +186,73 @@ class GuideNavigationTest {
         // The guide opens with the remote on that channel's row, on what is on now.
         rule.waitUntil(20_000) { focusedTag()?.startsWith("guide-${target.id.value}-") == true }
         awaitDetails(target.name)
+    }
+
+    private val playlist get() = runBlocking { graph.sources().single().playlistId }
+
+    /** Opens the guide from Live TV, as the viewer does: Back to the bar, along to Guide, OK. */
+    private fun openGuide() {
+        rule.waitUntil(20_000) { focusedTag()?.startsWith("live-") == true }
+        press(KeyEvent.KEYCODE_BACK)
+        awaitFocus(ShellTags.rail(Section.LIVE_TV))
+        walkTabsTo(Section.GUIDE, ::focusedTag, { key -> press(key) }) { timeout, condition ->
+            runCatching { rule.waitUntil(timeout, condition) }
+        }
+        awaitFocus(ShellTags.rail(Section.GUIDE))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+    }
+
+    private fun groupWith(channelName: String) = runBlocking { graph.groups(playlist) }.first { group ->
+        runBlocking { graph.channels(playlist, group.id) }.any { it.name == channelName }
+    }
+
+    /** The guide opens on the category last used in Live TV (x10), named in its chip, and shows only its channels. */
+    @Test
+    fun theGuideOpensOnTheLastGroup() {
+        val sports = groupWith("Test Sports")
+        runBlocking { graph.setPreference(graph.liveScopeKey(playlist), ChannelScope.Group(sports.id).key()) }
+        openGuide()
+        rule.waitUntil(20_000) {
+            val chip = hasTestTag(GuideTags.SCOPE).and(hasText(sports.title, substring = true, ignoreCase = true))
+            rule.onAllNodes(chip, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        val news = runBlocking { graph.channels(playlist, null) }.first { it.name == "Test News HD" }
+        assertTrue(
+            "a channel from another category is not in the guide",
+            rule.onAllNodes(hasText(news.label), useUnmergedTree = true).fetchSemanticsNodes().isEmpty(),
+        )
+    }
+
+    /** A channel without listings is one quiet bar with its name (x10), never "No information" boxes. */
+    @Test
+    fun aChannelWithoutListingsIsOneQuietBar() {
+        TestPanel.withoutGuide = setOf(401, 402, 403)
+        try {
+            runBlocking { graph.setPreference(graph.liveScopeKey(playlist), ChannelScope.Group(groupWith("Test Copies HD").id).key()) }
+            openGuide()
+            rule.waitUntil(30_000) {
+                rule.onAllNodes(hasText("Test Copies · no listings"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+            }
+        } finally {
+            TestPanel.withoutGuide = emptySet()
+        }
+    }
+
+    /** OK on a programme on now plays the channel, and Ch + stays inside the guide's category (x4). */
+    @Test
+    fun zappingFromTheGuideStaysInItsGroup() {
+        val sports = groupWith("Test Sports")
+        val inSports = runBlocking { graph.channels(playlist, sports.id) }
+        runBlocking { graph.setPreference(graph.liveScopeKey(playlist), ChannelScope.Group(sports.id).key()) }
+        openGuide()
+        awaitFocus(GuideTags.FIRST_CELL)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.waitUntil(20_000) { CompanionHub.playing.value?.title == inSports[0].label }
+        repeat(inSports.size) {
+            press(KeyEvent.KEYCODE_CHANNEL_UP)
+            Thread.sleep(800)
+            assertTrue("zapping stayed in Sports", inSports.any { it.label == CompanionHub.playing.value?.title })
+        }
     }
 }
 

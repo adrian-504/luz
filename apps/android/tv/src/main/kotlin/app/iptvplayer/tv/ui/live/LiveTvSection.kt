@@ -387,13 +387,20 @@ fun LiveTvSection(
                 coroutines.launch { returnFocusTo(focus, LiveTags.channel(channel.id)) }
                 Unit
             }
-            // Which channel the menu is for, over the dimmed screen: "Channel 2 · Sports" (Design 3.4), when both are known.
+            // Which channel the menu is for, over the dimmed screen (Design 3.4).
             val listName = when (scope) {
                 is ChannelScope.Group -> groups.firstOrNull { it.id == scope.id }?.title?.let(GroupNames::display)
                 is ChannelScope.Mine -> myGroups.firstOrNull { it.id == scope.id }?.title
                 else -> null
             }
-            val header = channel.number?.let { number -> listName?.let { stringResource(R.string.menu_header_line, number, it) } }
+            // "Channel 2 · Sports" in a named list; "Channel 2" alone under All channels or Favourites; nothing without a number.
+            val header = channel.number?.let { number ->
+                if (listName != null) {
+                    stringResource(R.string.menu_header_line, number, listName)
+                } else {
+                    stringResource(R.string.menu_header_number, number)
+                }
+            }
             // In Design 3.4's order: Watch, favourite, lists, copies, hide, information, guide.
             LuzMenu(
                 title = channel.label,
