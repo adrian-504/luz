@@ -126,6 +126,12 @@ emulator with `SeedLargePlaylistTest -e seedTestProvider 1`, turn the companion 
 `adb forward tcp:8765 tcp:8765`, and open `http://localhost:8765` in a browser on the Mac (the server accepts `localhost`
 as its own address). The pairing code is on the TV's Settings screen.
 
+`CompanionSetupTest` sends the test provider's login from a "phone" while Welcome is open and checks it connects through
+the TV's own form; that nothing is added with no form open (`409`); that a wrong password gives the TV's own sentence on
+both sides; that the password never appears in the phone's events or in logcat; and that a pasted Xtream link becomes a
+login. It uses the debug build's own test panel (`DeveloperStreams.testProvider`, served inside the app, synthetic login).
+Audio and subtitle changes from the phone have no device test: they need a film with several tracks.
+
 ## 5. Device matrix (initial proposal, finalized per platform phase)
 
 **Devices used so far:** Google TV emulator API 34 (arm64, on the development Mac); owner's **Bbox TV** (Technicolor

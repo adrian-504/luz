@@ -70,8 +70,10 @@ import app.iptvplayer.platform.playback.PlaybackMediaSession
 import app.iptvplayer.platform.playback.PlaybackRequest
 import app.iptvplayer.platform.playback.PlaybackSnapshot
 import app.iptvplayer.tv.R
+import app.iptvplayer.tv.companion.CompanionAction
 import app.iptvplayer.tv.companion.CompanionHub
 import app.iptvplayer.tv.companion.CompanionPlaying
+import app.iptvplayer.tv.companion.CompanionTrack
 import app.iptvplayer.tv.ui.shortTime
 import app.iptvplayer.tv.ui.theme.ButtonKind
 import app.iptvplayer.tv.ui.theme.LuzBadge
@@ -170,6 +172,8 @@ fun PlayerScreen(
     onNext: (() -> Unit)? = null,
     /** What a film or episode is about, for the Info panel. */
     description: String? = null,
+    /** The picture the phone companion shows beside what is playing: a reference (`CompanionLibrary.art`), never an address. */
+    companionArt: String? = null,
     /** Badges from the title (quality, HDR, language); the stream's own are added from what the decoder reports. */
     badges: List<String> = emptyList(),
     /** The channel on screen, for the live bar and Info. */
@@ -243,8 +247,12 @@ fun PlayerScreen(
     val isError = snapshot.state == PlaybackState.ERROR || unavailable
     val isVod = request?.mode == PlaybackMode.VOD
     val isLive = onZap != null
-    // The phone companion's "now playing" card (ADR-0050): words and times only, read again every second.
-    LaunchedEffect(controller, title, subtitle, live, isLive) {
+    // The phone companion's "now playing" card (ADR-0050): words, times, the tracks by the names the panel shows, and a
+    // picture's reference, read again every second.
+    val companionAudio = tracks.audio.mapIndexed { index, track -> CompanionTrack(track.id, audioLabel(track, index)) }
+    val companionSubtitles = tracks.subtitles.mapIndexed { index, track -> CompanionTrack(track.id, subtitleLabel(track, index)) }
+    val companionTracks by rememberUpdatedState(Triple(companionAudio, companionSubtitles, tracks))
+    LaunchedEffect(controller, title, subtitle, live, isLive, companionArt) {
         while (true) {
             CompanionHub.showPlaying(
                 CompanionPlaying(
@@ -258,9 +266,29 @@ fun PlayerScreen(
                     positionMs = if (isLive) null else controller.currentPosition()?.inWholeMilliseconds,
                     durationMs = if (isLive) null else controller.duration()?.inWholeMilliseconds,
                     playing = controller.snapshot.value.state == PlaybackState.PLAYING,
+                    art = companionArt,
+                    audio = companionTracks.first,
+                    subtitles = companionTracks.second,
+                    selectedAudio = companionTracks.third.audio.firstOrNull { it.isSelected }?.id,
+                    selectedSubtitle = companionTracks.third.subtitles.firstOrNull { it.isSelected }?.id,
                 ),
             )
             delay(COMPANION_REFRESH_MS)
+        }
+    }
+    // Skips and track choices from the phone (x2): the phone's skips are 10 s, as the remote's Left and Right.
+    LaunchedEffect(controller) {
+        CompanionHub.actions.collect { action ->
+            when (action) {
+                is CompanionAction.Seek -> if (!isLive) seekBy(controller, action.deltaMs.milliseconds)
+                is CompanionAction.Track -> if (action.audio) {
+                    action.id?.let(
+                        controller::setAudioTrack,
+                    )
+                } else {
+                    controller.setSubtitleTrack(action.id)
+                }
+            }
         }
     }
     DisposableEffect(controller) { onDispose { CompanionHub.showPlaying(null) } }

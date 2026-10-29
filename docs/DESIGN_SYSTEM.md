@@ -256,13 +256,18 @@ shows. **Cards** rest a shade dimmed and come up to full brightness with the lif
 **Welcome to Luz** — "Your TV. Your providers. Your content." — with one honest sentence that Luz ships no content, and
 *Add your provider* / *Look around first*. The room carries the mood (a glow from the upper left, a trace of amber from
 the lower right) because there is no artwork to show before a provider exists. **How do you connect?** offers each way as
-a card with what it needs in plain words. Forms use glass fields and one white *Connect*.
+a card with what it needs in plain words. Forms use glass fields and one white *Connect*. Welcome and both provider forms
+carry **Or set it up on your phone** on the right (360 dp): the companion's QR code at 96 dp, which reads from the sofa
+and takes no focus, or, while the companion is off, one *Use my phone* button that switches it on; a line says when a
+phone is already paired. While a phone's login connects, the form shows *Started from your phone* under Working, and a
+failure shows the same sentence on the TV and the phone (ADR-0050 step 4).
 
 ## 16. Settings and providers
 A screen title; a short list of sections that do something (Providers, Home, Film & show details once there is a
 provider — how many pages have been fetched and what share of them has each kind of detail — Hidden items when something
 is hidden, TMDB — the viewer's key, when the lists were read, Update now, Remove and the *Title artwork and photos* switch — About,
-Phone companion (ADR-0050) — on/off, a QR code with the address and a code to type, the phones that can connect with Forget — Developer in debug builds), each with its symbol on a round plate; the chosen one on the right under its own heading. The directive's other sections —
+Phone companion (ADR-0050) — on/off, a QR code with the address and a code to type, the TV's name as the phone will
+show it, the phones that can connect with Forget — Developer in debug builds), each with its symbol on a round plate; the chosen one on the right under its own heading. The directive's other sections —
 playback, subtitles, appearance, parental controls, storage, privacy, account, devices — arrive with the features they
 configure, never as empty pages. A **provider** is a glass card: a status dot (green working, yellow failing, grey
 updating), name, address, channel count, encryption warning, guide status, and Refresh / Guide link / Remove.
@@ -285,6 +290,11 @@ the list the channel came from over the left of the picture on Up, the playing c
 card in the lower right during an episode's last 20 seconds, then counts down from 10 and plays the next one. Buffering is
 a small turning arc in the corner, shown only after 600 ms. An **error** dims the picture from the left: a warning symbol,
 what happened, what to do, and Try again (white), Next channel (television), Details.
+
+**A note from the phone** (ADR-0050 x2): when a paired phone changes something (plays, pauses, seeks, changes the channel,
+audio or subtitles, My List, or finishes typing), a glass pill shows at the top centre for two seconds, the change first
+and then *· from your phone* (13 sp, a phone symbol). It never takes focus; a second change replaces it; the arrow pad
+gives none. It sits above every screen, not only the player.
 
 ## 18. Remote behaviour
 

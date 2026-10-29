@@ -3,6 +3,7 @@ package app.iptvplayer.tv.companion
 import android.view.KeyEvent
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.IOException
@@ -29,6 +30,8 @@ class CompanionServer(
     private val page: () -> ByteArray,
     private val pairing: CompanionPairing,
     private val library: CompanionLibrary,
+    /** The TV's own name for the phone's header, or null when it has none worth showing. */
+    private val tvName: () -> String?,
     /** Runs a change to the screen on the main thread. */
     private val onMain: (() -> Unit) -> Unit,
 ) : AutoCloseable {
@@ -157,10 +160,13 @@ class CompanionServer(
             }
             "/api/done" -> {
                 val field = CompanionHub.field.value
-                if (field != null && field.id == body.optLong("field")) onMain { field.onDone() }
+                if (field != null && field.id == body.optLong("field")) {
+                    onMain { field.onDone() }
+                    CompanionHub.notify(NoticeKind.TYPED)
+                }
             }
             "/api/play" -> {
-                val request = runBlocking {
+                val opened = runBlocking {
                     runCatching {
                         library.request(
                             body.optString("kind"),
@@ -170,7 +176,8 @@ class CompanionServer(
                         )
                     }.getOrNull()
                 } ?: return respond(out, 404, JSON, ERROR_NOT_FOUND)
-                if (!CompanionHub.open(request)) return respond(out, 409, JSON, """{"error":"luz-hidden"}""".toByteArray())
+                if (!CompanionHub.open(opened.first)) return respond(out, 409, JSON, ERROR_HIDDEN)
+                CompanionHub.notify(NoticeKind.PLAYING, opened.second)
             }
             "/api/mylist" -> {
                 val done = runBlocking {
@@ -184,9 +191,42 @@ class CompanionServer(
                 }
                 if (!done) return respond(out, 404, JSON, ERROR_NOT_FOUND)
             }
+            "/api/provider" -> {
+                // The password and the link are read here and handed to the open form; they are never logged, stored
+                // on the phone's behalf or sent back in any event (ADR-0050, step 4, the owner's option B).
+                val slot = CompanionHub.providerForm.value
+                if (slot == null ||
+                    slot.id != body.optLong("form")
+                ) {
+                    return respond(out, 409, JSON, """{"error":"form-closed"}""".toByteArray())
+                }
+                val entry = when (body.optString("kind")) {
+                    "login" -> ProviderEntry.Login(
+                        body.optString("server").trim(),
+                        body.optString("user").trim(),
+                        body.optString("password"),
+                    )
+                        .takeIf { it.server.isNotEmpty() && it.user.isNotEmpty() && it.password.isNotEmpty() }
+                    "link" -> ProviderEntry.Link(body.optString("url").trim()).takeIf { it.url.isNotEmpty() }
+                    else -> null
+                } ?: return respond(out, 400, JSON, """{"error":"missing"}""".toByteArray())
+                onMain { if (CompanionHub.providerForm.value?.id == slot.id) slot.submit(entry) }
+            }
             "/api/key" -> {
-                val code = KEYS[body.optString("key")] ?: return respond(out, 400, JSON, """{"error":"unknown-key"}""".toByteArray())
+                val key = body.optString("key")
+                val code = KEYS[key] ?: return respond(out, 400, JSON, """{"error":"unknown-key"}""".toByteArray())
                 CompanionHub.press(code)
+                // The arrow pad gets no note: it would show on every press.
+                when (key) {
+                    "playpause" -> CompanionHub.playing.value?.let {
+                        CompanionHub.notify(
+                            if (it.playing) NoticeKind.PAUSED else NoticeKind.RESUMED,
+                        )
+                    }
+                    "channel-up" -> CompanionHub.notify(NoticeKind.CHANNEL_UP)
+                    "channel-down" -> CompanionHub.notify(NoticeKind.CHANNEL_DOWN)
+                    "last-channel" -> CompanionHub.notify(NoticeKind.LAST_CHANNEL)
+                }
             }
             else -> return respond(out, 404, JSON, ERROR_NOT_FOUND)
         }
@@ -202,9 +242,13 @@ class CompanionServer(
                 ).toByteArray(),
         )
         out.flush()
+        // The TV's name first, for the phone's header (x2).
+        send(out, "tv", JSONObject().put("name", tvName() ?: JSONObject.NULL).toString())
         var sentField: String? = null
         var sentPlaying: String? = null
         var sentScreen: Boolean? = null
+        var sentProgress: ProviderProgress? = null
+        var sentForm: String? = null
         var lastWriteMs = 0L
         // Ends when the server stops or the viewer forgets this phone in Settings.
         while (!socket.isClosed && pairing.allows(token)) {
@@ -225,6 +269,30 @@ class CompanionServer(
             if (screen != sentScreen) {
                 send(out, "screen", JSONObject().put("on", screen).toString())
                 sentScreen = screen
+                lastWriteMs = now
+            }
+            // Progress first, so a phone sees "connected" before the form closes behind it.
+            val progress = CompanionHub.providerProgress.value
+            if (progress != sentProgress) {
+                send(
+                    out,
+                    "provider-state",
+                    JSONObject().put("state", progress.state).put("reason", progress.reason ?: JSONObject.NULL)
+                        .put("message", progress.message ?: JSONObject.NULL).toString(),
+                )
+                sentProgress = progress
+                lastWriteMs = now
+            }
+            val form = CompanionHub.providerForm.value.let { slot ->
+                if (slot == null) {
+                    JSONObject().put("open", false)
+                } else {
+                    JSONObject().put("open", true).put("kind", slot.kind).put("id", slot.id)
+                }
+            }.toString()
+            if (form != sentForm) {
+                send(out, "provider-form", form)
+                sentForm = form
                 lastWriteMs = now
             }
             if (now - lastWriteMs > HEARTBEAT_MS) {
@@ -264,6 +332,11 @@ class CompanionServer(
             playing.positionMs?.let { put("position", it / 1000 * 1000) }
             playing.durationMs?.let { put("duration", it) }
             put("playing", playing.playing)
+            playing.art?.let { put("art", it) }
+            put("audio", JSONArray(playing.audio.map { JSONObject().put("id", it.id).put("label", it.label) }))
+            put("subtitles", JSONArray(playing.subtitles.map { JSONObject().put("id", it.id).put("label", it.label) }))
+            put("selectedAudio", playing.selectedAudio ?: JSONObject.NULL)
+            put("selectedSubtitle", playing.selectedSubtitle ?: JSONObject.NULL)
         }
     }.toString()
 
@@ -326,6 +399,8 @@ class CompanionServer(
         const val TEXT = "text/plain; charset=utf-8"
         const val HTML = "text/html; charset=utf-8"
         const val JSON = "application/json; charset=utf-8"
+        const val MAX_SEEK_MS = 60_000L
+        val ERROR_HIDDEN = """{"error":"luz-hidden"}""".toByteArray()
         val ERROR_NOT_FOUND = """{"error":"not-found"}""".toByteArray()
         val ERROR_UNPAIRED = """{"error":"not-paired"}""".toByteArray()
         val REASONS = mapOf(

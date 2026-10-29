@@ -404,6 +404,7 @@
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
   <symbol id="i-tv" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2.5"/><path d="M9 20h6"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
   <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M8 14h8"/></symbol>
 </svg>
 
@@ -558,6 +559,9 @@
   let screenOn = true;
   let home = null;
   let homeLoadedAt = 0;
+  let openedOnLoad = false;
+  let artShown = null;
+  let tracksShown = null;
 
   // ---------- Small builders. Text from the TV always goes in through textContent. ----------
   function el(tag, cls, text) {
@@ -725,6 +729,9 @@
     events.addEventListener("field", (e) => showField(JSON.parse(e.data)));
     events.addEventListener("playing", (e) => showPlaying(JSON.parse(e.data)));
     events.addEventListener("screen", (e) => showScreen(JSON.parse(e.data)));
+    events.addEventListener("tv", (e) => showTvName(JSON.parse(e.data)));
+    events.addEventListener("provider-form", (e) => showProviderForm(JSON.parse(e.data)));
+    events.addEventListener("provider-state", (e) => showProviderState(JSON.parse(e.data)));
     events.onopen = () => {
       setStatus("on", "Connected");
       if (!home || Date.now() - homeLoadedAt > 60000) loadHome();
@@ -1281,6 +1288,77 @@
     playing = p.title === undefined ? null : p;
     paintPlaying();
     markChannelOnTv();
+    // The page opens on what's playing: someone picks up the phone mid-match to change something, not to browse.
+    if (!openedOnLoad) {
+      openedOnLoad = true;
+      if (playing && !openSheet && $("setup").hidden) presentSheet($("now-sheet"));
+    }
+  }
+
+  function showTvName(t) {
+    const box = $("tv-name");
+    box.replaceChildren();
+    if (!t || !t.name) { box.hidden = true; return; }
+    box.appendChild(document.createTextNode("· "));
+    box.appendChild(icon("tv"));
+    const name = el("span", null, t.name); name.dir = "auto";
+    box.appendChild(name);
+    box.hidden = false;
+  }
+
+  function paintArt(p) {
+    const key = p.art ? "a:" + p.art : (p.live ? "l:" + p.title : "none");
+    if (key === artShown) return;
+    artShown = key;
+    const box = $("now-art");
+    box.replaceChildren();
+    box.className = "now-art pic";
+    if (p.live) {
+      // A channel's picture is its logo: shown whole on the plate, never cropped.
+      box.className = "now-art plate-art";
+      box.appendChild(logo(p.art || null, p.title));
+      box.hidden = false;
+    } else if (p.art) {
+      const pic = picture(p.art, p.title, "hero");
+      pic.style.cssText = "position:absolute;inset:0;border-radius:inherit";
+      box.style.position = "relative";
+      box.appendChild(pic);
+      box.hidden = false;
+    } else box.hidden = true;
+  }
+
+  function paintTracks(p) {
+    const audio = p.audio || [], subs = p.subtitles || [];
+    const key = JSON.stringify([audio, subs, p.selectedAudio, p.selectedSubtitle]);
+    if (key === tracksShown) return;
+    tracksShown = key;
+    const box = $("now-tracks");
+    box.replaceChildren();
+    const row = (title, type, items, selected, withOff) => {
+      box.appendChild(el("h3", null, title));
+      const wrap = el("div");
+      const chip = (id, label) => {
+        const c = el("button", "tchip", label);
+        c.dir = "auto";
+        c.setAttribute("aria-pressed", id === selected ? "true" : "false");
+        c.addEventListener("click", () => chooseTrack(type, id, label));
+        wrap.appendChild(c);
+      };
+      if (withOff) chip(null, "Off");
+      items.forEach((t) => chip(t.id, t.label));
+      box.appendChild(wrap);
+    };
+    if (audio.length > 1) row("Audio", "audio", audio, p.selectedAudio === undefined ? null : p.selectedAudio, false);
+    if (subs.length) row("Subtitles", "subtitle", subs, p.selectedSubtitle === undefined ? null : p.selectedSubtitle, true);
+  }
+
+  async function chooseTrack(type, id, label) {
+    buzz();
+    try {
+      const r = await post("/api/track", { type, id });
+      if (r.status === 409) { showScreen({ on: false }); toast("Open Luz on the TV first.", true); }
+      else if (!r.ok && r.status !== 401) toast("The TV couldn't change that. Try again.", true);
+    } catch (e) { toast("Can't reach Luz.", true); }
   }
 
   function playingFraction(p) {
@@ -1298,6 +1376,8 @@
   function paintPlaying() {
     paintMini();
     if (!playing) {
+      artShown = null;
+      tracksShown = null;
       if (openSheet === $("now-sheet")) closeSheets();
       return;
     }
@@ -1341,10 +1421,156 @@
     }
     $("live-controls").hidden = !p.live;
     $("vod-controls").hidden = p.live;
+    paintArt(p);
+    paintTracks(p);
     setIcon($("now-play"), p.playing ? "pause" : "play");
     $("now-play").setAttribute("aria-label", p.playing ? "Pause" : "Play");
   }
   $("mini-open").addEventListener("click", () => { if (playing) presentSheet($("now-sheet")); });
+
+  // ---------- Set up your provider (only while the TV's provider form is open) ----------
+  const FAILURES = {
+    "wrong-login": "The provider did not accept this username and password.",
+    "expired": "This account has expired.",
+    "unreachable": "Could not reach the server. Check the address and the TV's internet connection.",
+    "not-a-playlist": "This link did not return a channel playlist.",
+    "other": "That didn't work. Check the details and try again.",
+  };
+  const setup = { form: null, kind: "login", state: "idle", reason: null, server: "", user: "", url: "", typed: false };
+
+  function showProviderForm(f) {
+    if (f && f.open) {
+      const changed = !setup.form || setup.form.id !== f.id;
+      setup.form = f;
+      if (changed) { setup.kind = f.kind === "m3u" ? "link" : "login"; setup.state = "idle"; setup.reason = null; }
+      $("setup").hidden = false;
+      if (openSheet === $("now-sheet")) closeSheets();
+      renderSetup();
+    } else {
+      const wasTyping = setup.form && setup.typed && setup.state !== "connected";
+      setup.form = null;
+      setup.typed = false;
+      $("setup").hidden = true;
+      $("setup-card").replaceChildren();
+      if (wasTyping) toast("The TV left the set-up screen.", true);
+    }
+  }
+
+  function showProviderState(st) {
+    if (!st) return;
+    setup.state = st.state || "idle";
+    setup.reason = st.reason || null;
+    if (setup.form) renderSetup();
+  }
+
+  function renderSetup() {
+    const card = $("setup-card");
+    card.replaceChildren();
+    if (setup.state === "connecting") {
+      card.appendChild(el("h2", null, "Connecting"));
+      card.appendChild(el("p", "lede", "Your TV is checking the login with your provider."));
+      const bar = el("div", "indeterminate"); bar.appendChild(el("i")); card.appendChild(bar);
+      return;
+    }
+    if (setup.state === "connected") {
+      card.appendChild(el("h2", null, "Connected"));
+      card.appendChild(el("p", "lede", "Your channels are loading on the TV. You can put the phone down."));
+      return;
+    }
+    card.appendChild(el("h2", null, "Set up your provider"));
+    card.appendChild(el("p", "lede", "Your TV is waiting for this."));
+    if (setup.state === "failed") {
+      const problem = el("div", "setup-problem", FAILURES[setup.reason] || FAILURES.other);
+      problem.setAttribute("role", "alert");
+      card.appendChild(problem);
+    }
+    const seg = el("div", "seg");
+    seg.setAttribute("role", "group");
+    seg.setAttribute("aria-label", "How to connect");
+    [["login", "Login"], ["link", "Link"]].forEach(([k, label]) => {
+      const b = el("button", null, label);
+      b.type = "button";
+      b.setAttribute("aria-pressed", setup.kind === k ? "true" : "false");
+      b.addEventListener("click", () => { setup.kind = k; renderSetup(); });
+      seg.appendChild(b);
+    });
+    card.appendChild(seg);
+
+    const form = el("form");
+    form.autocomplete = "off";
+    const field = (labelText, input) => {
+      const l = el("label", null, labelText);
+      l.htmlFor = input.id;
+      form.appendChild(l);
+    };
+    let ready;
+    if (setup.kind === "login") {
+      const server = el("input"); server.id = "setup-server"; server.type = "url"; server.inputMode = "url";
+      server.placeholder = "http://example.com:8080"; server.value = setup.server;
+      server.autocapitalize = "off"; server.spellcheck = false; server.setAttribute("autocorrect", "off");
+      const user = el("input"); user.id = "setup-user"; user.value = setup.user;
+      user.autocapitalize = "off"; user.spellcheck = false; user.setAttribute("autocorrect", "off"); user.autocomplete = "off";
+      const pass = el("input"); pass.id = "setup-pass"; pass.type = INPUT_TYPES.hidden; pass.autocomplete = "new-password";
+      pass.autocapitalize = "off"; pass.spellcheck = false;
+      field("Server address", server); form.appendChild(server);
+      field("User name", user); form.appendChild(user);
+      field("Password", pass);
+      const pw = el("div", "pw"); pw.appendChild(pass);
+      const eye = el("button"); eye.type = "button"; eye.setAttribute("aria-label", "Show password");
+      eye.appendChild(icon("eye"));
+      eye.addEventListener("click", () => {
+        const shown = pass.type === INPUT_TYPES.shown;
+        pass.type = shown ? INPUT_TYPES.hidden : INPUT_TYPES.shown;
+        eye.setAttribute("aria-label", shown ? "Show password" : "Hide password");
+      });
+      pw.appendChild(eye);
+      form.appendChild(pw);
+      ready = () => server.value.trim() && user.value.trim() && pass.value;
+      [server, user, pass].forEach((i) => i.addEventListener("input", () => {
+        setup.server = server.value; setup.user = user.value; setup.typed = true; connect.disabled = !ready();
+      }));
+      if (setup.state === "failed") setTimeout(() => pass.focus(), 50);
+    } else {
+      const url = el("textarea"); url.id = "setup-url"; url.placeholder = "Paste the link your provider sent you";
+      url.value = setup.url; url.autocapitalize = "off"; url.spellcheck = false; url.setAttribute("autocorrect", "off");
+      field("Playlist link", url); form.appendChild(url);
+      form.appendChild(el("p", "small", "An Xtream link becomes a login on its own: faster, with the TV guide."));
+      ready = () => url.value.trim();
+      url.addEventListener("input", () => { setup.url = url.value; setup.typed = true; connect.disabled = !ready(); });
+    }
+    form.appendChild(el("p", "small", "Your details go straight to the TV over your home Wi-Fi. This phone doesn't keep them."));
+    const connect = el("button", "btn primary", "Connect");
+    connect.type = "submit";
+    connect.disabled = !ready();
+    form.appendChild(connect);
+    form.addEventListener("submit", (e) => { e.preventDefault(); if (ready()) sendProvider(form, connect); });
+    card.appendChild(form);
+  }
+
+  async function sendProvider(form, button) {
+    if (!setup.form) return;
+    const body = { form: setup.form.id, kind: setup.kind };
+    const pass = $("setup-pass");
+    if (setup.kind === "login") {
+      body.server = setup.server.trim();
+      body.user = setup.user.trim();
+      body.password = pass ? pass.value : "";
+    } else body.url = setup.url.trim();
+    // The password (or a link carrying it) is sent once and never kept on the phone, not even in this page's memory.
+    if (pass) pass.value = "";
+    if (setup.kind === "link") setup.url = "";
+    button.disabled = true;
+    try {
+      const r = await post("/api/provider", body);
+      if (r.ok) { setup.state = "connecting"; setup.typed = false; renderSetup(); }
+      else if (r.status === 409) { toast("The TV left the set-up screen.", true); }
+      else if (r.status === 400) { toast("Fill in every box, then press Connect.", true); renderSetup(); }
+      else if (r.status !== 401) { setup.state = "failed"; setup.reason = "other"; renderSetup(); }
+    } catch (e) {
+      toast("Can't reach Luz. Is your phone on the same Wi-Fi?", true);
+      renderSetup();
+    }
+  }
 
   // ---------- Typing ----------
   function showField(next) {
@@ -1407,6 +1633,15 @@
   });
 
   // ---------- Keys and the pad ----------
+  document.querySelectorAll("[data-seek]").forEach((button) => {
+    button.addEventListener("click", () => {
+      buzz();
+      post("/api/seek", { deltaMs: Number(button.dataset.seek) }).then((r) => {
+        if (r.status === 409) { showScreen({ on: false }); toast("Open Luz on the TV first.", true); }
+      }).catch(() => toast("Can't reach Luz.", true));
+    });
+  });
+
   document.querySelectorAll("[data-key]").forEach((button) => {
     button.addEventListener("click", () => sendKey(button.dataset.key));
   });

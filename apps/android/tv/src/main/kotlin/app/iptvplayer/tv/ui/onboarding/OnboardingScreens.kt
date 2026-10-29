@@ -29,6 +29,8 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.tv.R
+import app.iptvplayer.tv.companion.CompanionHub
+import app.iptvplayer.tv.companion.ProviderEntry
 import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.PlaceholderPage
 import app.iptvplayer.tv.ui.RestoreFocusEffect
@@ -63,8 +65,13 @@ object OnboardingTags {
  * faint glow falling from the upper left and the warmth of the Luz amber, very low, from the opposite corner.
  */
 @Composable
-fun WelcomeScreen(onAddSource: () -> Unit, onExplore: () -> Unit) {
+fun WelcomeScreen(onAddSource: () -> Unit, onExplore: () -> Unit, onPhoneSetup: (SourceType) -> Unit) {
     val focus = rememberFocusMemory()
+    // The phone can start here (ADR-0050, step 4): Welcome opens the matching form, which connects what the phone sent.
+    ProviderFormForPhone("xtream") { entry ->
+        CompanionHub.holdProvider(entry)
+        onPhoneSetup(if (entry is ProviderEntry.Link) SourceType.M3U_URL else SourceType.XTREAM)
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -97,6 +104,10 @@ fun WelcomeScreen(onAddSource: () -> Unit, onExplore: () -> Unit) {
                 LuzButton(stringResource(R.string.welcome_explore), onExplore, Modifier.rememberedFocus(focus, OnboardingTags.EXPLORE))
             }
         }
+        PhoneSetupPanel(
+            Modifier.align(Alignment.CenterEnd).padding(end = Tokens.space16),
+            buttonModifier = Modifier.rememberedFocus(focus, PhoneSetupTags.USE_MY_PHONE),
+        )
     }
     RestoreFocusEffect(focus, OnboardingTags.ADD_SOURCE)
 }

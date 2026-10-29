@@ -131,6 +131,7 @@ fun AppNavHost() {
             WelcomeScreen(
                 onAddSource = { navController.navigate(Routes.SOURCE_TYPE) },
                 onExplore = { navController.navigate(Routes.main()) { popUpTo(Routes.WELCOME) { inclusive = true } } },
+                onPhoneSetup = { navController.navigate(Routes.sourceForm(it)) },
             )
         }
         composable(Routes.SOURCE_TYPE) {

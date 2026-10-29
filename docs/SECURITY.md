@@ -133,6 +133,16 @@ reads. A password field's contents are never sent to the phone. Pictures reach t
 phone can open things only while Luz is on screen. The traffic is cleartext HTTP inside the home network (no trusted certificate is possible for a LAN address);
 the setting says so. Keys from the phone are played only into Luz's own window.
 
+The server logs nothing: no request line, URL, query string, header or body, and its errors are dropped without a message
+(checked 2026-10-29: `companion/` has no `Log`, `println` or stack-trace call). **Setting up a provider from the phone**
+(`POST /api/provider`, ADR-0050 step 4, the owner's choice B) is accepted only while Welcome or a provider form is on the
+TV's screen (`409 form-closed` otherwise) and only from a paired phone. The login or link crosses the home network in
+plain form, goes straight into the TV's own form and connect path, and is kept only as every login is (Keystore,
+`CredentialRef`). It is never stored on the phone, logged, or sent back: the phone hears only *connecting*, *connected*
+or *failed* with a fixed reason code and one of the TV's own fixed sentences, never the address, user name or password
+(`thePasswordNeverComesBackToThePhone` reads the events and the log for it; written, not yet run on a device). Seeking
+from the phone is limited to a minute either way, and an audio or subtitle choice must be one the TV listed.
+
 ## 6. Resource limits (initial values; tuned by stress tests)
 
 | Limit | M3U | XMLTV | Xtream JSON |

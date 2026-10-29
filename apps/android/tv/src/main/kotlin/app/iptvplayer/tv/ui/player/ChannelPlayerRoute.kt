@@ -20,6 +20,7 @@ import app.iptvplayer.platform.playback.PlaybackRequest
 import app.iptvplayer.storage.ChannelRow
 import app.iptvplayer.storage.NowNextRow
 import app.iptvplayer.tv.app.LocalAppGraph
+import app.iptvplayer.tv.companion.CompanionLibrary
 import app.iptvplayer.tv.ui.library.rememberArtworkResolver
 import app.iptvplayer.tv.ui.live.ChannelScope
 import kotlinx.coroutines.delay
@@ -117,6 +118,7 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
             }
         },
         resolver = resolver,
+        companionArt = channel.logo?.let { CompanionLibrary.art(CompanionLibrary.CHANNEL, channel.id.value) },
         title = listOfNotNull(channel.number?.toString(), channel.label).joinToString("  "),
         subtitle = subtitle,
         unavailable = unavailable,

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,7 +46,7 @@ class PhoneCompanion(private val context: Context, private val preferences: Shar
     private fun start() {
         if (server == null) {
             server = try {
-                CompanionServer(PORT, ::hosts, ::page, pairing, library) { change -> main.post(change) }
+                CompanionServer(PORT, ::hosts, ::page, pairing, library, ::tvName) { change -> main.post(change) }
             } catch (_: IOException) {
                 null
             }
@@ -58,6 +59,16 @@ class PhoneCompanion(private val context: Context, private val preferences: Shar
         server?.close()
         server = null
         mutableStatus.value = CompanionStatus(on = false, address = null)
+    }
+
+    /**
+     * The TV's own name from its system settings, as phones show it ("Luz · Living room"); null when the TV has none or
+     * it is a model code, which would mean nothing to the viewer.
+     */
+    fun tvName(): String? {
+        val name = runCatching { Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME) }.getOrNull()
+            ?.trim()?.take(MAX_NAME)
+        return name?.takeUnless { it.isEmpty() || MODEL_CODE.matches(it) }
     }
 
     private fun page(): ByteArray = context.assets.open(PAGE).use { it.readBytes() }
@@ -79,5 +90,7 @@ class PhoneCompanion(private val context: Context, private val preferences: Shar
         const val PORT = 8765
         private const val KEY_ON = "companion_on"
         private const val PAGE = "companion/index.html"
+        private const val MAX_NAME = 40
+        private val MODEL_CODE = Regex("^[A-Z0-9_-]{6,}$")
     }
 }

@@ -15,11 +15,13 @@ import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.tv.app.IptvApplication
 import app.iptvplayer.tv.companion.CompanionHub
 import app.iptvplayer.tv.developer.DeveloperStreams
+import app.iptvplayer.tv.ui.COMPANION_NOTE_TAG
 import app.iptvplayer.tv.ui.live.LiveTags
 import app.iptvplayer.tv.ui.player.PlayerTags
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -164,6 +166,62 @@ class LivePlayerTest {
             rule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
             // Back on screen, Live TV is where it was: nothing was opened while it was away.
             awaitFocus(LiveTags.GROUP_ALL, timeout = 10_000)
+        } finally {
+            companion.pairing.phones.value.forEach { companion.pairing.forget(it.id) }
+            companion.setOn(false)
+        }
+    }
+
+    /** x2: the phone hears the TV's name first, then what is playing with a picture's reference, never an address. */
+    @Test
+    fun thePhoneHearsTheTvNameAndWhatIsPlaying() {
+        val companion = graph.companion
+        companion.setOn(true)
+        try {
+            awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
+            val channel = runBlocking { graph.channels(playlist, null) }.first()
+            press(KeyEvent.KEYCODE_DPAD_RIGHT)
+            awaitFocus(LiveTags.channel(channel.id))
+            press(KeyEvent.KEYCODE_DPAD_CENTER)
+            awaitFocus(PlayerTags.PLAY_PAUSE, timeout = 20_000)
+            val token = JSONObject(
+                companionCall("/api/pair", """{"code":"${companion.pairing.code()}","name":"Test phone"}""").second,
+            ).getString("token")
+
+            val events = companionEvents(token, millis = 3_000)
+            assertTrue(events, events.indexOf("event: tv") in 0 until events.indexOf("event: playing"))
+            val playing = events.substringAfter("event: playing\ndata: ").substringBefore('\n')
+            assertTrue(playing, playing.contains(channel.label))
+            if (channel.logo != null) assertTrue(playing, playing.contains("\"art\":\"c:${channel.id.value}\""))
+            assertFalse(playing, playing.contains("http"))
+        } finally {
+            companion.pairing.phones.value.forEach { companion.pairing.forget(it.id) }
+            companion.setOn(false)
+        }
+    }
+
+    /** x2: a phone's Ch + changes the channel and the TV says so at the top for two seconds. */
+    @Test
+    fun aPhoneChangeShowsANoteOnTheTv() {
+        val companion = graph.companion
+        companion.setOn(true)
+        try {
+            awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
+            val channels = runBlocking { graph.channels(playlist, null) }
+            press(KeyEvent.KEYCODE_DPAD_RIGHT)
+            awaitFocus(LiveTags.channel(channels.first().id))
+            press(KeyEvent.KEYCODE_DPAD_CENTER)
+            awaitFocus(PlayerTags.PLAY_PAUSE, timeout = 20_000)
+            val token = JSONObject(
+                companionCall("/api/pair", """{"code":"${companion.pairing.code()}","name":"Test phone"}""").second,
+            ).getString("token")
+            assertEquals(200, companionCall("/api/key", """{"token":"$token","key":"channel-up"}""").first)
+            awaitExists(COMPANION_NOTE_TAG, "from your phone", timeout = 3_000)
+            // The arrow pad shows nothing: it would on every press.
+            rule.waitUntil(4_000) { rule.onAllNodes(hasTestTag(COMPANION_NOTE_TAG)).fetchSemanticsNodes().isEmpty() }
+            assertEquals(200, companionCall("/api/key", """{"token":"$token","key":"down"}""").first)
+            Thread.sleep(500)
+            assertTrue(rule.onAllNodes(hasTestTag(COMPANION_NOTE_TAG)).fetchSemanticsNodes().isEmpty())
         } finally {
             companion.pairing.phones.value.forEach { companion.pairing.forget(it.id) }
             companion.setOn(false)

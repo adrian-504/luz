@@ -17,6 +17,7 @@ import app.iptvplayer.platform.playback.PlaybackRequest
 import app.iptvplayer.storage.EpisodeRow
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.LocalAppGraph
+import app.iptvplayer.tv.companion.CompanionLibrary
 import app.iptvplayer.tv.ui.player.PlayerScreen
 import kotlinx.coroutines.launch
 
@@ -42,6 +43,7 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
     var next by remember { mutableStateOf<EpisodeRow?>(null) }
     var description by remember { mutableStateOf<String?>(null) }
     var badges by remember { mutableStateOf<List<String>>(emptyList()) }
+    var companionArt by remember { mutableStateOf<String?>(null) }
     var newSession by remember { mutableStateOf(true) }
 
     LaunchedEffect(id) {
@@ -52,6 +54,14 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
             title = movie?.title.orEmpty()
             description = movie?.plot
             badges = movie?.let { badgesOf(it.quality, it.tags, it.language) }.orEmpty()
+            // The phone shows the wide picture when there is one (Design 2.2).
+            companionArt = movie?.let {
+                when {
+                    it.backdrop != null -> CompanionLibrary.art(CompanionLibrary.MOVIE_WIDE, it.id)
+                    it.poster != null -> CompanionLibrary.art(CompanionLibrary.MOVIE, it.id)
+                    else -> null
+                }
+            }
         } else {
             val current = graph.episode(playlistId, id)
             episode = current
@@ -68,6 +78,12 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
             }
             description = current?.plot ?: series?.plot
             badges = series?.let { badgesOf(it.quality, it.tags, it.language) }.orEmpty()
+            companionArt = when {
+                series?.backdrop != null -> CompanionLibrary.art(CompanionLibrary.SERIES_WIDE, series.id)
+                current?.still != null -> CompanionLibrary.art(CompanionLibrary.EPISODE, current.id)
+                series?.poster != null -> CompanionLibrary.art(CompanionLibrary.SERIES, series.id)
+                else -> null
+            }
             next = current?.let { NextEpisode.after(graph.episodes(playlistId, it.seriesId), it) }
         }
         val resolved = graph.contentPlaybackRequest(playlistId, type, id, startFromBeginning)
@@ -90,6 +106,7 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
             }
         },
         description = description,
+        companionArt = companionArt,
         badges = badges,
         nextLabel = following?.let { stringResource(R.string.player_next_episode, it.seasonNumber, it.episodeNumber) },
         onNext = following?.let {

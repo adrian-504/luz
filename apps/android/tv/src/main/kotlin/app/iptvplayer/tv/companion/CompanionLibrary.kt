@@ -150,15 +150,22 @@ class CompanionLibrary(private val context: Context, private val graph: AppGraph
             .put("seasons", JSONArray(seasons))
     }
 
-    /** What the phone asked to play or open, ready for the TV; null when the source or the title is not there. */
-    suspend fun request(kind: String, id: String, scope: String?, fromStart: Boolean): CompanionRequest? {
+    /**
+     * What the phone asked to play or open, ready for the TV, with the name the TV's note shows ("Playing … · from your
+     * phone"); null when the source or the title is not there.
+     */
+    suspend fun request(kind: String, id: String, scope: String?, fromStart: Boolean): Pair<CompanionRequest, String>? {
         val p = playlist() ?: return null
         return when (kind) {
-            "channel" -> CompanionRequest.Channel(p, scope ?: "all", ChannelId(id))
-            "movie" -> graph.movie(p, id)?.let { CompanionRequest.Play(p, ContentType.MOVIE, id, fromStart) }
-            "episode" -> graph.episode(p, id)?.let { CompanionRequest.Play(p, ContentType.EPISODE, id, fromStart) }
-            "movie-page" -> graph.movie(p, id)?.let { CompanionRequest.Movie(p, id) }
-            "series" -> graph.seriesById(p, id)?.let { CompanionRequest.Series(p, id) }
+            "channel" -> graph.channelLabel(p, ChannelId(id))?.let { CompanionRequest.Channel(p, scope ?: "all", ChannelId(id)) to it }
+            "movie" -> graph.movie(p, id)?.let { CompanionRequest.Play(p, ContentType.MOVIE, id, fromStart) to it.title }
+            "episode" -> graph.episode(p, id)?.let { episode ->
+                val show = graph.seriesById(p, episode.seriesId)?.title
+                CompanionRequest.Play(p, ContentType.EPISODE, id, fromStart) to
+                    listOfNotNull(show, "S${episode.seasonNumber} E${episode.episodeNumber}").joinToString(" ")
+            }
+            "movie-page" -> graph.movie(p, id)?.let { CompanionRequest.Movie(p, id) to it.title }
+            "series" -> graph.seriesById(p, id)?.let { CompanionRequest.Series(p, id) to it.title }
             else -> null
         }
     }
@@ -254,25 +261,29 @@ class CompanionLibrary(private val context: Context, private val graph: AppGraph
         .put("fraction", JSONObject.NULL)
 
     /** A picture's name for the phone: what it shows and whose it is, never where it lives. */
-    private fun ref(kind: String, id: String, template: UrlTemplate?): Any = if (template == null) JSONObject.NULL else "$kind:$id"
+    private fun ref(kind: String, id: String, template: UrlTemplate?): Any = if (template == null) JSONObject.NULL else art(kind, id)
 
-    private companion object {
+    companion object {
         const val MOVIE = "m"
         const val MOVIE_WIDE = "mw"
         const val SERIES = "s"
         const val SERIES_WIDE = "sw"
         const val EPISODE = "e"
         const val CHANNEL = "c"
-        const val ROW = 20
-        const val CHANNELS = 60
-        const val GROUP_CHANNELS = 400
-        const val SEARCH = 30
-        const val MAX_QUERY = 100
-        const val POSTER_W = 300
-        const val POSTER_H = 450
-        const val WIDE_W = 640
-        const val WIDE_H = 360
-        const val LOGO_PX = 160
-        const val JPEG_QUALITY = 80
+
+        /** A picture's reference, as the phone hands it back to `/api/art`. */
+        fun art(kind: String, id: String): String = "$kind:$id"
+
+        private const val ROW = 20
+        private const val CHANNELS = 60
+        private const val GROUP_CHANNELS = 400
+        private const val SEARCH = 30
+        private const val MAX_QUERY = 100
+        private const val POSTER_W = 300
+        private const val POSTER_H = 450
+        private const val WIDE_W = 640
+        private const val WIDE_H = 360
+        private const val LOGO_PX = 160
+        private const val JPEG_QUALITY = 80
     }
 }

@@ -80,6 +80,11 @@ internal fun CompanionPane(focus: FocusMemory) {
             Column(verticalArrangement = Arrangement.spacedBy(Tokens.space3), modifier = Modifier.widthIn(max = 420.dp)) {
                 Text(stringResource(R.string.companion_scan), style = MaterialTheme.typography.titleMedium, color = Tokens.textPrimary)
                 Text(
+                    stringResource(R.string.companion_tv_name, companion.tvName() ?: stringResource(R.string.companion_tv_fallback)),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Tokens.textSecondary,
+                )
+                Text(
                     stringResource(R.string.companion_or_type, "http://$address", code.chunked(CODE_GROUP).joinToString(" ")),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Tokens.textSecondary,
@@ -109,10 +114,10 @@ private fun Note(text: String) {
 
 /** A QR code drawn as squares on a white plate, with the quiet margin scanners need around it. */
 @Composable
-private fun QrCode(text: String, size: Dp) {
+internal fun QrCode(text: String, size: Dp, modifier: Modifier = Modifier) {
     val qr = remember(text) { QrCode.encodeText(text, QrCode.Ecc.MEDIUM) }
     Canvas(
-        Modifier
+        modifier
             .size(size)
             .background(Color.White, RoundedCornerShape(Tokens.radiusMedium))
             .padding(Tokens.space3),

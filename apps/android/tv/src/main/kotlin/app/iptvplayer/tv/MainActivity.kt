@@ -17,6 +17,7 @@ import app.iptvplayer.tv.app.IptvApplication
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.companion.CompanionHub
 import app.iptvplayer.tv.ui.AppNavHost
+import app.iptvplayer.tv.ui.CompanionNote
 import app.iptvplayer.tv.ui.theme.IptvTheme
 import app.iptvplayer.tv.ui.theme.OkKey
 import kotlinx.coroutines.launch
@@ -41,6 +42,7 @@ class MainActivity : ComponentActivity() {
                     // Test tags double as resource ids, so the robot in apps/android/benchmark can find its way (ADR-0049).
                     Box(Modifier.onPreviewKeyEvent { OkKey.observe(it.nativeKeyEvent) }.semantics { testTagsAsResourceId = true }) {
                         AppNavHost()
+                        CompanionNote()
                     }
                 }
             }

@@ -1,7 +1,7 @@
 # ADR-0050: The phone companion, a page Luz serves on the home network
 
-- **Status:** Accepted (steps 1 and 2 built 2026-10-28, step 3 built 2026-10-29; NOT YET tried from a real phone or on the
-  owner's TV)
+- **Status:** Accepted (steps 1 and 2 built 2026-10-28, steps 3 and 4 and x2 built 2026-10-29; NOT YET tried from a real
+  phone or on the owner's TV)
 - **Date:** 2026-10-28
 - **Spec:** owner's plan of 2026-10-27, round 2 (*Luz full plan.md*); SECURITY.md; ARCHITECTURE.md §14
 
@@ -36,7 +36,7 @@ companion must work on any phone, the owner's or a guest's, without installing a
      Luz, never on the rest of the TV.
    - **Step 2, what is playing** (built the same day): the channel's number, name and programme with its times and
      progress, or the film or episode with its position and length, and Play/Pause, ±30 s, Ch −/+ and Last. Words and
-     times only: no addresses or pictures, since a provider's links can carry the login.
+     times only: no addresses, since a provider's links can carry the login (pictures came later, through the TV; x2).
    - **Step 3, browse on the phone and play on the TV** (built 2026-10-29): the viewer's channels with what is on now,
      their categories, Continue watching, My List, Just added and New episodes, search, a film's and a series' page
      (with its seasons and episodes), My List on and off, and Play, which opens the channel, film or episode on the TV,
@@ -50,12 +50,32 @@ companion must work on any phone, the owner's or a guest's, without installing a
      address, which can carry the login, never reaches the phone. Pictures have four connections of their own and 8
      seconds each, so a page full of posters never keeps the phone from playing something. The phone page itself is
      designed by the Luz Design chat.
-   Step 4 (provider setup) follows as its own change.
+   - **Step 4, set up a provider from the phone** (built 2026-10-29, the owner's choice B of 2026-10-28; see 6). While
+     Welcome or a provider form is on the TV's screen, the TV shows *Or set it up on your phone* beside it, with the QR
+     code, or *Use my phone*, which switches the companion on. The open form tells the phone it can take a login or a
+     link (`provider-form` event); the phone sends a server, user name and password, or a playlist link
+     (`POST /api/provider`), and the TV fills its own form and connects through its own path, as if the viewer had
+     pressed Connect (`ProviderFormSlot`, `CompanionHub.openProviderForm`). From Welcome, the TV opens the matching form
+     first. A pasted Xtream link becomes a login, like the form's own link field. With no form on screen the phone gets
+     `409 form-closed`. How it goes comes back as *connecting*, *connected* or *failed* with a short reason
+     (`wrong-login`, `expired`, `unreachable`, `not-a-playlist`, `other`) and the TV's own sentence, the same words the
+     form shows (`provider-state` event). The form says *Started from your phone* while it works.
+   - **x2, a better remote** (built 2026-10-29): the page opens on what is playing; the TV's name heads the page
+     (the name set in the TV's Android settings, never a model code); the picture of what is playing, through
+     `/api/art` like step 3's; −10 s / +10 s (`POST /api/seek`, at most a minute either way, never on live channels);
+     the audio and subtitle choices the player itself offers (`POST /api/track`, only ids the TV listed). After the
+     phone changes something, the TV shows a small note at the top for two seconds, such as *Subtitles on · from your
+     phone* (`CompanionNote`), so nobody in the room wonders why the picture changed; the arrow pad gives no note.
 6. **No encryption on the wire, and what follows from it.** A page on a home-network address cannot have a trusted
    certificate, and browsers only give cryptography to secure pages. So the companion is plain HTTP inside the home, like
    the provider links most viewers already use. In step 1 nothing secret travels except what the viewer types; the
-   provider password is typed on the phone only if they choose to, and the setting says so. Setting up a provider from the
-   phone (step 4) gets its own decision before it is built.
+   provider password is typed on the phone only if they choose to, and the setting says so. **Step 4, the owner's choice
+   B (2026-10-28):** the login travels from the phone to the TV in plain form over the home Wi-Fi, the same as a
+   provider link over plain HTTP, and only while a provider form is open on the TV. The phone never stores it; the TV
+   keeps it only where it keeps every login (Android Keystore, ADR-0015's `CredentialRef`); neither side logs it, and the
+   TV never sends it, or the link, back to the phone, not even in an error. **C, the later upgrade:** encrypt the login
+   on the phone with a key derived from the pairing, so that someone listening on the home network sees nothing; it is
+   recorded here and not built.
 7. **QR codes** come from Nayuki's *QR Code generator library* (`io.nayuki:qrcodegen` 1.8.0). *Need:* drawing a QR code
    is not in the platform. *Maintenance:* one author, stable since 2022, a small finished library. *Security:* pure
    computation, no network or permissions. *License:* MIT. *Size:* about 30 KB before R8. *Exit:* any QR encoder, or a
@@ -72,6 +92,12 @@ companion must work on any phone, the owner's or a guest's, without installing a
 - Step 3's device tests (`aPairedPhoneFindsAChannelAndPlaysItOnTheTv` passed on the emulator 2026-10-28;
   `aPhoneCannotOpenAnythingWhileLuzIsHidden` written 2026-10-29 and not yet run) and the phone page against a running TV
   (tried only against a stand-in server) wait for the next testing session.
+- Step 4 and x2 compile and pass the checks that need no device; NOT YET VERIFIED on any device. Their device tests
+  (`CompanionSetupTest`, five tests; `LivePlayerTest.thePhoneHearsTheTvNameAndWhatIsPlaying` and
+  `aPhoneChangeShowsANoteOnTheTv`) are written and compiled, not run. Changing audio or subtitles from the phone has no
+  device test yet: the test provider's films carry one audio track and no subtitles.
+- Anyone on the home network who can read its traffic could read a login sent from the phone (choice B). The same is
+  true today of the provider's own plain links, and C would close it.
 
 ## Alternatives considered
 
