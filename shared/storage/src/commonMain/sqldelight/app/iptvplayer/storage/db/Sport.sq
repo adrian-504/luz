@@ -70,3 +70,76 @@ INSERT OR REPLACE INTO sport_follow(kind, ref, name, created_at) VALUES (?, ?, ?
 
 unfollow:
 DELETE FROM sport_follow WHERE kind = ? AND ref = ?;
+
+isFollowed:
+SELECT COUNT(*) FROM sport_follow WHERE kind = ? AND ref = ?;
+
+saveTeam:
+INSERT OR REPLACE INTO sport_team(ref, name, short_name, tla, crest_url, fetched_at) VALUES (?, ?, ?, ?, ?, ?);
+
+team:
+SELECT * FROM sport_team WHERE ref = ?;
+
+addAlias:
+INSERT OR IGNORE INTO sport_alias(team_ref, alias_fold, origin) VALUES (?, ?, ?);
+
+aliasesOf:
+SELECT alias_fold FROM sport_alias WHERE team_ref = ?;
+
+-- Teams one of whose names holds the folded query; the table holds a few names per followed team, so a scan is cheap.
+teamsMatching:
+SELECT DISTINCT team_ref FROM sport_alias WHERE instr(alias_fold, :query) > 0;
+
+saveFixture:
+INSERT OR REPLACE INTO sport_fixture(id, competition, competition_name, home_ref, away_ref, home_name, away_name, kickoff_utc, status, fetched_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+fixture:
+SELECT * FROM sport_fixture WHERE id = ?;
+
+fixturesBetween:
+SELECT * FROM sport_fixture WHERE kickoff_utc >= :from AND kickoff_utc < :until ORDER BY kickoff_utc, id;
+
+fixturesForTeams:
+SELECT * FROM sport_fixture
+WHERE kickoff_utc >= :from AND kickoff_utc < :until AND (home_ref IN :teams OR away_ref IN :teams)
+ORDER BY kickoff_utc, id;
+
+deleteFixturesBefore:
+DELETE FROM sport_fixture WHERE kickoff_utc < ?;
+
+clearStanding:
+DELETE FROM sport_standing WHERE competition = ?;
+
+addStanding:
+INSERT OR REPLACE INTO sport_standing(competition, position, team_ref, team_name, played, points, goal_diff, fetched_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+standing:
+SELECT * FROM sport_standing WHERE competition = ? ORDER BY position;
+
+addReminder:
+INSERT OR REPLACE INTO sport_reminder(fixture_id, created_at) VALUES (?, ?);
+
+removeReminder:
+DELETE FROM sport_reminder WHERE fixture_id = ?;
+
+-- Reminders for matches not yet past, soonest first.
+reminders:
+SELECT f.* FROM sport_reminder r JOIN sport_fixture f ON f.id = r.fixture_id WHERE f.kickoff_utc >= ? ORDER BY f.kickoff_utc;
+
+fetchedAt:
+SELECT fetched_at FROM sport_fetch WHERE resource = ?;
+
+setFetched:
+INSERT OR REPLACE INTO sport_fetch(resource, fetched_at) VALUES (?, ?);
+
+-- Removing the token forgets everything read with it; what the viewer follows stays.
+clearFetched:
+DELETE FROM sport_fetch;
+
+clearFixtures:
+DELETE FROM sport_fixture;
+
+clearStandings:
+DELETE FROM sport_standing;

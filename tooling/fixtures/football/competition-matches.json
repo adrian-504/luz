@@ -1,0 +1,11 @@
+{"competition":{"id":9001,"code":"EXL","name":"Example League"},"matches":[
+{"id":5001,"utcDate":"2026-11-01T20:00:00Z","status":"TIMED","competition":{"id":9001,"code":"EXL","name":"Example League"},
+ "homeTeam":{"id":101,"name":"Example City FC","shortName":"Example City","tla":"EXC","crest":"https://football.example.com/crests/1.png"},
+ "awayTeam":{"id":102,"name":"Sample United","shortName":"Sample Utd","tla":"SMU","crest":"https://football.example.com/crests/2.png"}},
+{"id":5002,"utcDate":"2026-11-02T18:30:00Z","status":"SCHEDULED","competition":{"id":9001,"code":"EXL","name":"Example League"},
+ "homeTeam":{"id":103,"name":"Placeholder Town","shortName":null,"tla":"PLT","crest":null},
+ "awayTeam":{"id":101,"name":"Example City FC","shortName":"Example City","tla":"EXC","crest":"https://football.example.com/crests/1.png"}},
+{"id":5003,"utcDate":"2026-11-08T20:00:00Z","status":"SCHEDULED","competition":{"id":9001,"code":"EXL","name":"Example League"},
+ "homeTeam":{"id":102,"name":"Sample United","shortName":"Sample Utd","tla":"SMU","crest":"https://football.example.com/crests/2.png"},
+ "awayTeam":{"id":null,"name":null,"shortName":null,"tla":null,"crest":null}}
+]}

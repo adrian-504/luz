@@ -1,0 +1,5 @@
+{"count":3,"competitions":[
+{"id":9001,"code":"EXL","name":"Example League","area":{"id":1,"name":"Exampleland","code":"EXL"},"emblem":"https://football.example.com/crests/league-1.png"},
+{"id":9002,"code":"SMC","name":"Sample Cup","area":{"id":2,"name":"Sampleland"},"emblem":null},
+{"id":9003,"name":"Codeless Competition","area":{"name":"Nowhere"}}
+]}

@@ -886,6 +886,118 @@
       "expected": {
         "titles": 2
       }
+    },
+    {
+      "path": "football/competitions.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "Football fixtures and team names (synthetic)",
+      "purpose": "football-data.org competitions: two complete, one without a code that must be skipped.",
+      "checks": {
+        "json_keys": [
+          "count",
+          "competitions"
+        ]
+      },
+      "expected": {
+        "competitions": 2
+      }
+    },
+    {
+      "path": "football/teams.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "Football fixtures and team names (synthetic)",
+      "purpose": "football-data.org teams of a competition: two complete, one without an id that must be skipped.",
+      "checks": {
+        "json_keys": [
+          "count",
+          "teams"
+        ]
+      },
+      "expected": {
+        "teams": 2
+      }
+    },
+    {
+      "path": "football/competition-matches.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "Football fixtures and team names (synthetic)",
+      "purpose": "football-data.org competition matches: a TIMED fixture, one with a placeholder team, and a knockout slot with a null away team id that must be skipped.",
+      "checks": {
+        "json_keys": [
+          "competition",
+          "matches"
+        ]
+      },
+      "expected": {
+        "matches": 2,
+        "skipped": 1
+      }
+    },
+    {
+      "path": "football/team-matches.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "Football fixtures and team names (synthetic)",
+      "purpose": "football-data.org matches of one team across two competitions.",
+      "checks": {
+        "json_keys": [
+          "matches"
+        ]
+      },
+      "expected": {
+        "matches": 2
+      }
+    },
+    {
+      "path": "football/standings.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "Football fixtures and team names (synthetic)",
+      "purpose": "football-data.org standings with a TOTAL and a HOME table; only TOTAL is read.",
+      "checks": {
+        "json_keys": [
+          "competition",
+          "standings"
+        ]
+      },
+      "expected": {
+        "rows": 2
+      }
+    },
+    {
+      "path": "wikidata/search.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "Football fixtures and team names (synthetic)",
+      "purpose": "Wikidata wbsearchentities hits: two without football in the description, then the club that is taken.",
+      "checks": {
+        "json_keys": [
+          "searchinfo",
+          "search"
+        ]
+      },
+      "expected": {
+        "hits": 3,
+        "picked": "Q900002"
+      }
+    },
+    {
+      "path": "wikidata/entities.json",
+      "format": "json",
+      "expect": "valid",
+      "spec": "Football fixtures and team names (synthetic)",
+      "purpose": "Wikidata wbgetentities labels and aliases in ar, fr and en, with a repeated and a blank alias.",
+      "checks": {
+        "json_keys": [
+          "entities"
+        ]
+      },
+      "expected": {
+        "names": 5
+      }
     }
   ]
 }

@@ -1,0 +1,8 @@
+{"matches":[
+{"id":5001,"utcDate":"2026-11-01T20:00:00Z","status":"TIMED","competition":{"id":9001,"code":"EXL","name":"Example League"},
+ "homeTeam":{"id":101,"name":"Example City FC","shortName":"Example City","tla":"EXC","crest":"https://football.example.com/crests/1.png"},
+ "awayTeam":{"id":102,"name":"Sample United","shortName":"Sample Utd","tla":"SMU","crest":"https://football.example.com/crests/2.png"}},
+{"id":5101,"utcDate":"2026-11-15T17:00:00Z","status":"SCHEDULED","competition":{"id":9002,"code":"SMC","name":"Sample Cup"},
+ "homeTeam":{"id":104,"name":"Reserved Rovers","shortName":"Rovers","tla":"RSR","crest":"https://football.example.com/crests/4.png"},
+ "awayTeam":{"id":101,"name":"Example City FC","shortName":"Example City","tla":"EXC","crest":"https://football.example.com/crests/1.png"}}
+]}

@@ -1,0 +1,5 @@
+{"count":3,"competition":{"id":9001,"code":"EXL","name":"Example League"},"teams":[
+{"id":101,"name":"Example City FC","shortName":"Example City","tla":"EXC","crest":"https://football.example.com/crests/1.png"},
+{"id":102,"name":"Sample United","shortName":"Sample Utd","tla":"SMU","crest":"https://football.example.com/crests/2.png"},
+{"name":"Nameless Id Team","tla":"NIT"}
+]}

@@ -14,6 +14,7 @@ import app.iptvplayer.domain.ports.HttpResponse
 import app.iptvplayer.domain.ports.HttpTimeouts
 import app.iptvplayer.domain.ports.HttpTransport
 import app.iptvplayer.domain.ports.TransportException
+import app.iptvplayer.domain.security.Secret
 import app.iptvplayer.domain.security.SensitiveUrl
 import kotlinx.coroutines.delay
 import kotlin.random.Random
@@ -60,13 +61,15 @@ public class HttpFetcher(
         requestClass: RequestClass,
         context: UrlContext,
         headers: Map<String, String> = emptyMap(),
+        /** Headers that carry a secret (a viewer's token): the transport sends them and never logs them. */
+        sensitiveHeaders: Map<String, Secret<String>> = emptyMap(),
     ): FetchResult {
         val initial = UrlPolicy.check(url.unsafeRawValue(), context)
         if (initial is UrlCheck.Rejected) return FetchResult.Failure(DomainError.Validation(ValidationFailure.URL_REJECTED), null, 0)
         var attempt = 0
         while (true) {
             attempt++
-            val outcome = attemptOnce(url, (initial as UrlCheck.Allowed).flags, requestClass, context, headers, attempt)
+            val outcome = attemptOnce(url, (initial as UrlCheck.Allowed).flags, requestClass, context, headers, sensitiveHeaders, attempt)
             val retryAfter = outcome.retryDelay
             if (retryAfter == null || attempt > requestClass.maxRetries) return outcome.result
             sleep(retryAfter)
@@ -81,6 +84,7 @@ public class HttpFetcher(
         requestClass: RequestClass,
         context: UrlContext,
         headers: Map<String, String>,
+        sensitiveHeaders: Map<String, Secret<String>>,
         attempt: Int,
     ): Attempt {
         var current = url
@@ -88,7 +92,14 @@ public class HttpFetcher(
         var redirects = 0
         while (true) {
             val request =
-                HttpRequest(HttpMethod.GET, current, headers, timeouts = requestClass.timeouts, maxBodyBytes = requestClass.maxBodyBytes)
+                HttpRequest(
+                    HttpMethod.GET,
+                    current,
+                    headers,
+                    sensitiveHeaders,
+                    timeouts = requestClass.timeouts,
+                    maxBodyBytes = requestClass.maxBodyBytes,
+                )
             val response = try {
                 transport.execute(request)
             } catch (e: TransportException) {

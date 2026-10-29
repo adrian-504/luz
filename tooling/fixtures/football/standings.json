@@ -1,0 +1,9 @@
+{"competition":{"id":9001,"code":"EXL","name":"Example League"},"standings":[
+{"stage":"REGULAR_SEASON","type":"TOTAL","table":[
+ {"position":1,"team":{"id":101,"name":"Example City FC","shortName":"Example City","tla":"EXC","crest":"https://football.example.com/crests/1.png"},"playedGames":10,"points":25,"goalDifference":14},
+ {"position":2,"team":{"id":102,"name":"Sample United","shortName":"Sample Utd","tla":"SMU","crest":"https://football.example.com/crests/2.png"},"playedGames":10,"points":22,"goalDifference":-3}
+]},
+{"stage":"REGULAR_SEASON","type":"HOME","table":[
+ {"position":1,"team":{"id":102,"name":"Sample United","shortName":"Sample Utd","tla":"SMU","crest":"https://football.example.com/crests/2.png"},"playedGames":5,"points":13,"goalDifference":6}
+]}
+]}

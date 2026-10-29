@@ -111,6 +111,7 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
     internal val tmdbQueries = database.tmdbQueries
     private val customisationQueries = database.customisationQueries
     internal val liveQueries = database.liveQueries
+    internal val sportQueries = database.sportQueries
 
     /** Marks [snapshot] as the published content of [unit] (library units; live channels use their writer). */
     internal fun publishUnit(playlistId: PlaylistId, unit: ImportUnit, snapshot: Long, itemCount: Long) {

@@ -77,3 +77,4 @@ line. Product-scope decisions still go to the owner.
 | [0054](0054-the-guide-denser-and-honest.md) | A denser, honest guide; no second free guide for now | Accepted |
 | [0055](0055-search-that-folds-arabic-and-latin.md) | Search that folds Arabic and Latin spellings | Accepted |
 | [0056](0056-guide-time-shifts.md) | Guide time shifts measured against the provider's own guide | Accepted |
+| [0057](0057-sport-fixtures-with-the-viewers-own-token.md) | Sport fixtures from football-data.org with the viewer's own token, team names from Wikidata, and no channel claims | Accepted |
