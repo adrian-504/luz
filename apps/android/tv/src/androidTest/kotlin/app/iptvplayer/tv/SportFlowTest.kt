@@ -18,6 +18,7 @@ import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.storage.FollowKind
 import app.iptvplayer.testing.TestPanel
 import app.iptvplayer.tv.app.IptvApplication
+import app.iptvplayer.tv.app.REMINDER_LEAD_DEFAULT
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.library.HomeTags
 import app.iptvplayer.tv.ui.library.SearchTags
@@ -42,7 +43,6 @@ import org.junit.rules.ExternalResource
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.minutes
 
 /**
  * Sport with the viewer's own football-data.org key (ADR-0057), against the test server's fakes of football-data.org and
@@ -72,7 +72,7 @@ class SportFlowTest {
 
     @After
     fun forget() {
-        graph.reminderLead = 2.minutes
+        graph.reminderLead = REMINDER_LEAD_DEFAULT
         forgetSport()
         DeveloperStreams.useTestSport = false
     }

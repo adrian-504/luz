@@ -35,6 +35,14 @@
     <string name="player_state_preparing">Starting…</string>
     <string name="player_state_buffering">Loading…</string>
     <string name="player_state_paused">Paused</string>
+    <plurals name="skip_seconds">
+        <item quantity="one">%1$d s</item>
+        <item quantity="other">%1$d s</item>
+    </plurals>
+    <plurals name="skip_minutes">
+        <item quantity="one">%1$d min</item>
+        <item quantity="other">%1$d min</item>
+    </plurals>
     <string name="player_state_playing">Playing</string>
     <string name="player_state_ended">Finished</string>
     <string name="player_state_error">Playback error</string>

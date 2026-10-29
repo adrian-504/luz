@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -105,6 +106,26 @@ class PlayerNavigationTest {
     private fun awaitSpeed(label: String) {
         runCatching { rule.waitUntil(5_000) { runCatching { rule.onNodeWithTag(PlayerTags.SPEED).assertTextContains(label) }.isSuccess } }
             .onFailure { throw AssertionError("expected the speed button to read $label", it) }
+    }
+
+    /** Right on a film's bare picture (x16): the bar, the step and the time it will jump to, then one jump. */
+    @Test
+    fun aSkipOnTheBarePictureShowsWhereItWillJumpThenJumpsOnce() {
+        openDeveloperStream("tracks")
+        awaitText(PlayerTags.STATE, string(R.string.player_state_playing))
+        press(KeyEvent.KEYCODE_BACK)
+        awaitGone(PlayerTags.OVERLAY)
+        awaitFocus(PlayerTags.ROOT)
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        rule.waitUntil(5_000) { rule.onAllNodes(hasTestTag(PlayerTags.SEEK_HUD)).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(5_000) { rule.onAllNodes(hasText("+10 s"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        // Ten seconds on from where the film was (0:1x), never clamped back to the start.
+        rule.waitUntil(
+            5_000,
+        ) { rule.onAllNodes(hasText("0:1", substring = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        screenshot("r5-skip-hud")
+        // The jump is committed once the remote has rested; the step leaves with it.
+        rule.waitUntil(5_000) { rule.onAllNodes(hasText("+10 s"), useUnmergedTree = true).fetchSemanticsNodes().isEmpty() }
     }
 
     @Test

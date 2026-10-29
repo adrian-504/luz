@@ -5,6 +5,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.ingestion.AddSourceResult
+import app.iptvplayer.storage.FollowKind
+import app.iptvplayer.testing.TestPanel
 import app.iptvplayer.tv.app.IptvApplication
 import app.iptvplayer.tv.developer.DeveloperStreams
 import kotlinx.coroutines.runBlocking
@@ -42,6 +44,14 @@ class CompanionReviewTest {
                     Thread.sleep(200)
                 }
             }
+        }
+        // With `-e companionReviewSport true`: the fake football-data.org, its key, and a team and league followed, for
+        // the phone's Matches tab.
+        if (InstrumentationRegistry.getArguments().getString("companionReviewSport") != null) {
+            DeveloperStreams.useTestSport = true
+            runBlocking { assertTrue(graph.setSportToken(TestPanel.FOOTBALL_TOKEN) == null) }
+            graph.follow(FollowKind.TEAM, "9065", "Example City FC")
+            graph.follow(FollowKind.COMPETITION, "EXL", "Example League")
         }
         graph.companion.setOn(true)
         val until = System.nanoTime() + minutes!!.minutes.inWholeNanoseconds

@@ -163,12 +163,16 @@ data class SourceActivity(
     val seriesRunning: Boolean = false,
 )
 
+/** How long before kick-off the reminder card rises (Design 4.4): two minutes. */
+val REMINDER_LEAD_DEFAULT: kotlin.time.Duration = 2.minutes
+
 /**
  * Application-scoped composition root (ARCHITECTURE.md §10): one database, the Keystore secret store, the shared import
  * service and the operations screens need. All blocking work runs on [Dispatchers.IO]; [revision] increments whenever
  * imported content or favorites change so screens reload.
  */
 class AppGraph(context: Context) {
+
     private val appContext = context.applicationContext
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -867,7 +871,7 @@ class AppGraph(context: Context) {
 
     /** How long before kick-off the reminder card rises (4.4); device tests move it so a match tonight is due now. */
     @Volatile
-    var reminderLead: kotlin.time.Duration = REMINDER_LEAD
+    var reminderLead: kotlin.time.Duration = REMINDER_LEAD_DEFAULT
 
     /** The soonest reminded match still to kick off that is not in [shown], as a card shows it. */
     suspend fun nextReminder(shown: Set<String>): MatchCard? = io {
@@ -1523,7 +1527,6 @@ class AppGraph(context: Context) {
         const val MAX_SEARCH_MATCHES = 12
         const val MAX_LOOKUPS = 3
         const val MAX_GUIDE_HITS = 60L
-        val REMINDER_LEAD = 2.minutes
         val SPORT_NOW_AHEAD = 3.hours
         val SPORT_GUIDE_KEEP = 5.minutes
         const val LOG_TAG = "IptvImport"

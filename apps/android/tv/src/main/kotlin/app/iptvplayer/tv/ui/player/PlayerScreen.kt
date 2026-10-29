@@ -56,12 +56,14 @@ import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
@@ -70,6 +72,7 @@ import app.iptvplayer.domain.model.TrackSet
 import app.iptvplayer.domain.playback.PlaybackErrorCode
 import app.iptvplayer.domain.playback.PlaybackMode
 import app.iptvplayer.domain.playback.PlaybackState
+import app.iptvplayer.domain.playback.SkipSteps
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.platform.playback.Media3PlaybackController
 import app.iptvplayer.platform.playback.PlaybackDiagnostics
@@ -326,6 +329,10 @@ fun PlayerScreen(
     var seekShownAt by remember { mutableLongStateOf(0L) }
     var scrubMs by remember { mutableStateOf<Long?>(null) }
     var scrubAt by remember { mutableLongStateOf(0L) }
+    // How long after the last press a gathered skip is committed: shorter on the bare picture, where the picture jumps
+    // once where the viewer lets go (x16), than on the focused bar, where they may still be choosing.
+    var scrubCommitMs by remember { mutableLongStateOf(SCRUB_COMMIT_MS) }
+    var skipStep by remember { mutableStateOf<Duration?>(null) }
     var nextDismissed by remember(request) { mutableStateOf(false) }
     var nextSecondsLeft by remember(request) { mutableIntStateOf(NEXT_COUNTDOWN_S) }
     LaunchedEffect(seekShownAt) {
@@ -413,9 +420,10 @@ fun PlayerScreen(
     // Scrubbing: the picture jumps once the remote has rested on the new position.
     LaunchedEffect(scrubAt) {
         val target = scrubMs ?: return@LaunchedEffect
-        delay(SCRUB_COMMIT_MS)
+        delay(scrubCommitMs)
         controller.seekTo(target.milliseconds)
         scrubMs = null
+        skipStep = null
     }
     LaunchedEffect(isVod, request) {
         if (!isVod) return@LaunchedEffect
@@ -490,7 +498,16 @@ fun PlayerScreen(
                         if (!it) return@also
                         val forward = keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
                         if (isVod) {
-                            seekBy(controller, holdStep(event.nativeKeyEvent.repeatCount) * (if (forward) 1 else -1))
+                            // Gathered while held, committed once after release: no rebuffer on every repeat (x16).
+                            val step = holdStep(event.nativeKeyEvent)
+                            skipStep = if (forward) step else -step
+                            // In the first second the length may not be read yet: ask the player, so the target is not
+                            // clamped to nothing.
+                            val length = durationMs.takeIf { it > 0 } ?: controller.duration()?.inWholeMilliseconds ?: Long.MAX_VALUE
+                            val from = scrubMs ?: controller.currentPosition()?.inWholeMilliseconds ?: positionMs
+                            scrubMs = (from + (skipStep ?: step).inWholeMilliseconds).coerceIn(0, length)
+                            scrubCommitMs = SKIP_COMMIT_MS
+                            scrubAt = System.nanoTime()
                             seekShownAt = System.nanoTime()
                         } else {
                             onZap?.invoke(if (forward) +1 else -1)
@@ -583,7 +600,21 @@ fun PlayerScreen(
                     .background(OVERLAY_GRADIENT)
                     .padding(start = Tokens.space16, end = Tokens.space16, top = Tokens.space16, bottom = Tokens.space10)
                     .testTag(PlayerTags.SEEK_HUD),
-            ) { ScrubBar(positionMs, durationMs, null, focused = false) }
+            ) {
+                // While skipping: the bar, the step, and the time the picture will jump to, large (x16).
+                Column(verticalArrangement = Arrangement.spacedBy(Tokens.space2)) {
+                    val target = scrubMs
+                    if (target != null) {
+                        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(Tokens.space4)) {
+                            Text(clockOf(target), fontSize = SKIP_TIME_TEXT, color = Tokens.textPrimary)
+                            skipStep?.let { step ->
+                                Text(stepLabel(step), style = MaterialTheme.typography.titleMedium, color = Tokens.textSecondary)
+                            }
+                        }
+                    }
+                    ScrubBar(positionMs, durationMs, target, focused = false)
+                }
+            }
         }
 
         if (!overlayVisible && !isError && snapshot.state == PlaybackState.PAUSED) {
@@ -663,8 +694,9 @@ fun PlayerScreen(
                                 when (event.nativeKeyEvent.keyCode) {
                                     KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                                         val forward = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
-                                        val step = holdStep(event.nativeKeyEvent.repeatCount).inWholeMilliseconds * (if (forward) 1 else -1)
+                                        val step = holdStep(event.nativeKeyEvent).inWholeMilliseconds * (if (forward) 1 else -1)
                                         scrubMs = ((scrubMs ?: positionMs) + step).coerceIn(0, durationMs)
+                                        scrubCommitMs = SCRUB_COMMIT_MS
                                         scrubAt = System.nanoTime()
                                         true
                                     }
@@ -1234,16 +1266,37 @@ private fun seekBy(controller: Media3PlaybackController, step: Duration) {
     controller.seekTo(target)
 }
 
-/** How far one press of Left or Right moves: 10 s, and more the longer the key is held (item 23). */
-private fun holdStep(repeatCount: Int): Duration = when {
-    repeatCount >= HOLD_FASTEST -> 60.seconds
-    repeatCount >= HOLD_FASTER -> 30.seconds
-    else -> SEEK_STEP
+/** How far one press of Left or Right moves (item 23): 10 s, more the longer the key is held, by held time (x16). */
+private fun holdStep(event: android.view.KeyEvent): Duration = SkipSteps.step(event.eventTime - event.downTime)
+
+/** "+30 s", "−10 s", "+1 min": the step a held key is taking. */
+@Composable
+private fun stepLabel(step: Duration): String {
+    val sign = if (step.isNegative()) MINUS else "+"
+    val size = step.absoluteValue
+    return sign + if (size.inWholeSeconds >= SECONDS_PER_MINUTE) {
+        pluralStringResource(R.plurals.skip_minutes, size.inWholeMinutes.toInt(), size.inWholeMinutes.toInt())
+    } else {
+        pluralStringResource(R.plurals.skip_seconds, size.inWholeSeconds.toInt(), size.inWholeSeconds.toInt())
+    }
+}
+
+/** "1:02:05" or "2:05": where the picture will jump to. */
+private fun clockOf(ms: Long): String {
+    val total = ms / MS_PER_SECOND
+    val h = total / SECONDS_PER_HOUR
+    val m = total % SECONDS_PER_HOUR / SECONDS_PER_MINUTE
+    val sec = total % SECONDS_PER_MINUTE
+    return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
 }
 
 private val SEEK_STEP = 10.seconds
-private const val HOLD_FASTER = 6
-private const val HOLD_FASTEST = 20
+private const val SKIP_COMMIT_MS = 400L
+private val SKIP_TIME_TEXT = 30.sp
+private const val MS_PER_SECOND = 1_000L
+private const val SECONDS_PER_MINUTE = 60L
+private const val SECONDS_PER_HOUR = 3_600L
+private const val MINUS = "\u2212"
 private const val SCRUB_COMMIT_MS = 900L
 private const val NEXT_LEAD_MS = 20_000L
 private const val NEXT_COUNTDOWN_S = 10
