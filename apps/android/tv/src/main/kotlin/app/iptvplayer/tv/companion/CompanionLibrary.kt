@@ -7,6 +7,7 @@ import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.domain.security.UrlTemplate
+import app.iptvplayer.domain.sport.MatchCalendar
 import app.iptvplayer.storage.ChannelRow
 import app.iptvplayer.storage.GroupRow
 import app.iptvplayer.storage.MovieRow
@@ -179,6 +180,46 @@ class CompanionLibrary(private val context: Context, private val graph: AppGraph
         "movie" -> ImportUnit.MOVIES
         "series" -> ImportUnit.SERIES
         else -> null
+    }
+
+    /**
+     * The phone's Matches tab (s3, ADR-0057): followed matches for 14 days, with their teams' three letters, the league,
+     * kick-off (epoch ms), whether one is under way and whether it has a reminder. No channel, ever. Empty when nothing is
+     * followed, so the page can hide the tab.
+     */
+    suspend fun sport(): JSONObject {
+        val now = Clock.System.now()
+        val matches = graph.followedMatches(now).map { card ->
+            val f = card.fixture
+            JSONObject()
+                .put("id", f.id)
+                .put("home", f.homeName)
+                .put("away", f.awayName)
+                .put("homeTla", card.home?.tla ?: JSONObject.NULL)
+                .put("awayTla", card.away?.tla ?: JSONObject.NULL)
+                .put("competition", f.competitionName)
+                .put("kickoff", f.kickoff.toEpochMilliseconds())
+                .put("live", f.kickoff <= now)
+                .put("reminder", card.reminder)
+        }
+        return JSONObject().put("follows", graph.follows().size).put("matches", JSONArray(matches))
+    }
+
+    /** The same matches as a calendar file (RFC 5545) for the phone's calendar: "Add all" adds them, adding again updates. */
+    suspend fun calendar(): String {
+        val now = Clock.System.now()
+        val matches = graph.followedMatches(now).map { card ->
+            val f = card.fixture
+            MatchCalendar.Match(f.id, context.getString(R.string.match_teams, f.homeName, f.awayName), f.competitionName, f.kickoff)
+        }
+        return MatchCalendar.ics(matches, now)
+    }
+
+    /** A reminder set or cleared from the phone; false when the match is not one Luz has. */
+    suspend fun setReminder(id: String, on: Boolean): Boolean {
+        if (graph.fixture(id) == null) return false
+        graph.remind(id, on)
+        return true
     }
 
     suspend fun group(id: String): JSONObject? {

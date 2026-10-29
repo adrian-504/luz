@@ -57,5 +57,8 @@ lists.
   amber countdown (then "Live now") and the two team plates where the picture goes. Keys (Design's ruling): the stage
   holds nothing the remote reaches, as on every other card; OK on the match card opens "In your guide", holding OK gives
   Remind me and Follow. Home's first-row time on the Bbox is NOT YET MEASURED (go/no-go: no more than 50 ms slower).
+- League tables (4.7, s2): from a followed league in Settings → Sport (OK; holding OK unfollows) or a match's menu.
+  Teams unfollowed in Settings stay listed as "Follow again" until the page is left. The phone's Matches tab and calendar
+  (s3): routes built (ADR-0050); the page is Design's.
 - Screens (follow, Matches and "In your guide" shelves, reminders, Sport now, match-day Home, the table, the phone's
   calendar) follow in this round, each under its own go/no-go in the round 4 brief.

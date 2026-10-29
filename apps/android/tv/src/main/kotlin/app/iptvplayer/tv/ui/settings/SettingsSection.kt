@@ -30,6 +30,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,6 +61,7 @@ import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.storage.ArrangedGroup
 import app.iptvplayer.storage.DetailCoverage
 import app.iptvplayer.storage.FollowKind
+import app.iptvplayer.storage.Followed
 import app.iptvplayer.tv.BuildConfig
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.AppGraph
@@ -440,6 +442,8 @@ private fun SportPane(focus: FocusMemory, onFindTeam: () -> Unit, onOpenTable: (
     var entering by remember { mutableStateOf(false) }
     var checking by remember { mutableStateOf(false) }
     var refused by remember { mutableStateOf<String?>(null) }
+    // Teams unfollowed on this visit stay in place as "Follow again", so a slip is undone in one press (Design).
+    val dropped = remember { mutableStateListOf<Followed>() }
     LaunchedEffect(revision, checking) { status = graph.sportStatus() }
     PaneHeading(stringResource(R.string.settings_sport))
     Text(stringResource(R.string.settings_sport_intro), style = MaterialTheme.typography.bodyMedium, color = Tokens.textSecondary)
@@ -483,7 +487,8 @@ private fun SportPane(focus: FocusMemory, onFindTeam: () -> Unit, onOpenTable: (
             }
         }
     }
-    if (current.follows.isEmpty()) {
+    val listed = current.follows + dropped.filter { gone -> current.follows.none { it.ref == gone.ref && it.kind == gone.kind } }
+    if (listed.isEmpty()) {
         Text(stringResource(R.string.sport_empty_title), style = MaterialTheme.typography.titleMedium, color = Tokens.textPrimary)
         Text(stringResource(R.string.sport_empty_body), style = MaterialTheme.typography.bodyMedium, color = Tokens.textSecondary)
         ActionButton(
@@ -494,12 +499,24 @@ private fun SportPane(focus: FocusMemory, onFindTeam: () -> Unit, onOpenTable: (
         )
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.space1)) {
-            current.follows.forEach { followed ->
+            listed.forEach { followed ->
                 // A team: OK unfollows (asks nothing). A league: OK opens its table, holding OK unfollows (Design 4.8).
                 val league = followed.kind == FollowKind.COMPETITION
-                val unfollow: () -> Unit = { scope.launch { graph.unfollow(followed.kind, followed.ref) } }
+                val gone = followed in dropped && current.follows.none { it.ref == followed.ref && it.kind == followed.kind }
+                val unfollow: () -> Unit = {
+                    if (!league) dropped += followed
+                    scope.launch { graph.unfollow(followed.kind, followed.ref) }
+                }
+                val followAgain: () -> Unit = {
+                    graph.follow(followed.kind, followed.ref, followed.name)
+                    dropped -= followed
+                }
                 LuzRow(
-                    onClick = if (league) ({ onOpenTable(followed.ref) }) else unfollow,
+                    onClick = when {
+                        gone -> followAgain
+                        league -> ({ onOpenTable(followed.ref) })
+                        else -> unfollow
+                    },
                     onLongClick = if (league) unfollow else null,
                     modifier = Modifier.rememberedFocus(focus, SettingsTags.followed(followed.ref)),
                 ) {
@@ -511,15 +528,23 @@ private fun SportPane(focus: FocusMemory, onFindTeam: () -> Unit, onOpenTable: (
                         overflow = TextOverflow.Ellipsis,
                     )
                     // The favourite's mark: one sign for "I keep this", everywhere (Design 4.8).
-                    Icon(
-                        LuzIcons.StarFilled,
-                        contentDescription = null,
-                        tint = Tokens.accent,
-                        modifier = Modifier.padding(start = Tokens.space2).size(FOLLOW_MARK),
-                    )
+                    if (!gone) {
+                        Icon(
+                            LuzIcons.StarFilled,
+                            contentDescription = null,
+                            tint = Tokens.accent,
+                            modifier = Modifier.padding(start = Tokens.space2).size(FOLLOW_MARK),
+                        )
+                    }
                     Spacer(Modifier.weight(1f))
                     Text(
-                        stringResource(if (league) R.string.settings_sport_table else R.string.unfollow),
+                        stringResource(
+                            when {
+                                gone -> R.string.sport_follow_again
+                                league -> R.string.settings_sport_table
+                                else -> R.string.unfollow
+                            },
+                        ),
                         style = MaterialTheme.typography.labelMedium,
                         color = Tokens.textSecondary,
                     )

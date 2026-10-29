@@ -341,6 +341,9 @@
     <string name="search_matches">Matches</string>
     <string name="league_table">%1$s table</string>
     <string name="settings_sport_table">Table</string>
+    <string name="table_updated_today">today %1$s</string>
+    <string name="table_updated_yesterday">yesterday %1$s</string>
+    <string name="sport_follow_again">Follow again</string>
     <plurals name="table_after">
         <item quantity="one">After %1$d match · updated %2$s</item>
         <item quantity="other">After %1$d matches · updated %2$s</item>

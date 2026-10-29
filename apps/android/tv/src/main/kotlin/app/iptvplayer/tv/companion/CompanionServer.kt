@@ -111,6 +111,11 @@ class CompanionServer(
                 // Pictures change rarely: the phone may keep them for a day, privately.
                 respond(out, 200, picture.type, picture.bytes, cache = "private, max-age=86400")
             }
+            // The followed matches for the phone's calendar (s3): a file it can add, never a channel.
+            method == "GET" && path == "/api/calendar.ics" -> {
+                val ics = runBlocking { runCatching { library.calendar() }.getOrNull() } ?: return respond(out, 404, JSON, ERROR_NOT_FOUND)
+                respond(out, 200, CALENDAR, ics.toByteArray())
+            }
             method == "GET" && path.startsWith("/api/") -> {
                 val answer = runBlocking {
                     runCatching {
@@ -124,6 +129,7 @@ class CompanionServer(
                             "/api/series" -> library.series(query["id"].orEmpty())
                             // Films and series on the phone (2c, Design 2.16).
                             "/api/library" -> library.library(query["kind"].orEmpty())
+                            "/api/sport" -> library.sport()
                             "/api/browse" -> library.browse(
                                 query["kind"].orEmpty(),
                                 query["filter"]?.ifEmpty { null } ?: "all",
@@ -202,6 +208,12 @@ class CompanionServer(
                 if (!done) return respond(out, 404, JSON, ERROR_NOT_FOUND)
             }
             "/api/list" -> return listChange(body, out)
+            "/api/reminder" -> {
+                val done = runBlocking {
+                    runCatching { library.setReminder(body.optString("id"), body.optBoolean("on")) }.getOrDefault(false)
+                }
+                if (!done) return respond(out, 404, JSON, ERROR_NOT_FOUND)
+            }
             "/api/favorite" -> {
                 if (body.optString("kind") != "channel") return respond(out, 400, JSON, ERROR_MISSING)
                 val on = body.optBoolean("on")
@@ -501,6 +513,7 @@ class CompanionServer(
         const val TEXT = "text/plain; charset=utf-8"
         const val HTML = "text/html; charset=utf-8"
         const val JSON = "application/json; charset=utf-8"
+        const val CALENDAR = "text/calendar; charset=utf-8"
         const val MAX_SEEK_MS = 60_000L
         val ERROR_HIDDEN = """{"error":"luz-hidden"}""".toByteArray()
         val ERROR_NOT_FOUND = """{"error":"not-found"}""".toByteArray()

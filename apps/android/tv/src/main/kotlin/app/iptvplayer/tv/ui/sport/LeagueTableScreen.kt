@@ -81,7 +81,7 @@ fun LeagueTableScreen(competition: String) {
         val played = shown.rows.maxOfOrNull { it.played }
         if (played != null && shown.fetchedAt != null) {
             Text(
-                pluralStringResource(R.plurals.table_after, played, played, shortTime(shown.fetchedAt)),
+                pluralStringResource(R.plurals.table_after, played, played, updatedWhen(shown.fetchedAt)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = Tokens.textSecondary,
             )
@@ -139,7 +139,13 @@ fun LeagueTableScreen(competition: String) {
                         modifier = Modifier.weight(1f),
                     )
                     Cell(row.played.toString(), NUMBER_WIDTH, words)
-                    Cell(if (row.goalDiff > 0) "+${row.goalDiff}" else row.goalDiff.toString(), NUMBER_WIDTH, words)
+                    // A true minus (U+2212), as wide as the plus, so the column lines up (Design).
+                    val goals = when {
+                        row.goalDiff > 0 -> "+${row.goalDiff}"
+                        row.goalDiff < 0 -> "\u2212${-row.goalDiff}"
+                        else -> "0"
+                    }
+                    Cell(goals, NUMBER_WIDTH, words)
                     Cell(row.points.toString(), NUMBER_WIDTH, words)
                 }
             }
@@ -169,3 +175,18 @@ private val CREST = 24.dp
 private val POSITION_WIDTH = 28.dp
 private val NUMBER_WIDTH = 48.dp
 private const val CONTEXT_ROWS = 3
+
+/** "today 23:08", "yesterday 23:08", or the date and time beyond that, so an old table never looks fresh (Design 4.7). */
+@Composable
+private fun updatedWhen(at: kotlin.time.Instant): String {
+    val zone = java.time.ZoneId.systemDefault()
+    val day = java.time.Instant.ofEpochMilli(at.toEpochMilliseconds()).atZone(zone).toLocalDate()
+    val today = java.time.LocalDate.now(zone)
+    return when (day) {
+        today -> stringResource(R.string.table_updated_today, shortTime(at))
+        today.minusDays(1) -> stringResource(R.string.table_updated_yesterday, shortTime(at))
+        else -> stringResource(R.string.match_when_date, UPDATED_DATE.format(day), shortTime(at))
+    }
+}
+
+private val UPDATED_DATE: java.time.format.DateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("d MMM")

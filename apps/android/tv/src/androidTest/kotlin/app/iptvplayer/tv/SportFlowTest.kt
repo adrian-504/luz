@@ -31,6 +31,7 @@ import app.iptvplayer.tv.ui.sport.LeagueTableTags
 import app.iptvplayer.tv.ui.sport.MatchGuideTags
 import app.iptvplayer.tv.ui.theme.LuzPromptTags
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -176,6 +177,11 @@ class SportFlowTest {
         // OK on a followed name unfollows it, asking nothing.
         rule.onNodeWithTag(SettingsTags.followed("9065")).performClick()
         rule.waitUntil(10_000) { runBlocking { graph.follows() }.isEmpty() }
+        // The row stays for this visit, as "Follow again": a slip is undone in one press.
+        rule.waitUntil(5_000) { rule.onAllNodes(hasText("Follow again"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        shot("r4-settings-sport-follow-again")
+        rule.onNodeWithTag(SettingsTags.followed("9065")).performClick()
+        rule.waitUntil(10_000) { runBlocking { graph.isFollowed(FollowKind.TEAM, "9065") } }
     }
 
     @Test
@@ -319,5 +325,40 @@ class SportFlowTest {
         rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(LeagueTableTags.SCREEN)).fetchSemanticsNodes().isNotEmpty() }
         awaitFocus(LeagueTableTags.row("9066"))
         shot("r4-league-table")
+    }
+
+    /** The phone's Matches tab and calendar (s3): followed matches as JSON and as a calendar file, and reminders. */
+    @Test
+    fun aPairedPhoneSeesTheMatchesAndTheirCalendar() {
+        assertNull(runBlocking { graph.setSportToken(TestPanel.FOOTBALL_TOKEN) })
+        graph.follow(FollowKind.TEAM, "9065", "Example City FC")
+        rule.waitUntil(60_000) { runBlocking { graph.fixture("70001") } != null }
+        val companion = graph.companion
+        companion.setOn(true)
+        try {
+            val token = JSONObject(
+                companionCall("/api/pair", """{"code":"${companion.pairing.code()}","name":"Test phone"}""").second,
+            ).getString("token")
+            assertEquals(401, companionGet("/api/calendar.ics", "wrong").first)
+
+            val sport = JSONObject(companionGet("/api/sport", token).second)
+            assertEquals(1, sport.getInt("follows"))
+            val matches = sport.getJSONArray("matches")
+            val ids = (0 until matches.length()).map { matches.getJSONObject(it).getString("id") }
+            assertTrue(ids.containsAll(listOf("70000", "70001")))
+            assertTrue("no channel, ever", (0 until matches.length()).none { matches.getJSONObject(it).has("channel") })
+
+            val (status, ics) = companionGet("/api/calendar.ics", token)
+            assertEquals(200, status)
+            assertTrue(ics.startsWith("BEGIN:VCALENDAR\r\n"))
+            assertTrue("UID:70001@luz.invalid" in ics)
+
+            assertEquals(200, companionCall("/api/reminder", """{"token":"$token","id":"70001","on":true}""").first)
+            assertTrue(runBlocking { graph.hasReminder("70001") })
+            assertEquals(404, companionCall("/api/reminder", """{"token":"$token","id":"nope","on":true}""").first)
+        } finally {
+            companion.pairing.phones.value.forEach { companion.pairing.forget(it.id) }
+            companion.setOn(false)
+        }
     }
 }

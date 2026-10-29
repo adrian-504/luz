@@ -461,6 +461,22 @@
   .pgrid .sk-post { aspect-ratio: 2 / 3; }
   .pgrid .sk-line { height: 10px; width: 80%; margin-top: 9px; border-radius: 5px; }
 
+  /* Matches (round 4, 4.9) */
+  .matches { padding: 18px 16px 0; }
+  .matches h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+  .matches .intro { color: var(--text-2); font-size: 15px; margin: 4px 0 16px; }
+  .matches > .btn.primary { display: flex; width: 100%; text-decoration: none; }
+  .matches .day { font-size: 15px; font-weight: 600; color: var(--text-2); margin: 24px 0 2px; }
+  .match { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--hair); }
+  .m-main { flex: 1; min-width: 0; }
+  .m-when { font-size: 13px; color: var(--text-3); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .m-when .live-dot { margin-right: 0; }
+  .m-live { color: var(--text); font-weight: 600; }
+  .m-title { font-size: 17px; font-weight: 600; margin-top: 2px; overflow-wrap: anywhere; }
+  .m-rem { font-size: 13px; color: var(--amber); display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  .m-rem svg { width: 15px; height: 15px; }
+  .match .btn { height: 40px; padding: 0 16px; flex: none; text-decoration: none; }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition-duration: 0.01ms !important; animation: none !important; }
   }
@@ -495,6 +511,8 @@
   <symbol id="i-star-line" viewBox="0 0 24 24"><path d="M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 17l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6.5h11M9 12h11M9 17.5h7M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01" stroke-width="2"/></symbol>
   <symbol id="i-remove" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-ball" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5l3.8 2.8-1.5 4.4H9.7l-1.5-4.4z"/><path d="M12 3.5v4M15.8 10.3l4-1.3M14.3 14.7l2.4 3.4M9.7 14.7l-2.4 3.4M8.2 10.3l-4-1.3"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z"/><path d="M10 20.5h4"/></symbol>
   <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M8 14h8"/></symbol>
 </svg>
 
@@ -552,6 +570,10 @@
       <div class="lib-page" id="lib-page" hidden></div>
     </section>
 
+    <section id="pane-matches" role="tabpanel" aria-labelledby="tab-matches" hidden>
+      <div class="matches" id="matches-body"></div>
+    </section>
+
     <section id="pane-remote" role="tabpanel" aria-labelledby="tab-remote" hidden>
       <div class="remote">
         <div class="ring" id="ring" aria-label="Remote pad">
@@ -589,6 +611,7 @@
 
   <nav class="tabs" role="tablist">
     <button role="tab" id="tab-browse" aria-selected="true" aria-controls="pane-browse"><svg class="i"><use href="#i-browse"/></svg>Browse</button>
+    <button role="tab" id="tab-matches" aria-selected="false" aria-controls="pane-matches" hidden><svg class="i"><use href="#i-ball"/></svg>Matches</button>
     <button role="tab" id="tab-remote" aria-selected="false" aria-controls="pane-remote"><svg class="i"><use href="#i-remote"/></svg>Remote</button>
   </nav>
 
@@ -846,6 +869,7 @@
       setStatus("on", "Connected");
       if (!home || Date.now() - homeLoadedAt > 60000) loadHome();
       if (browseSeg !== "home") renderLib(browseSeg, true);
+      loadSport();
     };
     events.onerror = () => {
       setStatus("off", "Can't reach Luz");
@@ -2344,6 +2368,91 @@
 
   paintBrowse(false);
 
+  // ---------- Matches (round 4, 4.9): followed matches for 14 days, to the phone's calendar ----------
+  const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const IS_ANDROID = /Android/.test(navigator.userAgent);
+  const MATCH_LENGTH_MS = 135 * 60000;
+  let sportData = null;
+  let sportAt = 0;
+
+  async function loadSport() {
+    try { sportData = await get("/api/sport"); sportAt = Date.now(); } catch (e) { return; }
+    const show = (sportData.follows || 0) > 0;
+    $("tab-matches").hidden = !show;
+    if (!show && !$("pane-matches").hidden) selectTab("browse");
+    else if (!$("pane-matches").hidden) renderMatches();
+  }
+
+  function matchDay(ms) {
+    return new Date(ms).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+  }
+
+  function renderMatches() {
+    const box = $("matches-body");
+    box.replaceChildren();
+    box.appendChild(el("h2", null, "Matches"));
+    box.appendChild(el("p", "intro", "Teams and leagues you follow, next 14 days."));
+    const matches = (sportData && sportData.matches) || [];
+    if (!matches.length) {
+      box.appendChild(el("p", "intro", "No matches in the next two weeks."));
+      return;
+    }
+    // iPhone (and computers): one file adds them all; adding again updates rather than doubling.
+    if (!IS_ANDROID) {
+      const all = el("a", "btn primary", "Add all to calendar");
+      all.href = "/api/calendar.ics?token=" + encodeURIComponent(token);
+      all.addEventListener("click", () => {
+        buzz();
+        setTimeout(() => {
+          all.textContent = "Added to your calendar";
+          setTimeout(() => { all.textContent = "Add all to calendar"; }, 3000);
+        }, 400);
+      });
+      box.appendChild(all);
+    }
+    let day = null;
+    matches.forEach((m) => safely(() => {
+      const d = matchDay(m.kickoff);
+      if (d !== day) { day = d; box.appendChild(el("div", "day", d)); }
+      box.appendChild(matchRow(m));
+    }));
+  }
+
+  function matchRow(m) {
+    const row = el("div", "match");
+    const main = el("div", "m-main");
+    const when = el("div", "m-when");
+    if (m.live) {
+      when.appendChild(el("span", null, m.competition + " ·"));
+      when.appendChild(el("span", "live-dot"));
+      when.appendChild(el("span", "m-live", "Live now"));
+    } else {
+      when.textContent = m.competition + " · " + new Date(m.kickoff).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    }
+    when.dir = "auto";
+    main.appendChild(when);
+    const title = el("div", "m-title", m.home + " – " + m.away); title.dir = "auto";
+    main.appendChild(title);
+    if (m.reminder) {
+      const rem = el("div", "m-rem");
+      rem.appendChild(icon("bell"));
+      rem.appendChild(el("span", null, "Reminder set on the TV"));
+      main.appendChild(rem);
+    }
+    row.appendChild(main);
+    // Android: "Add" opens the phone's own calendar with the match filled in. Nothing leaves the phone.
+    if (IS_ANDROID && !m.live) {
+      const add = el("a", "btn", "Add");
+      add.href = "intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event" +
+        ";S.title=" + encodeURIComponent(m.home + " – " + m.away) +
+        ";S.description=" + encodeURIComponent(m.competition) +
+        ";l.beginTime=" + m.kickoff + ";l.endTime=" + (m.kickoff + MATCH_LENGTH_MS) + ";end";
+      add.setAttribute("aria-label", "Add " + m.home + " – " + m.away + " to your calendar");
+      row.appendChild(add);
+    }
+    return row;
+  }
+
   // ---------- What's playing ----------
   function showPlaying(p) {
     playing = p.title === undefined ? null : p;
@@ -2760,7 +2869,7 @@
 
   // ---------- Tabs ----------
   function selectTab(name) {
-    ["browse", "remote"].forEach((t) => {
+    ["browse", "matches", "remote"].forEach((t) => {
       const on = t === name;
       $("tab-" + t).setAttribute("aria-selected", on ? "true" : "false");
       $("pane-" + t).hidden = !on;
@@ -2768,10 +2877,12 @@
     $("search-box").hidden = name !== "browse";
     window.scrollTo(0, 0);
     if (name === "browse" && Date.now() - homeLoadedAt > 30000) loadHome();
+    if (name === "matches") { if (sportData) renderMatches(); if (Date.now() - sportAt > 60000) loadSport(); }
     try { sessionStorage.setItem("luz-tab", name); } catch (e) {}
   }
   $("tab-browse").addEventListener("click", () => selectTab("browse"));
   $("tab-remote").addEventListener("click", () => selectTab("remote"));
+  $("tab-matches").addEventListener("click", () => selectTab("matches"));
   try { if (sessionStorage.getItem("luz-tab") === "remote") selectTab("remote"); } catch (e) {}
 
   // Coming back to the page (the phone was locked, or another app was in front) brings the library up to date.

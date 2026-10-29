@@ -124,3 +124,7 @@ companion must work on any phone, the owner's or a guest's, without installing a
   nothing in the companion needs the phone to stream to the TV faster than a request per keystroke.
 - **Wait for the iPhone app.** It is paused, and it would leave out every other phone.
 - **Always on.** Simpler, but a server listening on the home network should be the viewer's choice.
+- Round 4 (ADR-0057, s3): `GET /api/sport` (followed matches for 14 days, no channel), `GET /api/calendar.ics` (the same
+  matches as RFC 5545 text; event ids are the matches' ids, so adding again updates) and `POST /api/reminder`, behind the
+  same pairing check. Whether the owner's phone adds the file from the home Wi-Fi in under three presses is NOT YET
+  TRIED (the s3 go/no-go, in the Bbox session).

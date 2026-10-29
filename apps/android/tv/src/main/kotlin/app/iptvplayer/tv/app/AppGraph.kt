@@ -826,6 +826,21 @@ class AppGraph(context: Context) {
         MatchCard(fixture, sportStore.team(fixture.homeRef), sportStore.team(fixture.awayRef), reminded)
     }
 
+    /**
+     * The phone's Matches tab and calendar (s3): the matches of followed teams and competitions from those under way to
+     * two weeks ahead, soonest first. No channels.
+     */
+    suspend fun followedMatches(now: Instant): List<MatchCard> = io {
+        val follows = sportStore.follows()
+        val teams = follows.filter { it.kind == FollowKind.TEAM }.map { it.ref }.toSet()
+        val leagues = follows.filter { it.kind == FollowKind.COMPETITION }.map { it.ref }.toSet()
+        if (teams.isEmpty() && leagues.isEmpty()) return@io emptyList()
+        val reminded = sportStore.reminders().map { it.id }.toSet()
+        sportStore.fixtures(now - MATCH_LENGTH, now + MATCH_DAYS.days)
+            .filter { it.homeRef in teams || it.awayRef in teams || it.competition in leagues }
+            .map { MatchCard(it, sportStore.team(it.homeRef), sportStore.team(it.awayRef), it.id in reminded) }
+    }
+
     /** A match as a card shows it, read again (its reminder may have changed). */
     suspend fun matchCard(id: String): MatchCard? = io {
         val fixture = sportStore.fixture(id) ?: return@io null
