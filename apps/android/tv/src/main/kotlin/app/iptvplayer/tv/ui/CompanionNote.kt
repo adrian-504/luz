@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -100,6 +101,14 @@ private fun what(note: CompanionNotice): String {
         NoticeKind.MY_LIST_ON -> stringResource(R.string.phone_note_mylist_on)
         NoticeKind.MY_LIST_OFF -> stringResource(R.string.phone_note_mylist_off)
         NoticeKind.TYPED -> stringResource(R.string.phone_note_typed)
+        NoticeKind.FAVOURITE_ON -> stringResource(R.string.note_fav_on, detail)
+        NoticeKind.FAVOURITE_OFF -> stringResource(R.string.note_fav_off, detail)
+        NoticeKind.LIST_ADD -> stringResource(R.string.note_list_add, detail, note.extra.orEmpty())
+        NoticeKind.LIST_REMOVE -> stringResource(R.string.note_list_remove, detail, note.extra.orEmpty())
+        NoticeKind.LIST_MANY -> pluralStringResource(R.plurals.note_list_many, note.count, note.count, note.extra.orEmpty())
+        NoticeKind.LIST_NEW -> stringResource(R.string.note_list_new, detail)
+        NoticeKind.LIST_RENAMED -> stringResource(R.string.note_list_renamed, detail, note.extra.orEmpty())
+        NoticeKind.LIST_DELETED -> stringResource(R.string.note_list_deleted, detail)
     }
 }
 

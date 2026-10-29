@@ -117,7 +117,9 @@ class CompanionServer(
                         when (path) {
                             "/api/home" -> library.home()
                             "/api/channels" -> library.group(query["group"].orEmpty())
-                            "/api/search" -> library.search(query["q"].orEmpty())
+                            "/api/search" -> library.search(query["q"].orEmpty(), query["list"]?.ifEmpty { null })
+                            "/api/list" -> library.list(query["id"].orEmpty())
+                            "/api/item" -> library.item(query["kind"].orEmpty(), query["id"].orEmpty())
                             "/api/movie" -> library.movie(query["id"].orEmpty())
                             "/api/series" -> library.series(query["id"].orEmpty())
                             else -> null
@@ -191,6 +193,16 @@ class CompanionServer(
                 }
                 if (!done) return respond(out, 404, JSON, ERROR_NOT_FOUND)
             }
+            "/api/list" -> return listChange(body, out)
+            "/api/favorite" -> {
+                if (body.optString("kind") != "channel") return respond(out, 400, JSON, ERROR_MISSING)
+                val on = body.optBoolean("on")
+                val done = runBlocking {
+                    runCatching { library.setInList(CompanionLibrary.FAVOURITES, "channel", body.optString("id"), on) }.getOrNull()
+                }
+                if (done !is ListResult.Done) return respond(out, 404, JSON, ERROR_NOT_FOUND)
+                notifyFavourite(body.optString("id"), on)
+            }
             "/api/provider" -> {
                 // The password and the link are read here and handed to the open form; they are never logged, stored
                 // on the phone's behalf or sent back in any event (ADR-0050, step 4, the owner's option B).
@@ -209,7 +221,7 @@ class CompanionServer(
                         .takeIf { it.server.isNotEmpty() && it.user.isNotEmpty() && it.password.isNotEmpty() }
                     "link" -> ProviderEntry.Link(body.optString("url").trim()).takeIf { it.url.isNotEmpty() }
                     else -> null
-                } ?: return respond(out, 400, JSON, """{"error":"missing"}""".toByteArray())
+                } ?: return respond(out, 400, JSON, ERROR_MISSING)
                 onMain { if (CompanionHub.providerForm.value?.id == slot.id) slot.submit(entry) }
             }
             "/api/key" -> {
@@ -233,6 +245,73 @@ class CompanionServer(
         respond(out, 200, JSON, """{"ok":true}""".toByteArray())
     }
 
+    /**
+     * The phone's changes to the viewer's lists (Design 2.8–2.12): make one (named, or "New list", "New list 2"…, with
+     * its first item), rename, delete, and put things in or take them out. The TV shows a note for each (2.13).
+     */
+    private fun listChange(body: JSONObject, out: OutputStream) {
+        val id = body.optString("id")
+        val result = runBlocking {
+            runCatching {
+                when (body.optString("action")) {
+                    "create" -> library.createList(
+                        body.optString("title").ifEmpty { null },
+                        body.optJSONObject("add")?.let { it.optString("kind") to it.optString("id") },
+                    )
+                    "rename" -> library.renameList(id, body.optString("title"))
+                    "delete" -> library.deleteList(id)
+                    "add" -> library.setInList(id, body.optString("kind"), body.optString("item"), on = true)
+                    "remove" -> library.setInList(id, body.optString("kind"), body.optString("item"), on = false)
+                    else -> ListResult.Missing
+                }
+            }.getOrDefault(ListResult.NotFound)
+        }
+        when (result) {
+            is ListResult.NameTaken ->
+                return respond(out, 409, JSON, JSONObject().put("error", "name-taken").put("title", result.title).toString().toByteArray())
+            ListResult.NotFound -> return respond(out, 404, JSON, ERROR_NOT_FOUND)
+            ListResult.Missing -> return respond(out, 400, JSON, ERROR_MISSING)
+            is ListResult.Done -> {
+                val title = result.title
+                val item = body.optString("item")
+                when (body.optString("action")) {
+                    "create" -> CompanionHub.notify(NoticeKind.LIST_NEW, title)
+                    "rename" -> CompanionHub.notify(NoticeKind.LIST_RENAMED, result.previous, title)
+                    "delete" -> CompanionHub.notify(NoticeKind.LIST_DELETED, title)
+                    "add", "remove" -> {
+                        val on = body.optString("action") == "add"
+                        if (result.id == CompanionLibrary.FAVOURITES) {
+                            notifyFavourite(item, on)
+                        } else {
+                            val name = runBlocking { runCatching { library.itemName(body.optString("kind"), item) }.getOrNull() }
+                            if (name != null && title != null) {
+                                if (on) {
+                                    CompanionHub.notifyAdded(
+                                        name,
+                                        title,
+                                        result.id,
+                                    )
+                                } else {
+                                    CompanionHub.notify(NoticeKind.LIST_REMOVE, name, title)
+                                }
+                            }
+                        }
+                    }
+                }
+                val answer = JSONObject().put(
+                    "ok",
+                    true,
+                ).put("id", result.id).put("title", title ?: JSONObject.NULL).put("count", result.count)
+                respond(out, 200, JSON, answer.toString().toByteArray())
+            }
+        }
+    }
+
+    private fun notifyFavourite(channel: String, on: Boolean) {
+        val name = runBlocking { runCatching { library.itemName("channel", channel) }.getOrNull() } ?: return
+        CompanionHub.notify(if (on) NoticeKind.FAVOURITE_ON else NoticeKind.FAVOURITE_OFF, name)
+    }
+
     /** Tells the phone about the field under the remote and what is playing whenever they change, and that the TV is there. */
     private fun streamEvents(out: OutputStream, token: String) {
         out.write(
@@ -249,6 +328,8 @@ class CompanionServer(
         var sentScreen: Boolean? = null
         var sentProgress: ProviderProgress? = null
         var sentForm: String? = null
+        var seenRevision = library.revision
+        var sentLists = runBlocking { runCatching { library.listsStamp() }.getOrNull() }
         var lastWriteMs = 0L
         // Ends when the server stops or the viewer forgets this phone in Settings.
         while (!socket.isClosed && pairing.allows(token)) {
@@ -294,6 +375,17 @@ class CompanionServer(
                 send(out, "provider-form", form)
                 sentForm = form
                 lastWriteMs = now
+            }
+            // Lists and favourites, changed on the TV or a phone (2b): only a nudge, the phone fetches what it shows.
+            val revision = library.revision
+            if (revision != seenRevision) {
+                seenRevision = revision
+                val lists = runBlocking { runCatching { library.listsStamp() }.getOrNull() }
+                if (lists != sentLists) {
+                    send(out, "lists", "{}")
+                    sentLists = lists
+                    lastWriteMs = now
+                }
             }
             if (now - lastWriteMs > HEARTBEAT_MS) {
                 // A comment line: keeps the connection open through home routers and shows a dead phone as a failed write.
@@ -402,6 +494,7 @@ class CompanionServer(
         const val MAX_SEEK_MS = 60_000L
         val ERROR_HIDDEN = """{"error":"luz-hidden"}""".toByteArray()
         val ERROR_NOT_FOUND = """{"error":"not-found"}""".toByteArray()
+        val ERROR_MISSING = """{"error":"missing"}""".toByteArray()
         val ERROR_UNPAIRED = """{"error":"not-paired"}""".toByteArray()
         val REASONS = mapOf(
             200 to "OK", 400 to "Bad Request", 401 to "Unauthorized", 403 to "Forbidden", 404 to "Not Found",

@@ -86,10 +86,21 @@ enum class NoticeKind {
     MY_LIST_ON,
     MY_LIST_OFF,
     TYPED,
+    FAVOURITE_ON,
+    FAVOURITE_OFF,
+    LIST_ADD,
+    LIST_REMOVE,
+    LIST_MANY,
+    LIST_NEW,
+    LIST_RENAMED,
+    LIST_DELETED,
 }
 
-/** One note: what changed, the name it is about (a title, a language), and when, so a repeat shows again. */
-data class CompanionNotice(val kind: NoticeKind, val detail: String?, val atMs: Long)
+/**
+ * One note: what changed, the name it is about (a title, a language), the list it went to or the list's new name
+ * ([extra]), how many for "3 added to My sports" ([count]), and when, so a repeat shows again.
+ */
+data class CompanionNotice(val kind: NoticeKind, val detail: String?, val atMs: Long, val extra: String? = null, val count: Int = 0)
 
 /**
  * A provider's login or playlist link typed on the phone (ADR-0050, step 4). Prints as its kind only, so the password or
@@ -170,9 +181,29 @@ object CompanionHub {
     /** False when Luz is not on screen or nothing plays, so the phone can say so. */
     fun act(action: CompanionAction): Boolean = mutableOnScreen.value && mutablePlaying.value != null && mutableActions.tryEmit(action)
 
-    fun notify(kind: NoticeKind, detail: String? = null) {
-        mutableNotice.value = CompanionNotice(kind, detail, System.currentTimeMillis())
+    fun notify(kind: NoticeKind, detail: String? = null, extra: String? = null) {
+        mutableNotice.value = CompanionNotice(kind, detail, System.currentTimeMillis(), extra)
     }
+
+    /**
+     * "beIN Sports 3 added to My sports"; several adds to the same list within two seconds become one note, "3 added to My
+     * sports" (Design 2.13). Nothing while the TV itself shows that list being filled ([addingTo]): the screen already does.
+     */
+    fun notifyAdded(item: String, list: String, listId: String) {
+        if (addingTo.value == listId) return
+        val now = System.currentTimeMillis()
+        mutableNotice.update { last ->
+            val recent = last != null && last.extra == list && now - last.atMs < MERGE_MS
+            when {
+                recent && last.kind == NoticeKind.LIST_ADD -> CompanionNotice(NoticeKind.LIST_MANY, null, now, list, 2)
+                recent && last.kind == NoticeKind.LIST_MANY -> CompanionNotice(NoticeKind.LIST_MANY, null, now, list, last.count + 1)
+                else -> CompanionNotice(NoticeKind.LIST_ADD, item, now, list)
+            }
+        }
+    }
+
+    /** The id of the list the TV's own "Adding to …" screen is filling, or null (Design 2.9). */
+    val addingTo = MutableStateFlow<String?>(null)
 
     private val mutableProviderForm = MutableStateFlow<ProviderFormSlot?>(null)
 
@@ -219,4 +250,5 @@ object CompanionHub {
     const val FAILED = "failed"
 
     private const val KEY_BUFFER = 16
+    private const val MERGE_MS = 2_000L
 }

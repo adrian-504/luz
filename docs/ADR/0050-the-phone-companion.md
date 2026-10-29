@@ -66,6 +66,18 @@ companion must work on any phone, the owner's or a guest's, without installing a
      the audio and subtitle choices the player itself offers (`POST /api/track`, only ids the TV listed). After the
      phone changes something, the TV shows a small note at the top for two seconds, such as *Subtitles on · from your
      phone* (`CompanionNote`), so nobody in the room wonders why the picture changed; the arrow pad gives no note.
+   - **2b, favourites and lists from the phone** (built 2026-10-29; Design 2.8, 2.10–2.13; the owner's words of
+     2026-10-29, "there should be a way for me to create lists and set favorites from my phone too"). The viewer's own
+     lists (the word everywhere is now *list*; the provider's sets stay *categories*) live on the TV, in the tables they
+     already had, and the phone shows what the TV holds: *Your lists* and *Favourites* on Browse (`/api/home`), a list's
+     page (`/api/list`), search that says what is already in the list being filled (`/api/search?list=`), and a
+     channel's, film's or series' sheet with its favourite or My List state and its lists ticked (`/api/item`). The phone
+     makes a list (named, or "New list", "New list 2"… until named), renames it, deletes it, puts things in and takes them
+     out (`POST /api/list`), and favourites channels (`POST /api/favorite`); a name already used is refused
+     (`409 name-taken`). A `lists` event tells the phone to fetch again whenever a list or favourite changes on either
+     side. The TV notes each change ("beIN Sports 3 added to My sports · from your phone"), several adds to one list
+     within two seconds as one ("3 added to My sports"). The TV's own menus show the lists with ticks. Making a list on
+     the TV itself (Design 2.9) follows as its own change.
 6. **No encryption on the wire, and what follows from it.** A page on a home-network address cannot have a trusted
    certificate, and browsers only give cryptography to secure pages. So the companion is plain HTTP inside the home, like
    the provider links most viewers already use. In step 1 nothing secret travels except what the viewer types; the
@@ -96,6 +108,7 @@ companion must work on any phone, the owner's or a guest's, without installing a
   (`CompanionSetupTest`, five tests; `LivePlayerTest.thePhoneHearsTheTvNameAndWhatIsPlaying` and
   `aPhoneChangeShowsANoteOnTheTv`) are written and compiled, not run. Changing audio or subtitles from the phone has no
   device test yet: the test provider's films carry one audio track and no subtitles.
+- 2b's device test (`LivePlayerTest.aPhoneMakesAListFillsItAndTheTvSaysSo`) is written and compiled, not run.
 - Anyone on the home network who can read its traffic could read a login sent from the phone (choice B). The same is
   true today of the provider's own plain links, and C would close it.
 

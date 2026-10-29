@@ -301,7 +301,7 @@ fun LiveTvSection(
                     ) { coroutines.launch { graph.setFavorite(channel.id, !channel.isFavorite) } },
                     LuzMenuItem("info", stringResource(R.string.menu_information)) { infoFor = channel to guide },
                     LuzMenuItem("guide", stringResource(R.string.menu_open_guide)) { onOpenGuide(channel.id) },
-                    LuzMenuItem("add-to-group", stringResource(R.string.menu_add_to_group)) { addingToGroup = channel },
+                    LuzMenuItem("add-to-group", stringResource(R.string.menu_add_to_list)) { addingToGroup = channel },
                     LuzMenuItem("hide", stringResource(R.string.menu_hide_channel)) {
                         coroutines.launch { graph.hide(current, CustomisationTarget.CHANNEL, channel.id.value) }
                     },
@@ -312,14 +312,12 @@ fun LiveTvSection(
         addingToGroup?.let { channel ->
             val holding = remember(channel.id, myGroups) { mutableStateOf(emptyList<String>()) }
             LaunchedEffect(channel.id, revision) { holding.value = graph.groupsHolding(current, ContentType.CHANNEL, channel.id.value) }
+            // His lists with ticks (Design 2.10): a channel can be in several; OK puts it in or takes it out.
             LuzMenu(
-                title = channel.label,
+                title = stringResource(R.string.list_add_title, channel.label),
                 items = myGroups.map { group ->
                     val inIt = group.id in holding.value
-                    LuzMenuItem(
-                        group.id,
-                        stringResource(if (inIt) R.string.menu_remove_from else R.string.menu_add_to, group.title),
-                    ) {
+                    LuzMenuItem(group.id, group.title, checked = inIt) {
                         coroutines.launch {
                             if (inIt) {
                                 graph.removeFromGroup(current, group.id, ContentType.CHANNEL, channel.id.value)
@@ -328,7 +326,7 @@ fun LiveTvSection(
                             }
                         }
                     }
-                } + LuzMenuItem("new-group", stringResource(R.string.menu_new_group)) { newGroupFor = channel },
+                } + LuzMenuItem("new-group", stringResource(R.string.list_new_menu)) { newGroupFor = channel },
                 onDismiss = {
                     addingToGroup = null
                     coroutines.launch { returnFocusTo(focus, LiveTags.channel(channel.id)) }
@@ -337,7 +335,7 @@ fun LiveTvSection(
         }
         newGroupFor?.let { channel ->
             LuzPrompt(
-                title = stringResource(R.string.menu_new_group),
+                title = stringResource(R.string.list_new_menu),
                 initial = "",
                 onConfirm = { name ->
                     graph.createGroupWith(current, name, ContentType.CHANNEL, channel.id.value)
@@ -353,8 +351,8 @@ fun LiveTvSection(
             LuzMenu(
                 title = group.title,
                 items = listOf(
-                    LuzMenuItem("rename", stringResource(R.string.menu_rename_group)) { renamingMine = group },
-                    LuzMenuItem("delete", stringResource(R.string.menu_delete_group)) {
+                    LuzMenuItem("rename", stringResource(R.string.menu_rename_list)) { renamingMine = group },
+                    LuzMenuItem("delete", stringResource(R.string.menu_delete_list)) {
                         coroutines.launch {
                             if (scope == ChannelScope.Mine(group.id)) scopeKey = ChannelScope.All.key()
                             graph.deleteGroup(current, group.id)
@@ -369,7 +367,7 @@ fun LiveTvSection(
         }
         renamingMine?.let { group ->
             LuzPrompt(
-                title = stringResource(R.string.menu_rename_group),
+                title = stringResource(R.string.menu_rename_list),
                 initial = group.title,
                 onConfirm = { coroutines.launch { graph.renameGroup(current, group.id, it) } },
                 onClear = null,

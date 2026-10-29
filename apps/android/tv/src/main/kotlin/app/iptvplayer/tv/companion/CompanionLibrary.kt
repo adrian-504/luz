@@ -7,9 +7,11 @@ import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.storage.ChannelRow
+import app.iptvplayer.storage.GroupRow
 import app.iptvplayer.storage.MovieRow
 import app.iptvplayer.storage.NowNextRow
 import app.iptvplayer.storage.SeriesRow
+import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.AppGraph
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
@@ -20,6 +22,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import kotlin.time.Clock
+
+/** What a change to a list came to: done (with the list's name, its old name after a rename, and how many it holds), or why not. */
+sealed interface ListResult {
+    data class Done(val id: String, val title: String?, val count: Int, val previous: String? = null) : ListResult
+    data class NameTaken(val title: String) : ListResult
+    data object NotFound : ListResult
+    data object Missing : ListResult
+}
 
 /** A picture for the phone: its bytes and their type. */
 class CompanionPicture(val bytes: ByteArray, val type: String)
@@ -67,6 +77,8 @@ class CompanionLibrary(private val context: Context, private val graph: AppGraph
                     },
                 ),
             )
+            .put("lists", JSONArray(graph.userGroups(p).map(::listLine)))
+            .put("favourites", favourites.size)
             .put("myList", JSONArray(graph.favoriteMovies(p, ROW).map(::poster) + graph.favoriteSeries(p, ROW).map(::poster)))
             .put("added", JSONArray(graph.recentMovies(p, ROW).map(::poster)))
             .put("newEpisodes", JSONArray(graph.newEpisodeSeries(p, ROW).map(::poster)))
@@ -81,16 +93,169 @@ class CompanionLibrary(private val context: Context, private val graph: AppGraph
             .put("items", channels(p, graph.channels(p, id).take(GROUP_CHANNELS)))
     }
 
-    suspend fun search(query: String): JSONObject {
+    /**
+     * Search, as on the TV. With [list] (a list's id, or [FAVOURITES]), every result says whether it is already in it, for
+     * the phone's Add / Added (Design 2.8); favourites hold channels only, so only channels come back for them.
+     */
+    suspend fun search(query: String, list: String? = null): JSONObject {
         val result = JSONObject().put("query", query)
         val p = playlist()
         if (p == null || query.isBlank()) return result.put("channels", JSONArray()).put("movies", JSONArray()).put("series", JSONArray())
         val found = graph.search(p, query.trim().take(MAX_QUERY), SEARCH)
+        if (list == null) {
+            return result
+                .put("channels", channels(p, found.channels))
+                .put("movies", JSONArray(found.movies.map(::poster)))
+                .put("series", JSONArray(found.series.map(::poster)))
+        }
+        if (list == FAVOURITES) {
+            return result
+                .put("channels", channels(p, found.channels) { it.isFavorite })
+                .put("movies", JSONArray())
+                .put("series", JSONArray())
+        }
+        val held = members(p, list)
         return result
-            .put("channels", channels(p, found.channels))
-            .put("movies", JSONArray(found.movies.map(::poster)))
-            .put("series", JSONArray(found.series.map(::poster)))
+            .put("channels", channels(p, found.channels) { ContentType.CHANNEL to it.id.value in held })
+            .put("movies", JSONArray(found.movies.map { poster(it).put("added", ContentType.MOVIE to it.id in held) }))
+            .put("series", JSONArray(found.series.map { poster(it).put("added", ContentType.SERIES to it.id in held) }))
     }
+
+    /** One of the viewer's lists, or their favourite channels ([FAVOURITES]); null when it is gone. */
+    suspend fun list(id: String): JSONObject? {
+        val p = playlist() ?: return null
+        if (id == FAVOURITES) {
+            return JSONObject().put("id", FAVOURITES).put("title", JSONObject.NULL)
+                .put("channels", channels(p, graph.favoriteChannels(p))).put("movies", JSONArray()).put("series", JSONArray())
+        }
+        val list = graph.userGroups(p).firstOrNull { it.id == id } ?: return null
+        return JSONObject()
+            .put("id", list.id)
+            .put("title", list.title)
+            .put("channels", channels(p, graph.channelsInUserGroup(p, id)))
+            .put("movies", JSONArray(graph.moviesInUserGroup(p, id, LIST_TITLES).map(::poster)))
+            .put("series", JSONArray(graph.seriesInUserGroup(p, id, LIST_TITLES).map(::poster)))
+    }
+
+    /** What the phone's "⋯" sheet needs about one channel, film or series: its favourite or My List state and its lists. */
+    suspend fun item(kind: String, id: String): JSONObject? {
+        val p = playlist() ?: return null
+        val type = type(kind) ?: return null
+        val base = JSONObject().put("kind", kind).put("id", id)
+        when (type) {
+            ContentType.CHANNEL -> {
+                val channel = graph.channelRow(p, ChannelId(id)) ?: return null
+                base.put("title", channel.label).put("number", channel.number ?: JSONObject.NULL)
+                    // The provider's category name is not looked up yet; the phone leaves the line out when it is null.
+                    .put("category", JSONObject.NULL).put("favorite", channel.isFavorite)
+            }
+            ContentType.MOVIE -> graph.movie(p, id)?.let { base.put("title", it.title).put("favorite", it.isFavorite) } ?: return null
+            else -> graph.seriesById(p, id)?.let { base.put("title", it.title).put("favorite", it.isFavorite) } ?: return null
+        }
+        val holding = graph.groupsHolding(p, type, id).toSet()
+        return base.put(
+            "lists",
+            JSONArray(graph.userGroups(p).map { JSONObject().put("id", it.id).put("title", it.title).put("in", it.id in holding) }),
+        )
+    }
+
+    /** The name of a channel, film or series, for the TV's note; null when it is not in the source. */
+    suspend fun itemName(kind: String, id: String): String? {
+        val p = playlist() ?: return null
+        return when (type(kind)) {
+            ContentType.CHANNEL -> graph.channelLabel(p, ChannelId(id))
+            ContentType.MOVIE -> graph.movie(p, id)?.title
+            ContentType.SERIES -> graph.seriesById(p, id)?.title
+            else -> null
+        }
+    }
+
+    /** Lists the phone can change; each returns what the TV's note and the phone need, or a [ListResult] error. */
+    suspend fun createList(title: String?, add: Pair<String, String>?): ListResult {
+        val p = playlist() ?: return ListResult.NotFound
+        val existing = graph.userGroups(p).map { it.title }
+        val name = title?.trim()?.take(MAX_TITLE)?.ifEmpty { null }
+        if (name != null && existing.any { it.equals(name, ignoreCase = true) }) return ListResult.NameTaken(name)
+        val chosen = name ?: unnamed(existing)
+        val type = add?.let { type(it.first) ?: return ListResult.Missing }
+        if (add != null && itemName(add.first, add.second) == null) return ListResult.NotFound
+        val id = graph.createGroup(p, chosen) ?: return ListResult.NotFound
+        if (type != null) graph.addToGroup(p, id, type, add.second)
+        return ListResult.Done(id, chosen, if (type != null) 1 else 0)
+    }
+
+    suspend fun renameList(id: String, title: String): ListResult {
+        val p = playlist() ?: return ListResult.NotFound
+        val name = title.trim().take(MAX_TITLE).ifEmpty { return ListResult.Missing }
+        val lists = graph.userGroups(p)
+        val list = lists.firstOrNull { it.id == id } ?: return ListResult.NotFound
+        if (lists.any { it.id != id && it.title.equals(name, ignoreCase = true) }) return ListResult.NameTaken(name)
+        graph.renameGroup(p, id, name)
+        return ListResult.Done(id, name, 0, previous = list.title)
+    }
+
+    suspend fun deleteList(id: String): ListResult {
+        val p = playlist() ?: return ListResult.NotFound
+        val list = graph.userGroups(p).firstOrNull { it.id == id } ?: return ListResult.NotFound
+        graph.deleteGroup(p, id)
+        return ListResult.Done(id, list.title, 0)
+    }
+
+    /** Puts a channel, film or series in a list or takes it out; [FAVOURITES] works for channels. */
+    suspend fun setInList(id: String, kind: String, item: String, on: Boolean): ListResult {
+        val p = playlist() ?: return ListResult.NotFound
+        val type = type(kind) ?: return ListResult.Missing
+        if (itemName(kind, item) == null) return ListResult.NotFound
+        if (id == FAVOURITES) {
+            if (type != ContentType.CHANNEL) return ListResult.Missing
+            graph.setFavorite(ChannelId(item), on)
+            return ListResult.Done(FAVOURITES, null, graph.favoriteChannels(p).size)
+        }
+        val list = graph.userGroups(p).firstOrNull { it.id == id } ?: return ListResult.NotFound
+        if (on) graph.addToGroup(p, id, type, item) else graph.removeFromGroup(p, id, type, item)
+        val after = graph.userGroups(p).firstOrNull { it.id == id }
+        return ListResult.Done(id, list.title, after?.let { (it.channelCount + it.movieCount + it.seriesCount).toInt() } ?: 0)
+    }
+
+    /**
+     * A short fingerprint of the lists and favourites, so the server tells the phone ("lists" event) only when one of them
+     * changed, not on every change to the library.
+     */
+    suspend fun listsStamp(): String {
+        val p = playlist() ?: return ""
+        val lists = graph.userGroups(p).joinToString("|") { "${it.id}:${it.title}:${it.channelCount}:${it.movieCount}:${it.seriesCount}" }
+        return "$p#$lists#${graph.favoriteChannels(p).joinToString(",") { it.id.value }}"
+    }
+
+    /** Changes to the library, from the TV or the phone, as a number that goes up. */
+    val revision: Int get() = graph.revision.value
+
+    private suspend fun members(p: PlaylistId, list: String): Set<Pair<ContentType, String>> = buildSet {
+        graph.channelsInUserGroup(p, list).forEach { add(ContentType.CHANNEL to it.id.value) }
+        graph.moviesInUserGroup(p, list, LIST_TITLES).forEach { add(ContentType.MOVIE to it.id) }
+        graph.seriesInUserGroup(p, list, LIST_TITLES).forEach { add(ContentType.SERIES to it.id) }
+    }
+
+    // "New list", "New list 2"… (Words 2b, list_unnamed), until the viewer names it.
+    private fun unnamed(existing: List<String>): String {
+        val base = context.getString(R.string.list_unnamed)
+        return generateSequence(1) { it + 1 }.map { if (it == 1) base else "$base $it" }
+            .first { candidate -> existing.none { it.equals(candidate, ignoreCase = true) } }
+    }
+
+    private fun type(kind: String): ContentType? = when (kind) {
+        "channel" -> ContentType.CHANNEL
+        "movie" -> ContentType.MOVIE
+        "series" -> ContentType.SERIES
+        else -> null
+    }
+
+    private fun listLine(row: GroupRow): JSONObject = JSONObject()
+        .put("id", row.id)
+        .put("title", row.title)
+        .put("channels", row.channelCount)
+        .put("movies", row.movieCount)
+        .put("series", row.seriesCount)
 
     suspend fun movie(id: String): JSONObject? {
         val p = playlist() ?: return null
@@ -222,9 +387,9 @@ class CompanionLibrary(private val context: Context, private val graph: AppGraph
         }
     }
 
-    private suspend fun channels(p: PlaylistId, rows: List<ChannelRow>): JSONArray {
+    private suspend fun channels(p: PlaylistId, rows: List<ChannelRow>, added: ((ChannelRow) -> Boolean)? = null): JSONArray {
         val guide = graph.storedNowNext(p, rows, Clock.System.now())
-        return JSONArray(rows.map { channel(it, guide[it.id.value]) })
+        return JSONArray(rows.map { row -> channel(row, guide[row.id.value]).also { if (added != null) it.put("added", added(row)) } })
     }
 
     private fun channel(row: ChannelRow, guide: NowNextRow?): JSONObject = JSONObject()
@@ -271,6 +436,9 @@ class CompanionLibrary(private val context: Context, private val graph: AppGraph
         const val EPISODE = "e"
         const val CHANNEL = "c"
 
+        /** The favourite channels, addressed like a list (`/api/list?id=favorites`). */
+        const val FAVOURITES = "favorites"
+
         /** A picture's reference, as the phone hands it back to `/api/art`. */
         fun art(kind: String, id: String): String = "$kind:$id"
 
@@ -279,6 +447,8 @@ class CompanionLibrary(private val context: Context, private val graph: AppGraph
         private const val GROUP_CHANNELS = 400
         private const val SEARCH = 30
         private const val MAX_QUERY = 100
+        private const val MAX_TITLE = 60
+        private const val LIST_TITLES = 500
         private const val POSTER_W = 300
         private const val POSTER_H = 450
         private const val WIDE_W = 640

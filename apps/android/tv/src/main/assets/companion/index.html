@@ -376,6 +376,70 @@
   .pairing .btn { width: 100%; margin-top: 12px; }
   .error { color: #ff8a80; font-size: 15px; min-height: 1.4em; margin: 12px 0 0; }
 
+  /* Favourites and lists (round 2b) */
+  .row-play { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: 12px; text-align: left; }
+  .row:has(> .row-play:active) { background: var(--raised); }
+  .more { width: 40px; height: 44px; flex: none; margin-right: -4px; display: grid; place-items: center; color: var(--text-3); border-radius: 12px; }
+  .more:active { background: var(--raised-2); }
+  .more svg { width: 22px; height: 22px; }
+  svg.star { width: 15px; height: 15px; fill: var(--amber); stroke: none; }
+  .row-sub { font-size: 13px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+  .pic.thumb { width: 40px; height: 60px; flex: none; border-radius: 6px; }
+  .pic.thumb .stand-in { font-size: 13px; font-weight: 600; padding: 2px; }
+  .lists-help { color: var(--text-3); font-size: 14px; margin: 0 16px 6px; }
+  .addbtn {
+    flex: none; height: 36px; padding: 0 14px; border-radius: 18px; display: inline-flex; align-items: center; gap: 4px;
+    font-size: 15px; font-weight: 600; background: var(--text); color: var(--room); border: 1px solid var(--text);
+  }
+  .addbtn.added { background: none; color: var(--text-2); border-color: var(--hair-2); }
+  .addbtn svg { width: 17px; height: 17px; stroke-width: 2.2; }
+  .sheet.full { height: calc(100dvh - var(--top) - 24px); }
+  .sheet.own-close .sheet-close { display: none; }
+  .adding-head { position: sticky; top: 0; z-index: 2; background: var(--surface); padding: 0 20px 6px; }
+  .adding-head .kicker { font-size: 13px; color: var(--text-3); }
+  .adding-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .adding-title h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .adding-title .btn { height: 40px; padding: 0 18px; flex: none; }
+  .adding-head .search { margin-top: 12px; }
+  .sheet-help { color: var(--text-3); font-size: 14px; margin: 14px 20px 0; max-width: 40ch; }
+  .page-head { display: flex; align-items: flex-start; gap: 12px; }
+  .page-head > div { flex: 1; min-width: 0; }
+  .page-head h2 { overflow-wrap: anywhere; }
+  .page-head .more { margin-top: -2px; color: var(--text-2); }
+  .menu-head { display: flex; align-items: center; gap: 14px; padding: 0 20px 4px; }
+  .menu-head > div { min-width: 0; }
+  .menu-head h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin: 0; overflow-wrap: anywhere; }
+  .menu-head p { margin: 2px 0 0; color: var(--text-3); font-size: 14px; }
+  .menu-body { padding: 0 0 4px; }
+  .menu-body > .btn.primary { display: flex; width: calc(100% - 40px); margin: 16px 20px 6px; }
+  .menu-body .sheet-help { margin-top: 4px; }
+  .line {
+    width: 100%; min-height: 54px; padding: 0 20px; display: flex; align-items: center; gap: 14px; text-align: left;
+    font-size: 17px; font-weight: 500; position: relative;
+  }
+  .line:active { background: var(--raised); }
+  .line + .line::before { content: ""; position: absolute; left: 58px; right: 0; top: 0; border-top: 1px solid var(--hair); }
+  .line > svg { color: var(--text-2); }
+  .line > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .line .end { flex: none; color: var(--text-3); }
+  .line .end.tick { color: var(--amber); }
+  .line.plain > svg { visibility: hidden; }
+  .ask { padding: 0 20px; }
+  .ask h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 12px; overflow-wrap: anywhere; }
+  .ask p { color: var(--text-2); font-size: 15px; margin: 0 0 4px; }
+  .ask input {
+    width: 100%; height: 56px; font: inherit; font-size: 20px; color: var(--text); background: var(--raised);
+    border: 1px solid var(--hair-2); border-radius: 14px; padding: 0 16px; outline: none;
+  }
+  .ask input:focus { border-color: var(--amber); }
+  .ask .error { min-height: 0; margin: 8px 0 0; }
+  .ask .actions { margin-top: 16px; }
+  .ask .btn.primary:disabled { opacity: 0.4; }
+  .scrim.top { z-index: 50; }
+  .sheet.menu { z-index: 51; }
+  .toast.act { pointer-events: auto; }
+  .toast .undo { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; padding: 4px 0 4px 6px; margin: -4px 0; }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition-duration: 0.01ms !important; animation: none !important; }
   }
@@ -405,6 +469,11 @@
   <symbol id="i-tv" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2.5"/><path d="M9 20h6"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/></symbol>
   <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 17l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z"/></symbol>
+  <symbol id="i-star-line" viewBox="0 0 24 24"><path d="M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 17l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6.5h11M9 12h11M9 17.5h7M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01" stroke-width="2"/></symbol>
+  <symbol id="i-remove" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
   <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M8 14h8"/></symbol>
 </svg>
 
@@ -542,6 +611,12 @@
     </div>
   </div>
 
+  <div class="scrim top" id="menu-scrim"></div>
+  <div class="sheet menu" id="menu-sheet" role="dialog" aria-modal="true" aria-label="Options">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="sheet-body menu-body" id="menu-body"></div>
+  </div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </div>
 
@@ -562,6 +637,10 @@
   let openedOnLoad = false;
   let artShown = null;
   let tracksShown = null;
+  let favourites = new Set();
+  let menuOpen = false;
+  let listView = null;
+  let adding = null;
 
   // ---------- Small builders. Text from the TV always goes in through textContent. ----------
   function el(tag, cls, text) {
@@ -732,6 +811,7 @@
     events.addEventListener("tv", (e) => showTvName(JSON.parse(e.data)));
     events.addEventListener("provider-form", (e) => showProviderForm(JSON.parse(e.data)));
     events.addEventListener("provider-state", (e) => showProviderState(JSON.parse(e.data)));
+    events.addEventListener("lists", () => listsChanged());
     events.onopen = () => {
       setStatus("on", "Connected");
       if (!home || Date.now() - homeLoadedAt > 60000) loadHome();
@@ -747,15 +827,21 @@
 
   // ---------- Feedback ----------
   let toastTimer = null;
-  function toast(text, warn) {
+  function toast(text, warn, action) {
     const t = $("toast");
     t.replaceChildren();
     if (!warn) t.appendChild(icon("tv"));
     t.appendChild(el("span", null, text));
+    if (action) {
+      const b = el("button", "undo", action.label);
+      b.addEventListener("click", () => { t.classList.remove("show"); action.run(); });
+      t.appendChild(b);
+    }
     t.classList.toggle("warn", !!warn);
+    t.classList.toggle("act", !!action);
     t.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove("show"), warn ? 4200 : 2200);
+    toastTimer = setTimeout(() => t.classList.remove("show"), action ? 5000 : warn ? 4200 : 2200);
   }
 
   function showScreen(s) {
@@ -840,15 +926,20 @@
       (playing.number === undefined || channel.number === null || String(playing.number) === String(channel.number));
   }
 
-  function channelRow(ch, scope) {
-    const b = el("button", "row");
-    b.dataset.channel = ch.id;
+  function channelRow(ch, scope, inList) {
+    const row = el("div", "row");
+    row.dataset.channel = ch.id;
+    const b = el("button", "row-play");
     b.appendChild(logo(ch.logo, ch.name));
     const main = el("div", "row-main");
     const name = el("div", "row-name");
     if (ch.number !== null && ch.number !== undefined) name.appendChild(el("span", "num", String(ch.number)));
     const n = el("span", null, ch.name); n.dir = "auto";
     name.appendChild(n);
+    const star = icon("star");
+    star.classList.add("star");
+    star.toggleAttribute("hidden", !favourites.has(ch.id));
+    name.appendChild(star);
     if (ch.quality) name.appendChild(el("span", "badge", ch.quality));
     main.appendChild(name);
     if (ch.now) {
@@ -868,18 +959,51 @@
     const end = el("span", "tv-mark", "On TV");
     end.hidden = !isOnTv(ch);
     b.appendChild(end);
-    b.classList.toggle("on-tv", isOnTv(ch));
-    b._channel = ch;
+    row.classList.toggle("on-tv", isOnTv(ch));
+    row._channel = ch;
     b.setAttribute("aria-label", "Play " + ch.name + (ch.now ? ", now: " + ch.now.title : "") + " on the TV");
-    b.addEventListener("click", () => play({ kind: "channel", id: ch.id, scope: scope }));
-    return b;
+    const item = { kind: "channel", id: ch.id, title: ch.name, logo: ch.logo };
+    b.addEventListener("click", () => { if (!b._held) play({ kind: "channel", id: ch.id, scope: scope }); b._held = false; });
+    onHold(b, () => itemMenu(item, inList));
+    row.appendChild(b);
+    row.appendChild(moreButton(ch.name, () => itemMenu(item, inList)));
+    return row;
   }
 
-  function channelList(items, scope, limit) {
+  function channelList(items, scope, limit, inList) {
     const list = el("div", "list");
     const shown = limit ? items.slice(0, limit) : items;
-    shown.forEach((ch) => list.appendChild(channelRow(ch, scope)));
+    shown.forEach((ch) => list.appendChild(channelRow(ch, scope, inList)));
     return list;
+  }
+
+  function moreButton(name, open) {
+    const m = el("button", "more");
+    m.appendChild(icon("more"));
+    m.setAttribute("aria-label", "More for " + name);
+    m.addEventListener("click", open);
+    return m;
+  }
+
+  // A long press opens the menu instead of playing; the click that follows it is swallowed.
+  function onHold(target, fn) {
+    let timer = null, x = 0, y = 0;
+    target.addEventListener("pointerdown", (e) => {
+      x = e.clientX; y = e.clientY;
+      timer = setTimeout(() => { timer = null; target._held = true; buzz(); fn(); }, 520);
+    });
+    const cancel = () => { clearTimeout(timer); timer = null; };
+    target.addEventListener("pointermove", (e) => { if (Math.abs(e.clientX - x) + Math.abs(e.clientY - y) > 10) cancel(); });
+    target.addEventListener("pointerup", cancel);
+    target.addEventListener("pointercancel", cancel);
+    target.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
+
+  function paintStars() {
+    document.querySelectorAll(".row[data-channel]").forEach((row) => {
+      const star = row.querySelector("svg.star");
+      if (star) star.toggleAttribute("hidden", !favourites.has(row.dataset.channel));
+    });
   }
 
   function markChannelOnTv() {
@@ -914,6 +1038,7 @@
     try {
       home = await get("/api/home");
       homeLoadedAt = Date.now();
+      await loadFavourites();
       renderHome();
     } catch (e) {
       if (!home) {
@@ -974,6 +1099,10 @@
         s.appendChild(shelf(items, posterCard));
         box.appendChild(s);
       });
+    });
+    safely(() => {
+      if (!Array.isArray(home.lists)) return;
+      box.appendChild(listsSection());
     });
     safely(() => {
       if (!home.groups || !home.groups.length) return;
@@ -1051,8 +1180,12 @@
 
   // ---------- Sheets ----------
   let openSheet = null;
+  let skipPop = 0;
+  let handoff = false;
   function presentSheet(sheet) {
+    sheet.classList.remove("full", "own-close");
     if (openSheet && openSheet !== sheet) hideSheet(openSheet);
+    else if (!openSheet && handoff) handoff = false;
     else if (!openSheet) history.pushState({ sheet: true }, "");
     openSheet = sheet;
     sheet.classList.add("show");
@@ -1066,20 +1199,59 @@
     sheet.style.transform = "";
   }
   function closeSheets() {
-    if (openSheet) {
-      hideSheet(openSheet);
-      openSheet = null;
-      if (history.state && history.state.sheet) history.back();
-    }
+    let back = 0;
+    if (menuOpen) { hideMenu(); back++; }
+    if (openSheet) { hideSheet(openSheet); openSheet = null; back++; }
+    listView = null; adding = null;
+    if (back && history.state && (history.state.sheet || history.state.menu)) { skipPop++; history.go(-back); }
     $("scrim").classList.remove("show");
     paintMini();
   }
   window.addEventListener("popstate", () => {
-    if (openSheet) { hideSheet(openSheet); openSheet = null; $("scrim").classList.remove("show"); paintMini(); }
+    if (skipPop > 0) { skipPop--; return; }
+    if (menuOpen) { hideMenu(); return; }
+    if (openSheet) { hideSheet(openSheet); openSheet = null; listView = null; adding = null; $("scrim").classList.remove("show"); paintMini(); }
   });
   $("scrim").addEventListener("click", closeSheets);
+  $("menu-scrim").addEventListener("click", () => closeMenu());
   document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", closeSheets));
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openSheet) closeSheets(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (menuOpen) closeMenu(); else if (openSheet) closeSheets();
+  });
+
+  // The small sheet for menus, names and questions. It sits over whatever is open and keeps it.
+  function openMenu(build, label) {
+    const m = $("menu-sheet");
+    const body = $("menu-body");
+    body.replaceChildren();
+    build(body);
+    m.setAttribute("aria-label", label || "Options");
+    if (!menuOpen) { history.pushState({ menu: true }, ""); menuOpen = true; }
+    m.classList.add("show");
+    $("menu-scrim").classList.add("show");
+    $("mini").classList.add("away");
+    body.scrollTop = 0;
+    return body;
+  }
+  function hideMenu() {
+    menuOpen = false;
+    hideSheet($("menu-sheet"));
+    $("menu-scrim").classList.remove("show");
+    paintMini();
+  }
+  function closeMenu() {
+    if (!menuOpen) return;
+    hideMenu();
+    if (history.state && history.state.menu) { skipPop++; history.back(); }
+  }
+  // Going on from a menu to a full sheet (Start adding, Add more): the menu's history entry becomes the sheet's.
+  function menuToSheet() {
+    if (!menuOpen) return;
+    hideMenu();
+    if (openSheet) { if (history.state && history.state.menu) { skipPop++; history.back(); } return; }
+    if (history.state && history.state.menu) { history.replaceState({ sheet: true }, ""); handoff = true; }
+  }
 
   // Drag a sheet down by its handle to put it away.
   document.querySelectorAll(".sheet .grab").forEach((grab) => {
@@ -1097,7 +1269,7 @@
       sheet.classList.remove("dragging");
       sheet.style.transform = "";
       if (moved > 90) {
-        if (sheet.id === "type-sheet") hideTyping(); else closeSheets();
+        if (sheet.id === "type-sheet") hideTyping(); else if (sheet.id === "menu-sheet") closeMenu(); else closeSheets();
       }
     };
     grab.addEventListener("pointerup", end);
@@ -1105,6 +1277,7 @@
   });
 
   function titleSheetLoading(text) {
+    listView = null; adding = null;
     const sheet = $("sheet");
     sheet.classList.add("title-sheet");
     const body = $("sheet-body");
@@ -1183,6 +1356,14 @@
     page.appendChild(icon("tv")); page.appendChild(el("span", null, "Open its page on the TV"));
     page.addEventListener("click", () => play({ kind: "movie-page", id: m.id }, { close: true }));
     block.appendChild(page);
+    block.appendChild(addToListLink({ kind: "movie", id: m.id, title: m.title, art: m.art }));
+  }
+
+  function addToListLink(item) {
+    const b = el("button", "text-link");
+    b.appendChild(icon("list")); b.appendChild(el("span", null, "Add to a list…"));
+    b.addEventListener("click", () => pickListMenu(item));
+    return b;
   }
 
   async function openSeries(id) {
@@ -1212,6 +1393,7 @@
       page.addEventListener("click", () => play({ kind: "series", id: s.id }, { close: true }));
       block.appendChild(page);
     }
+    block.appendChild(addToListLink({ kind: "series", id: s.id, title: s.title, art: s.art }));
     if (!seasons.length) return;
 
     let current = seasons[0];
@@ -1265,6 +1447,7 @@
   }
 
   async function openGroup(g) {
+    listView = null; adding = null;
     const sheet = $("sheet");
     sheet.classList.remove("title-sheet");
     const body = $("sheet-body");
@@ -1280,7 +1463,619 @@
     try {
       const r = await get("/api/channels", { group: g.id });
       wait.replaceWith(channelList(r.items || [], r.scope));
-    } catch (e) { wait.textContent = "Couldn't get this group. Close and try again."; }
+    } catch (e) { wait.textContent = "Couldn't get this category. Close and try again."; }
+  }
+
+  // ---------- Favourites and lists (round 2b). Lists live on the TV; the phone always shows what the TV holds. ----------
+  const FAVOURITES = "favorites";
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+  // "12 channels", "1 channel · 5 series": the parts that are zero are left out.
+  function countText(c) {
+    const parts = [];
+    if (c.channels) parts.push(plural(c.channels, "channel", "channels"));
+    if (c.movies) parts.push(plural(c.movies, "film", "films"));
+    if (c.series) parts.push(plural(c.series, "series", "series"));
+    return parts.length ? parts.join(" · ") : "Nothing in it yet";
+  }
+  function listTitle(id, title) { return id === FAVOURITES ? "Favourites" : (title || "New list"); }
+  function sizeOf(r) {
+    return { channels: (r.channels || []).length, movies: (r.movies || []).length, series: (r.series || []).length };
+  }
+  function total(c) { return (c.channels || 0) + (c.movies || 0) + (c.series || 0); }
+
+  async function loadFavourites() {
+    try {
+      const r = await get("/api/list", { id: FAVOURITES });
+      favourites = new Set((r.channels || []).map((c) => c.id));
+    } catch (e) { /* Stars are a nicety; the page works without them. */ }
+  }
+
+  // Sends one change to the TV's lists. Returns the reply's JSON, or null after saying what went wrong.
+  async function listCall(path, body, fail) {
+    buzz();
+    try {
+      const r = await post(path, body);
+      if (r.ok) return await r.json().catch(() => ({}));
+      if (r.status === 409) {
+        const j = await r.json().catch(() => ({}));
+        if (j.error === "name-taken") return { taken: j.title || body.title };
+      }
+      if (r.status === 404) { toast("That list isn't on the TV any more.", true); listsChanged(); return null; }
+      if (r.status !== 401) toast(fail || "The TV didn't take that change. Try again.", true);
+    } catch (e) {
+      toast("Can't reach Luz. Is your phone on the same Wi-Fi?", true);
+    }
+    return null;
+  }
+
+  // ----- Browse: "Your lists" above the provider's "Channel categories" -----
+  function listsSection() {
+    const add = el("button", null, "+ New list");
+    add.addEventListener("click", () => newListMenu());
+    const s = section("Your lists", add);
+    s.id = "your-lists";
+    const list = el("div", "list");
+    const fav = listLine("Favourites", plural(home.favourites || 0, "channel", "channels"), true);
+    fav.addEventListener("click", () => openListPage({ id: FAVOURITES }));
+    list.appendChild(fav);
+    home.lists.forEach((l) => {
+      const b = listLine(listTitle(l.id, l.title), countText(l));
+      b.addEventListener("click", () => openListPage({ id: l.id, title: l.title }));
+      list.appendChild(b);
+    });
+    s.appendChild(list);
+    if (!home.lists.length) s.appendChild(el("p", "lists-help", "Make a list for things you watch together, like My sports."));
+    return s;
+  }
+  function listLine(title, sub, starred) {
+    const b = el("button", "row");
+    b.style.minHeight = "58px";
+    b.style.paddingLeft = "12px";
+    const main = el("div", "row-main");
+    const t = el("div", "row-name");
+    if (starred) { const st = icon("star"); st.classList.add("star"); t.appendChild(st); }
+    const sp = el("span", null, title); sp.dir = "auto"; t.appendChild(sp);
+    main.appendChild(t);
+    main.appendChild(el("div", "row-sub", sub));
+    b.appendChild(main);
+    const end = el("span", "row-end"); end.appendChild(icon("right")); b.appendChild(end);
+    return b;
+  }
+
+  // A change on the phone or the TV: refetch only what is on screen.
+  let listsTimer = null;
+  function listsChanged() {
+    clearTimeout(listsTimer);
+    listsTimer = setTimeout(async () => {
+      if (home) {
+        try {
+          const fresh = await get("/api/home");
+          home.lists = fresh.lists; home.favourites = fresh.favourites;
+          await loadFavourites();
+          const old = $("your-lists");
+          if (old && Array.isArray(home.lists)) old.replaceWith(listsSection());
+          paintStars();
+        } catch (e) { /* The next change or reconnect tries again. */ }
+      }
+      if (listView && !adding) renderListPage(true);
+      if (adding) refreshAdding();
+    }, 300);
+  }
+
+  // ----- A list's page (2.12) -----
+  function titleRow(p, inList) {
+    const row = el("div", "row");
+    row.dataset.item = p.kind + ":" + p.id;
+    const b = el("button", "row-play");
+    b.appendChild(picture(p.art, p.title, "thumb"));
+    const main = el("div", "row-main");
+    const name = el("div", "row-name"); const n = el("span", null, p.title); n.dir = "auto"; name.appendChild(n);
+    main.appendChild(name);
+    main.appendChild(el("div", "row-sub", facts([p.kind === "series" ? "Series" : "Film", p.year])));
+    b.appendChild(main);
+    const item = { kind: p.kind, id: p.id, title: p.title, art: p.art };
+    b.addEventListener("click", () => { if (!b._held) (p.kind === "series" ? openSeries(p.id) : openMovie(p.id)); b._held = false; });
+    onHold(b, () => itemMenu(item, inList));
+    row.appendChild(b);
+    row.appendChild(moreButton(p.title, () => itemMenu(item, inList)));
+    return row;
+  }
+
+  function openListPage(ref) {
+    listView = { id: ref.id, title: ref.title };
+    adding = null;
+    const sheet = $("sheet");
+    sheet.classList.remove("title-sheet");
+    presentSheet(sheet);
+    sheet.classList.add("own-close");
+    renderListPage(false);
+  }
+
+  async function renderListPage(quietly) {
+    const view = listView;
+    const body = $("sheet-body");
+    if (!quietly) {
+      body.replaceChildren();
+      body.appendChild(pageHead(view, null));
+      body.appendChild(el("div", "waiting", "Getting the list"));
+    }
+    let r;
+    try { r = await get("/api/list", { id: view.id }); } catch (e) {
+      if (listView !== view) return;
+      if (String(e.message).includes("404")) { closeSheets(); toast("That list isn't on the TV any more.", true); return; }
+      if (!quietly) body.lastChild.textContent = "Couldn't get this list. Close and try again.";
+      return;
+    }
+    if (listView !== view || adding) return;
+    view.title = r.title;
+    view.size = sizeOf(r);
+    const keep = body.scrollTop;
+    body.replaceChildren();
+    body.appendChild(pageHead(view, view.size));
+    const kinds = ["channels", "movies", "series"].filter((k) => view.size[k]);
+    const heads = { channels: "Channels", movies: "Films", series: "Series" };
+    kinds.forEach((k) => {
+      const s = el("section", "section");
+      s.style.marginTop = "14px";
+      if (kinds.length > 1) { const h = el("h2"); h.appendChild(el("span", null, heads[k])); s.appendChild(h); }
+      if (k === "channels") s.appendChild(channelList(r.channels, view.id === FAVOURITES ? "favorites" : "m:" + view.id, 0, view.id));
+      else { const l = el("div", "list"); r[k].forEach((p) => l.appendChild(titleRow(p, view.id))); s.appendChild(l); }
+      body.appendChild(s);
+    });
+    if (!kinds.length) {
+      const empty = el("div", "empty");
+      empty.style.margin = "36px 24px";
+      empty.appendChild(el("p", null, "Nothing in this list yet."));
+      const more = el("button", "btn", "Add more");
+      more.style.marginTop = "16px";
+      more.addEventListener("click", () => openAdding(addingFrom(view)));
+      empty.appendChild(more);
+      body.appendChild(empty);
+    }
+    body.scrollTop = keep;
+  }
+
+  function pageHead(view, size) {
+    const head = el("div", "sheet-head page-head");
+    const text = el("div");
+    const h = el("h2", null, listTitle(view.id, view.title)); h.dir = "auto";
+    text.appendChild(h);
+    if (size && total(size)) text.appendChild(el("p", null, countText(size)));
+    head.appendChild(text);
+    head.appendChild(moreButton(listTitle(view.id, view.title), () => listMenu(view)));
+    return head;
+  }
+
+  function addingFrom(view) {
+    return { id: view.id, title: view.title, count: view.size ? total(view.size) : 0, unnamed: false };
+  }
+
+  function listMenu(view) {
+    openMenu((body) => {
+      const head = el("div", "menu-head");
+      const h = el("h2", null, listTitle(view.id, view.title)); h.dir = "auto";
+      head.appendChild(h);
+      body.appendChild(head);
+      body.appendChild(menuLine("add", "Add more", null, () => { menuToSheet(); openAdding(addingFrom(view)); }));
+      if (view.id === FAVOURITES) return;
+      body.appendChild(menuLine("list", "Rename this list", null, () => renameMenu(view)));
+      body.appendChild(menuLine("close", "Delete this list", null, () => deleteMenu(view)));
+    }, listTitle(view.id, view.title));
+  }
+
+  function menuLine(iconName, text, end, onClick) {
+    const b = el("button", "line");
+    b.appendChild(icon(iconName));
+    const t = el("span", null, text); t.dir = "auto";
+    b.appendChild(t);
+    if (end) b.appendChild(end);
+    b.addEventListener("click", onClick);
+    return b;
+  }
+  function chevron() { const e = el("span", "end"); e.appendChild(icon("right")); return e; }
+  function tick(on) {
+    const e = el("span", "end tick");
+    if (on) e.appendChild(icon("check"));
+    return e;
+  }
+
+  // A name box with one white button. Used for a new list, renaming, and naming an unnamed list on Done.
+  function askName(body, o) {
+    const box = el("form", "ask");
+    box.appendChild(el("h2", null, o.title));
+    const input = el("input");
+    input.dir = "auto"; input.autocomplete = "off"; input.maxLength = 60;
+    input.setAttribute("enterkeyhint", "done");
+    input.value = o.value || "";
+    box.appendChild(input);
+    const error = el("p", "error"); error.hidden = true;
+    box.appendChild(error);
+    const actions = el("div", "actions");
+    const go = el("button", "btn primary", o.go); go.type = "submit";
+    actions.appendChild(go);
+    if (o.other) {
+      const other = el("button", "btn", o.other); other.type = "button";
+      other.addEventListener("click", () => o.onOther());
+      actions.appendChild(other);
+    }
+    box.appendChild(actions);
+    const paint = () => { go.disabled = !input.value.trim(); };
+    input.addEventListener("input", () => { error.hidden = true; paint(); });
+    paint();
+    box.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = input.value.trim();
+      if (!name || go.disabled) return;
+      go.disabled = true;
+      const r = await o.onGo(name);
+      if (r && r.taken) { error.textContent = "You already have a list called " + r.taken + "."; error.hidden = false; }
+      paint();
+    });
+    body.appendChild(box);
+    setTimeout(() => input.focus(), 60);
+    return input;
+  }
+
+  // ----- Making a list (2.8): name it or "Name it later", then straight to search -----
+  function newListMenu(first) {
+    openMenu((body) => {
+      askName(body, {
+        title: "New list", go: "Start adding", other: "Name it later",
+        onGo: (name) => createList(name, first),
+        onOther: () => createList(null, first),
+      });
+    }, "New list");
+  }
+  async function createList(title, first) {
+    const body = { action: "create" };
+    if (title) body.title = title;
+    if (first) body.add = { kind: first.kind, id: first.id };
+    const r = await listCall("/api/list", body, "The TV didn't make the list. Try again.");
+    if (!r || r.taken) return r;
+    menuToSheet();
+    openAdding({ id: r.id, title: r.title, count: first ? 1 : 0, unnamed: !title });
+    return r;
+  }
+
+  function renameMenu(view) {
+    openMenu((body) => {
+      askName(body, {
+        title: "Rename list", go: "Rename", value: view.title,
+        onGo: async (name) => {
+          const r = await listCall("/api/list", { action: "rename", id: view.id, title: name });
+          if (r && !r.taken) { view.title = r.title || name; closeMenu(); listsChanged(); }
+          return r;
+        },
+      });
+    }, "Rename list");
+  }
+
+  function deleteMenu(view) {
+    const size = view.size || { channels: 0, movies: 0, series: 0 };
+    const n = total(size);
+    const titles = size.movies || size.series;
+    let what;
+    if (n === 0) what = "This can't be undone.";
+    else if (n === 1) what = "The " + (titles ? "title" : "channel") + " stays in Luz; only the list goes. This can't be undone.";
+    else what = "The " + n + (titles ? " titles" : " channels") + " stay in Luz; only the list goes. This can't be undone.";
+    openMenu((body) => {
+      const box = el("div", "ask");
+      const h = el("h2", null, "Delete “" + view.title + "”?"); h.dir = "auto";
+      box.appendChild(h);
+      box.appendChild(el("p", null, what));
+      const actions = el("div", "actions");
+      const keep = el("button", "btn", "Keep it");
+      keep.style.flex = "1";
+      keep.addEventListener("click", () => closeMenu());
+      const del = el("button", "btn primary", "Delete");
+      del.style.minWidth = "0";
+      del.addEventListener("click", async () => {
+        del.classList.add("busy");
+        const r = await listCall("/api/list", { action: "delete", id: view.id });
+        del.classList.remove("busy");
+        if (!r) return;
+        closeSheets();
+        toast(view.title + " deleted");
+        listsChanged();
+      });
+      actions.appendChild(keep);
+      actions.appendChild(del);
+      box.appendChild(actions);
+      body.appendChild(box);
+    }, "Delete this list");
+  }
+
+  // ----- Adding (2.8): search, tap Add, it's added. Done goes to the list's page. -----
+  function openAdding(a) {
+    adding = Object.assign({ q: "" }, a);
+    listView = { id: a.id, title: a.title };
+    const sheet = $("sheet");
+    sheet.classList.remove("title-sheet");
+    presentSheet(sheet);
+    sheet.classList.add("full", "own-close");
+    const body = $("sheet-body");
+    body.replaceChildren();
+    const head = el("div", "adding-head");
+    head.appendChild(el("div", "kicker", "Adding to"));
+    const row = el("div", "adding-title");
+    const h = el("h2"); h.dir = "auto"; h.id = "adding-title";
+    row.appendChild(h);
+    const done = el("button", "btn", "Done");
+    done.addEventListener("click", finishAdding);
+    row.appendChild(done);
+    head.appendChild(row);
+    const search = el("label", "search");
+    search.appendChild(icon("search"));
+    const input = el("input");
+    input.type = "search"; input.dir = "auto"; input.autocomplete = "off"; input.spellcheck = false;
+    input.setAttribute("autocapitalize", "off"); input.setAttribute("autocorrect", "off"); input.setAttribute("enterkeyhint", "search");
+    input.placeholder = a.id === FAVOURITES ? "Search channels" : "Search channels, films and series";
+    input.setAttribute("aria-label", input.placeholder);
+    search.appendChild(input);
+    head.appendChild(search);
+    body.appendChild(head);
+    const results = el("div"); results.id = "adding-results";
+    body.appendChild(results);
+    paintAddingTitle();
+    let timer = null;
+    input.addEventListener("input", () => {
+      clearTimeout(timer);
+      adding.q = input.value.trim();
+      timer = setTimeout(() => (adding.q ? addingSearch() : addingInList()), adding.q ? 250 : 0);
+    });
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
+    addingInList();
+    setTimeout(() => input.focus(), 380);
+  }
+
+  function paintAddingTitle() {
+    const h = $("adding-title");
+    if (h && adding) h.textContent = listTitle(adding.id, adding.title) + " · " + adding.count;
+  }
+
+  let addingSeq = 0;
+  // With the search box empty: what's in the list so far.
+  async function addingInList() {
+    const a = adding, seq = ++addingSeq;
+    let r;
+    try { r = await get("/api/list", { id: a.id }); } catch (e) { return; }
+    if (adding !== a || seq !== addingSeq || a.q) return;
+    a.count = total(sizeOf(r));
+    paintAddingTitle();
+    const box = $("adding-results");
+    box.replaceChildren();
+    const all = (r.channels || []).map((c) => ["channel", Object.assign({ added: true }, c)])
+      .concat((r.movies || []).map((p) => ["movie", Object.assign({ added: true }, p)]))
+      .concat((r.series || []).map((p) => ["series", Object.assign({ added: true }, p)]));
+    if (all.length) {
+      const s = section("In this list");
+      s.style.marginTop = "14px";
+      const l = el("div", "list");
+      all.forEach(([k, x]) => l.appendChild(addRow(k, x)));
+      s.appendChild(l);
+      box.appendChild(s);
+    }
+    box.appendChild(el("p", "sheet-help", a.id === FAVOURITES
+      ? "Type a name to find more."
+      : "Type a name to find more. Channels, films and series can all go in one list."));
+  }
+
+  async function addingSearch() {
+    const a = adding, seq = ++addingSeq, q = a.q;
+    let r;
+    try { r = await get("/api/search", { q, list: a.id }); } catch (e) { return; }
+    if (adding !== a || seq !== addingSeq || a.q !== q) return;
+    const box = $("adding-results");
+    box.replaceChildren();
+    [["Channels", "channel", r.channels], ["Films", "movie", r.movies], ["Series", "series", r.series]].forEach(([title, kind, items]) => {
+      if (!items || !items.length) return;
+      const s = section(title);
+      s.style.marginTop = "14px";
+      const l = el("div", "list");
+      items.forEach((x) => l.appendChild(addRow(kind, x)));
+      s.appendChild(l);
+      box.appendChild(s);
+    });
+    if (!box.children.length) {
+      const empty = el("div", "empty");
+      empty.style.margin = "36px 24px";
+      empty.appendChild(el("p", null, "Nothing called “" + q + "”. Try part of the name."));
+      box.appendChild(empty);
+    }
+  }
+
+  // One result while adding. The whole row is the target; it never plays.
+  function addRow(kind, x) {
+    const row = el("div", "row");
+    row.dataset.item = kind + ":" + x.id;
+    let on = !!x.added;
+    const name = kind === "channel" ? x.name : x.title;
+    const b = el("button", "row-play");
+    b.appendChild(kind === "channel" ? logo(x.logo, x.name) : picture(x.art, x.title, "thumb"));
+    const main = el("div", "row-main");
+    const t = el("div", "row-name");
+    if (kind === "channel" && x.number !== null && x.number !== undefined) t.appendChild(el("span", "num", String(x.number)));
+    const n = el("span", null, name); n.dir = "auto"; t.appendChild(n);
+    main.appendChild(t);
+    const sub = kind === "channel" ? (x.now ? x.now.title : null) : facts([kind === "series" ? "Series" : "Film", x.year]);
+    if (sub) { const s = el("div", "row-sub", sub); s.dir = "auto"; main.appendChild(s); }
+    b.appendChild(main);
+    const add = el("button", "addbtn");
+    const into = listTitle(adding.id, adding.title);
+    const paint = () => {
+      add.replaceChildren(icon(on ? "check" : "add"), el("span", null, on ? "Added" : "Add"));
+      add.classList.toggle("added", on);
+      add.setAttribute("aria-pressed", on ? "true" : "false");
+      add.setAttribute("aria-label", (on ? "Take " + name + " out of " : "Add " + name + " to ") + into);
+    };
+    paint();
+    const flip = async () => {
+      const a = adding;
+      on = !on; paint();
+      const r = await listCall("/api/list", { action: on ? "add" : "remove", id: a.id, kind, item: x.id });
+      if (!r) { on = !on; paint(); return; }
+      if (typeof r.count === "number" && adding === a) { a.count = r.count; paintAddingTitle(); }
+    };
+    b.addEventListener("click", flip);
+    add.addEventListener("click", flip);
+    row._paint = (v) => { on = v; paint(); };
+    row.appendChild(b);
+    row.appendChild(add);
+    return row;
+  }
+
+  // The TV changed something while adding: fix the count and the Add/Added buttons in place.
+  async function refreshAdding() {
+    const a = adding;
+    if (!a.q) return addingInList();
+    try {
+      const [l, r] = await Promise.all([get("/api/list", { id: a.id }), get("/api/search", { q: a.q, list: a.id })]);
+      if (adding !== a) return;
+      a.count = total(sizeOf(l)); paintAddingTitle();
+      const flags = {};
+      [["channel", r.channels], ["movie", r.movies], ["series", r.series]].forEach(([k, xs]) => (xs || []).forEach((x) => { flags[k + ":" + x.id] = !!x.added; }));
+      document.querySelectorAll("#adding-results .row[data-item]").forEach((row) => {
+        if (row.dataset.item in flags && row._paint) row._paint(flags[row.dataset.item]);
+      });
+    } catch (e) {
+      if (String(e.message).includes("404")) { closeSheets(); toast("That list isn't on the TV any more.", true); }
+    }
+  }
+
+  function finishAdding() {
+    const a = adding;
+    const view = { id: a.id, title: a.title };
+    if (!a.unnamed) { openListPage(view); return; }
+    openMenu((body) => {
+      askName(body, {
+        title: "Name this list", go: "Done", other: "Later",
+        onGo: async (name) => {
+          const r = await listCall("/api/list", { action: "rename", id: a.id, title: name });
+          if (r && !r.taken) { view.title = r.title || name; closeMenu(); openListPage(view); }
+          return r;
+        },
+        onOther: () => { closeMenu(); openListPage(view); },
+      });
+    }, "Name this list");
+  }
+
+  // ----- The "⋯" menu (2.10): the TV's own lines, in the TV's order -----
+  async function itemMenu(item, inList) {
+    let info = null;
+    const body = openMenu((b) => {
+      b.appendChild(itemHead(item, null));
+      b.appendChild(el("div", "waiting", " "));
+    }, item.title);
+    try { info = await get("/api/item", { kind: item.kind, id: item.id }); } catch (e) {
+      if (menuOpen && body.lastChild) body.lastChild.textContent = String(e.message).includes("404")
+        ? "That isn't in your library any more." : "Couldn't get this. Close and try again.";
+      return;
+    }
+    if (!menuOpen) return;
+    body.replaceChildren();
+    const line = item.kind === "channel"
+      ? facts([info.number !== null && info.number !== undefined ? "Channel " + info.number : null, info.category])
+      : (item.kind === "series" ? "Series" : "Film");
+    body.appendChild(itemHead(item, line));
+    const playBtn = el("button", "btn primary");
+    playBtn.appendChild(icon("play"));
+    playBtn.appendChild(el("span", null, item.kind === "series" ? "Open on TV" : "Play on TV"));
+    playBtn.addEventListener("click", () => {
+      const scope = inList ? (inList === FAVOURITES ? "favorites" : "m:" + inList) : undefined;
+      const req = item.kind === "channel" ? { kind: "channel", id: item.id, scope }
+        : item.kind === "series" ? { kind: "series", id: item.id } : { kind: "movie", id: item.id, fromStart: false };
+      closeMenu();
+      play(req, { button: playBtn });
+    });
+    body.appendChild(playBtn);
+    if (item.kind === "channel") {
+      body.appendChild(menuLine(info.favorite ? "star" : "star-line", info.favorite ? "Remove from favourites" : "Add to favourites", null, async () => {
+        const on = !info.favorite;
+        const r = await listCall("/api/favorite", { kind: "channel", id: item.id, on });
+        if (!r) return;
+        if (on) favourites.add(item.id); else favourites.delete(item.id);
+        paintStars();
+        closeMenu();
+        toast(on ? "Added to favourites" : "Removed from favourites");
+      }));
+    } else {
+      body.appendChild(menuLine(info.favorite ? "check" : "add", info.favorite ? "Remove from My List" : "Add to My List", null, async () => {
+        const on = !info.favorite;
+        const r = await listCall("/api/mylist", { kind: item.kind, id: item.id, on }, "Couldn't change My List. Try again.");
+        if (!r) return;
+        homeLoadedAt = 0;
+        closeMenu();
+        toast(on ? "Added to My List" : "Removed from My List");
+      }));
+    }
+    body.appendChild(menuLine("list", "Add to a list…", chevron(), () => pickListMenu(item, info)));
+    if (inList && inList !== FAVOURITES) {
+      const l = (info.lists || []).find((x) => x.id === inList);
+      if (l && l.in) {
+        body.appendChild(menuLine("remove", "Remove from " + l.title, null, async () => {
+          const r = await listCall("/api/list", { action: "remove", id: inList, kind: item.kind, item: item.id });
+          if (!r) return;
+          closeMenu();
+          listsChanged();
+          toast("Removed from " + l.title, false, { label: "Undo", run: async () => {
+            if (await listCall("/api/list", { action: "add", id: inList, kind: item.kind, item: item.id })) listsChanged();
+          } });
+        }));
+      }
+    }
+  }
+
+  function itemHead(item, line) {
+    const head = el("div", "menu-head");
+    head.appendChild(item.kind === "channel" ? logo(item.logo, item.title) : picture(item.art, item.title, "thumb"));
+    const text = el("div");
+    const h = el("h2", null, item.title); h.dir = "auto";
+    text.appendChild(h);
+    if (line) { const p = el("p", null, line); p.dir = "auto"; text.appendChild(p); }
+    head.appendChild(text);
+    return head;
+  }
+
+  // Ticks: a channel, film or series can be in several lists. "New list…" makes one with it already in.
+  async function pickListMenu(item, info) {
+    const body = openMenu((b) => {
+      const head = el("div", "menu-head");
+      const h = el("h2", null, "Add " + item.title + " to a list"); h.dir = "auto";
+      head.appendChild(h);
+      b.appendChild(head);
+      if (!info) b.appendChild(el("div", "waiting", " "));
+    }, "Add to a list");
+    if (!info) {
+      try { info = await get("/api/item", { kind: item.kind, id: item.id }); } catch (e) {
+        if (menuOpen && body.lastChild) body.lastChild.textContent = "Couldn't get your lists. Close and try again.";
+        return;
+      }
+      if (!menuOpen) return;
+      body.lastChild.remove();
+    }
+    body.appendChild(el("p", "sheet-help", item.kind === "channel"
+      ? "Ch + and Ch − on the TV stay inside a list."
+      : "A list can hold channels, films and series together."));
+    const lists = info.lists || [];
+    if (!lists.length) body.appendChild(el("p", "sheet-help", "Make a list for things you watch together, like My sports."));
+    const box = el("div");
+    box.style.marginTop = "8px";
+    lists.forEach((l) => {
+      const mark = tick(l.in);
+      const b = menuLine("list", l.title, mark, async () => {
+        const on = !l.in;
+        const r = await listCall("/api/list", { action: on ? "add" : "remove", id: l.id, kind: item.kind, item: item.id });
+        if (!r) return;
+        l.in = on;
+        mark.replaceChildren();
+        if (on) mark.appendChild(icon("check"));
+        toast((on ? "Added to " : "Removed from ") + l.title);
+      });
+      b.setAttribute("aria-pressed", l.in ? "true" : "false");
+      box.appendChild(b);
+    });
+    box.appendChild(menuLine("add", "New list…", null, () => newListMenu({ kind: item.kind, id: item.id })));
+    body.appendChild(box);
   }
 
   // ---------- What's playing ----------
@@ -1368,7 +2163,7 @@
 
   function paintMini() {
     const mini = $("mini");
-    const away = !playing || !!openSheet;
+    const away = !playing || !!openSheet || menuOpen;
     mini.classList.toggle("away", away);
     mini.setAttribute("aria-hidden", away ? "true" : "false");
   }

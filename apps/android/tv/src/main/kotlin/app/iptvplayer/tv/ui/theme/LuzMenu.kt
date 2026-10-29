@@ -7,8 +7,10 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -31,11 +33,12 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
-/** One line of a context menu: what it says, and what it does. */
-data class LuzMenuItem(val key: String, val label: String, val onSelect: () -> Unit)
+/** One line of a context menu: what it says and does; [checked] true adds an amber tick (Design 2.10). */
+data class LuzMenuItem(val key: String, val label: String, val checked: Boolean? = null, val onSelect: () -> Unit)
 
 object LuzMenuTags {
     const val MENU = "luz-menu"
@@ -105,7 +108,17 @@ fun LuzMenu(title: String, items: List<LuzMenuItem>, onDismiss: () -> Unit) {
                         .testTag(LuzMenuTags.item(item.key))
                         .then(if (index == 0) Modifier.focusRequester(first) else Modifier),
                 ) {
-                    Text(item.label, style = MaterialTheme.typography.titleSmall, color = Tokens.textPrimary)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.space3)) {
+                        Text(
+                            item.label,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Tokens.textPrimary,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (item.checked == true) {
+                            Icon(LuzIcons.Check, contentDescription = null, tint = Tokens.accent, modifier = Modifier.size(TICK_SIZE))
+                        }
+                    }
                 }
             }
         }
@@ -124,6 +137,8 @@ object OkKey {
         return false
     }
 }
+
+private val TICK_SIZE = 20.dp
 
 /** How long OK must have been quiet before a menu opened under a held OK takes a press. */
 private const val MENU_QUIET_MS = 250L

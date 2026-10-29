@@ -73,11 +73,11 @@ fun TitleMenu(playlistId: PlaylistId, target: TitleTarget, onOpen: () -> Unit, o
         Step.MENU -> LuzMenu(
             title = target.title,
             items = listOf(
-                LuzMenuItem("open", stringResource(R.string.menu_open), onOpen),
+                LuzMenuItem("open", stringResource(R.string.menu_open), onSelect = onOpen),
                 LuzMenuItem("my-list", stringResource(if (target.favorite) R.string.menu_remove_my_list else R.string.menu_add_my_list)) {
                     coroutines.launch { graph.setFavorite(target.type, target.id, !target.favorite) }
                 },
-                LuzMenuItem("add-to-group", stringResource(R.string.menu_add_to_group)) { next(Step.GROUPS) },
+                LuzMenuItem("add-to-group", stringResource(R.string.menu_add_to_list)) { next(Step.GROUPS) },
             ) + marks + listOf(
                 LuzMenuItem(
                     "hide",
@@ -86,11 +86,12 @@ fun TitleMenu(playlistId: PlaylistId, target: TitleTarget, onOpen: () -> Unit, o
             ),
             onDismiss = { closed = true },
         )
+        // His lists with ticks (Design 2.10): OK puts the title in or takes it out.
         Step.GROUPS -> LuzMenu(
-            title = target.title,
+            title = stringResource(R.string.list_add_title, target.title),
             items = groups.map { group ->
                 val inIt = group.id in holding
-                LuzMenuItem(group.id, stringResource(if (inIt) R.string.menu_remove_from else R.string.menu_add_to, group.title)) {
+                LuzMenuItem(group.id, group.title, checked = inIt) {
                     coroutines.launch {
                         if (inIt) {
                             graph.removeFromGroup(playlistId, group.id, target.type, target.id)
@@ -99,11 +100,11 @@ fun TitleMenu(playlistId: PlaylistId, target: TitleTarget, onOpen: () -> Unit, o
                         }
                     }
                 }
-            } + LuzMenuItem("new-group", stringResource(R.string.menu_new_group)) { next(Step.NEW_GROUP) },
+            } + LuzMenuItem("new-group", stringResource(R.string.list_new_menu)) { next(Step.NEW_GROUP) },
             onDismiss = { closed = true },
         )
         Step.NEW_GROUP -> LuzPrompt(
-            title = stringResource(R.string.menu_new_group),
+            title = stringResource(R.string.list_new_menu),
             initial = "",
             onConfirm = { name ->
                 graph.createGroupWith(playlistId, name, target.type, target.id)
@@ -127,7 +128,7 @@ fun ContinueMenu(playlistId: PlaylistId, card: ContinueCard, onOpen: () -> Unit,
     LuzMenu(
         title = listOfNotNull(card.title, card.subtitle).joinToString(" · "),
         items = listOfNotNull(
-            LuzMenuItem("open", stringResource(R.string.menu_open), onOpen),
+            LuzMenuItem("open", stringResource(R.string.menu_open), onSelect = onOpen),
             // Application scope: the row redraws, and this card may be gone, before the write has finished.
             LuzMenuItem("mark-watched", stringResource(R.string.menu_mark_watched)) {
                 graph.scope.launch { graph.setWatched(playlistId, card.type, card.id, true) }

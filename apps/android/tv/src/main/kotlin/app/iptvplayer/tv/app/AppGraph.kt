@@ -230,6 +230,9 @@ class AppGraph(context: Context) {
     suspend fun channelLabel(playlistId: PlaylistId, channelId: ChannelId): String? =
         io { content.channelsByIds(playlistId, listOf(channelId.value)).firstOrNull()?.label }
 
+    suspend fun channelRow(playlistId: PlaylistId, channelId: ChannelId): ChannelRow? =
+        io { content.channelsByIds(playlistId, listOf(channelId.value)).firstOrNull() }
+
     suspend fun channelLogo(playlistId: PlaylistId, channelId: ChannelId): UrlTemplate? =
         io { content.channelsByIds(playlistId, listOf(channelId.value)).firstOrNull()?.logo }
 

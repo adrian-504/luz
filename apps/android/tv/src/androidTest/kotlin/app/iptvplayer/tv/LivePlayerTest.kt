@@ -142,6 +142,75 @@ class LivePlayerTest {
         }
     }
 
+    /**
+     * Lists from the phone (ADR-0050, 2b; Design 2.8–2.13): make one, fill it from search, see it on the TV, rename it, be
+     * refused a name already used, favourite a channel, and delete the list; the TV shows a note for the changes.
+     */
+    @Test
+    fun aPhoneMakesAListFillsItAndTheTvSaysSo() {
+        val companion = graph.companion
+        companion.setOn(true)
+        try {
+            awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
+            val (first, second) = runBlocking { graph.channels(playlist, null) }.let { it[0] to it[1] }
+            val token = JSONObject(
+                companionCall("/api/pair", """{"code":"${companion.pairing.code()}","name":"Test phone"}""").second,
+            ).getString("token")
+
+            val made = companionCall("/api/list", """{"token":"$token","action":"create","title":"My sports"}""")
+            assertEquals(200, made.first)
+            val id = JSONObject(made.second).getString("id")
+            awaitExists(COMPANION_NOTE_TAG)
+            assertEquals(409, companionCall("/api/list", """{"token":"$token","action":"create","title":"my sports"}""").first)
+            // No name: the TV picks one.
+            val unnamed = JSONObject(companionCall("/api/list", """{"token":"$token","action":"create"}""").second)
+            assertEquals("New list", unnamed.getString("title"))
+
+            fun add(channel: String) = companionCall(
+                "/api/list",
+                """{"token":"$token","action":"add","id":"$id","kind":"channel","item":"$channel"}""",
+            )
+            assertEquals(200, add(first.id.value).first)
+            assertEquals(2, JSONObject(add(second.id.value).second).getInt("count"))
+            assertTrue(runBlocking { graph.channelsInUserGroup(playlist, id) }.map { it.id } == listOf(first.id, second.id))
+
+            val search = Uri.Builder().path("/api/search").appendQueryParameter("q", first.label).appendQueryParameter("list", id).build()
+            val hits = JSONObject(companionGet(search.toString(), token).second).getJSONArray("channels")
+            assertTrue((0 until hits.length()).map(hits::getJSONObject).first { it.getString("id") == first.id.value }.getBoolean("added"))
+
+            val home = JSONObject(companionGet("/api/home", token).second).getJSONArray("lists")
+            assertTrue((0 until home.length()).map(home::getJSONObject).any { it.getString("id") == id && it.getInt("channels") == 2 })
+            val item = JSONObject(
+                companionGet(
+                    Uri.Builder().path(
+                        "/api/item",
+                    ).appendQueryParameter("kind", "channel").appendQueryParameter("id", first.id.value).build().toString(),
+                    token,
+                ).second,
+            )
+            val lists = item.getJSONArray("lists")
+            assertTrue((0 until lists.length()).map(lists::getJSONObject).single { it.getString("id") == id }.getBoolean("in"))
+
+            assertEquals(200, companionCall("/api/list", """{"token":"$token","action":"rename","id":"$id","title":"Football"}""").first)
+            assertEquals(
+                409,
+                companionCall("/api/list", """{"token":"$token","action":"rename","id":"$id","title":"New list"}""").first,
+            )
+            assertEquals(
+                200,
+                companionCall("/api/favorite", """{"token":"$token","kind":"channel","id":"${first.id.value}","on":true}""").first,
+            )
+            rule.waitUntil(5_000) { runBlocking { graph.favoriteChannels(playlist) }.any { it.id == first.id } }
+
+            assertEquals(200, companionCall("/api/list", """{"token":"$token","action":"delete","id":"$id"}""").first)
+            assertEquals(404, companionGet("/api/list?id=$id", token).first)
+        } finally {
+            runBlocking { graph.userGroups(playlist).forEach { graph.deleteGroup(playlist, it.id) } }
+            companion.pairing.phones.value.forEach { companion.pairing.forget(it.id) }
+            companion.setOn(false)
+        }
+    }
+
     /** Nothing opens out of sight (ADR-0050, step 3): while Luz is not on the TV's screen, the phone is told so. */
     @Test
     fun aPhoneCannotOpenAnythingWhileLuzIsHidden() {

@@ -286,7 +286,7 @@
     <string name="home_recently_watched">Recently watched</string>
     <string name="section_my_luz">My Luz</string>
     <string name="my_luz_empty_title">Nothing here yet</string>
-    <string name="my_luz_empty_message">Hold OK on a film, series or channel and choose My List or Add to favourites. What you keep, what you are part-way through and your own groups gather here.</string>
+    <string name="my_luz_empty_message">Hold OK on a film, series or channel and choose My List or Add to favourites. What you keep, what you are part-way through and your own lists gather here.</string>
     <string name="home_hours_left">%1$d h %2$d min left</string>
     <string name="home_started_ago">Started %1$d min ago</string>
     <string name="home_starts_in">In %1$d min</string>
@@ -438,12 +438,11 @@
     <string name="menu_mark_watched">Mark as watched</string>
     <string name="menu_mark_unwatched">Mark as not watched</string>
     <string name="menu_remove_continue">Remove from Continue watching</string>
-    <string name="menu_add_to_group">Add to a group…</string>
-    <string name="menu_add_to">Add to %1$s</string>
-    <string name="menu_remove_from">Remove from %1$s</string>
-    <string name="menu_new_group">New group…</string>
-    <string name="menu_rename_group">Rename this group</string>
-    <string name="menu_delete_group">Delete this group</string>
+    <string name="menu_add_to_list">Add to a list…</string>
+    <string name="list_add_title">Add %1$s to a list</string>
+    <string name="list_new_menu">New list…</string>
+    <string name="menu_rename_list">Rename this list</string>
+    <string name="menu_delete_list">Delete this list</string>
     <string name="settings_home">Home</string>
     <string name="settings_home_summary">Which rows Home shows</string>
     <string name="settings_home_help">OK turns a row on or off. Hold OK to move it.</string>
@@ -452,4 +451,17 @@
     <string name="home_row_up">Move up</string>
     <string name="home_row_down">Move down</string>
     <string name="home_row_default">Use the default order</string>
+    <!-- Favourites and lists (Words - round 2b); "New list", "New list 2"… until named -->
+    <string name="list_unnamed">New list</string>
+    <string name="note_fav_on">%1$s added to favourites</string>
+    <string name="note_fav_off">%1$s removed from favourites</string>
+    <string name="note_list_add">%1$s added to %2$s</string>
+    <string name="note_list_remove">%1$s removed from %2$s</string>
+    <plurals name="note_list_many">
+        <item quantity="one">%1$d added to %2$s</item>
+        <item quantity="other">%1$d added to %2$s</item>
+    </plurals>
+    <string name="note_list_new">New list: %1$s</string>
+    <string name="note_list_renamed">%1$s renamed to %2$s</string>
+    <string name="note_list_deleted">%1$s deleted</string>
 </resources>

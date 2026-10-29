@@ -296,6 +296,10 @@ audio or subtitles, My List, or finishes typing), a glass pill shows at the top 
 and then *· from your phone* (13 sp, a phone symbol). It never takes focus; a second change replaces it; the arrow pad
 gives none. It sits above every screen, not only the player.
 
+**Lists** (ADR-0050 2b): the viewer's own sets are *lists* everywhere ("Add to a list…", "New list…", "Rename this
+list"); the provider's are *categories*. Choosing *Add to a list…* shows "Add France 24 to a list" with every list on
+its own line and an amber tick beside the ones that hold it; OK puts it in or takes it out.
+
 ## 18. Remote behaviour
 
 | Input | Behaviour |
