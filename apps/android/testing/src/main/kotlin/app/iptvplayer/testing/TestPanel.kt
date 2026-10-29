@@ -147,6 +147,10 @@ object TestPanel {
             """"episodes":{"1":[${episode(8101, 1, 1)},${episode(8102, 1, 2)},${episode(8103, 1, 3)}],"2":[${episode(8201, 2, 1)}]}}"""
     }
 
+    /** The guide's half hours (from two hours ago) holding the fake match and a magazine about one of its teams. */
+    private const val MATCH_SLOT = 10
+    private const val MAGAZINE_SLOT = 4
+
     /** The football-data.org token the fake accepts (ADR-0057); a canary, never a real token. */
     const val FOOTBALL_TOKEN = "football-canary-5e2b8d714c9a03f6"
 
@@ -297,7 +301,14 @@ object TestPanel {
                             from,
                         )}\" stop=\"${format.format(from.plus(30, ChronoUnit.MINUTES))}\" channel=\"$id\">",
                     )
-                    append("<title>$name programme ${slot + 1}</title></programme>\n")
+                    // Two programmes about the fake football's teams (ADR-0057): the match itself, about kick-off, and a magazine
+                    // on now, for "In your guide".
+                    val title = when {
+                        id == "sports.test" && slot == MATCH_SLOT -> "Example City v Sample United"
+                        id == "docs.test" && slot == MAGAZINE_SLOT -> "Example City magazine"
+                        else -> "$name programme ${slot + 1}"
+                    }
+                    append("<title>$title</title></programme>\n")
                 }
             }
             append("</tv>\n")

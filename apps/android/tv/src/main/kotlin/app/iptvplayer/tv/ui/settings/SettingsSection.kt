@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -530,15 +528,11 @@ private fun SportPane(focus: FocusMemory, onFindTeam: () -> Unit) {
 private fun SportKeyBox(onSave: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf("") }
     val field = remember { FocusRequester() }
-    val inView = remember { BringIntoViewRequester() }
     BackHandler(onBack = onDismiss)
-    LaunchedEffect(Unit) {
-        inView.bringIntoView()
-        runCatching { field.requestFocus() }
-    }
+    // In place of the key buttons, the box fits under the heading as it is: nothing scrolls, the status stays in view.
+    LaunchedEffect(Unit) { runCatching { field.requestFocus() } }
     Column(
         Modifier
-            .bringIntoViewRequester(inView)
             .clip(RoundedCornerShape(Tokens.radiusLarge))
             .background(Tokens.panel)
             .border(1.dp, Tokens.hairline, RoundedCornerShape(Tokens.radiusLarge))
@@ -553,6 +547,8 @@ private fun SportKeyBox(onSave: (String) -> Unit, onDismiss: () -> Unit) {
             onValueChange = { text = it },
             imeAction = ImeAction.Done,
             modifier = Modifier.fillMaxWidth().focusRequester(field).testTag(LuzPromptTags.FIELD),
+            // The phone line under the field is the easy way for a long key: the keyboard waits for OK (Design).
+            keyboardOnOk = true,
         )
         PhoneLine()
         ActionButton(

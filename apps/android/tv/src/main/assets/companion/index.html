@@ -43,11 +43,11 @@
     background: linear-gradient(var(--room) 70%, rgba(7, 8, 11, 0));
   }
   .top .bar { display: flex; align-items: center; justify-content: space-between; min-height: 32px; }
-  .brand { font-weight: 650; font-size: 22px; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; }
+  .brand { font-weight: 650; font-size: 22px; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; min-width: 0; }
   .light { width: 9px; height: 9px; border-radius: 50%; background: var(--text-3); transition: background 0.4s, box-shadow 0.4s; }
   .on .light { background: var(--amber); box-shadow: 0 0 12px 1px var(--amber); }
   .off .light { background: var(--live); }
-  .status { font-size: 13px; color: var(--text-3); }
+  .status { font-size: 13px; color: var(--text-3); flex: none; margin-left: 12px; }
   .search {
     margin-top: 12px; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 14px;
     background: var(--raised); border: 1px solid var(--hair); border-radius: 14px;
@@ -96,7 +96,7 @@
   .section > h2 button { font-size: 15px; font-weight: 500; color: var(--text-2); padding: 6px 0; }
   .shelf {
     display: flex; gap: 12px; overflow-x: auto; padding: 0 16px 4px; scroll-padding: 0 16px;
-    scroll-snap-type: x mandatory; scrollbar-width: none;
+    scroll-snap-type: x mandatory; scrollbar-width: none; align-items: flex-start;
   }
   .shelf::-webkit-scrollbar { display: none; }
   .shelf > * { scroll-snap-align: start; flex: none; }
@@ -312,7 +312,8 @@
   .now-note { color: var(--text-3); font-size: 14px; text-align: center; margin: 14px 0 0; }
 
   /* Typing */
-  .tvname { color: var(--text-2); font-weight: 500; font-size: 17px; letter-spacing: 0; display: inline-flex; align-items: center; gap: 6px; }
+  .tvname { color: var(--text-2); font-weight: 500; font-size: 17px; letter-spacing: 0; display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+  .tvname span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tvname svg { width: 16px; height: 16px; }
   .now-art { aspect-ratio: 16 / 9; margin: 0 16px 14px; border-radius: 14px; }
   .now-art.plate-art { display: grid; place-items: center; background: linear-gradient(150deg, #2b3040, #12141a); }

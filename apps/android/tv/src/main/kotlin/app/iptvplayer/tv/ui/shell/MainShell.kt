@@ -93,6 +93,8 @@ fun MainShell(
     onOpenSeries: (PlaylistId, String) -> Unit = { _, _ -> },
     onPlayContent: (PlaylistId, ContentType, String) -> Unit = { _, _, _ -> },
     onOpenPerson: (PlaylistId, String) -> Unit = { _, _ -> },
+    /** "In your guide" for a match (4.16). */
+    onOpenMatch: (PlaylistId, String) -> Unit = { _, _ -> },
 ) {
     var homeFirstKey by remember { mutableStateOf<String?>(null) }
     var libraryFirstKey by remember { mutableStateOf<String?>(null) }
@@ -179,6 +181,7 @@ fun MainShell(
                         onOpenSeries = onOpenSeries,
                         onOpenPerson = onOpenPerson,
                         onAddSource = onAddSource,
+                        onOpenMatch = onOpenMatch,
                     )
                     Section.SETTINGS -> SettingsSection(
                         focus,

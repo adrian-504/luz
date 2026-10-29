@@ -48,10 +48,10 @@ class SportStoreTest {
     @Test
     fun aTeamIsFoundByItsNameInArabicOrLatinLetters() {
         // "Mithal Siti", the team's name in Arabic letters, as Wikidata would give it.
-        sport.saveTeam(city, listOf("مثال سيتي"), SportStore.ORIGIN_WIKIDATA)
+        sport.saveTeam(city, listOf("\u0645\u062b\u0627\u0644 \u0633\u064a\u062a\u064a"), SportStore.ORIGIN_WIKIDATA)
         sport.saveTeam(united)
         assertEquals(listOf(city.ref), sport.teamsMatching("example"))
-        assertEquals(listOf(city.ref), sport.teamsMatching("مثال"))
+        assertEquals(listOf(city.ref), sport.teamsMatching("\u0645\u062b\u0627\u0644"))
         assertEquals(listOf(united.ref), sport.teamsMatching("SAMPLE utd"))
         assertEquals(emptyList(), sport.teamsMatching("ex"), "two letters find nothing")
     }

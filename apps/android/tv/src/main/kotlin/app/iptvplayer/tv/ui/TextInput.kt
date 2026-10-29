@@ -59,6 +59,12 @@ fun TvTextField(
     hint: String? = null,
     /** Search draws the field as one large line of type rather than a form box, with the label as its placeholder. */
     large: Boolean = false,
+    /**
+     * Keeps the keyboard down when focus arrives, until OK on the field asks for it: for a field the remote is put on
+     * without being asked, such as the search line and the sport key box. Not under a name prompt: putting the
+     * keyboard away there closed the prompt.
+     */
+    keyboardOnOk: Boolean = large,
 ) {
     var focused by remember { mutableStateOf(false) }
     val okPressedHere = remember { mutableStateOf(false) }
@@ -74,9 +80,8 @@ fun TvTextField(
         }
         // The search line takes focus without being asked — the remote arrives on it as Search opens — and the platform can
         // raise the keyboard over it even though it asks not to. For the moment after focus arrives, put the keyboard away
-        // again unless the viewer asked for it. Only the search line: putting the keyboard away under a name prompt closed
-        // the prompt.
-        if (!large) return@LaunchedEffect
+        // again unless the viewer asked for it ([keyboardOnOk]).
+        if (!keyboardOnOk) return@LaunchedEffect
         repeat(AUTO_HIDE_ATTEMPTS) {
             delay(AUTO_HIDE_STEP_MS)
             if (!keyboardAsked.value) keyboard?.hide()

@@ -18,6 +18,7 @@ import app.iptvplayer.domain.playback.PlaybackMode
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.domain.text.TextNormalization
 import app.iptvplayer.epg.GuideOffset
+import app.iptvplayer.epg.MatchGuide
 import app.iptvplayer.ingestion.AddSourceFailure
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.ingestion.EpisodeArt
@@ -98,6 +99,9 @@ data class SearchResults(
 
 /** A match as a card shows it (4.16): the match, its teams' crests and short names when known, and whether it has a reminder. */
 data class MatchCard(val fixture: Fixture, val home: SportTeam?, val away: SportTeam?, val reminder: Boolean)
+
+/** One of the guide's programmes for a match (4.16), on the viewer's channel it was found on: the guide's words, unchanged. */
+data class MatchProgramme(val channel: ChannelRow, val title: String, val start: Instant, val end: Instant)
 
 /** "Because you watched …": the film it started from and what shares its director, cast or genres. */
 data class Recommendation(val seed: MovieRow, val movies: List<MovieRow>)
@@ -760,6 +764,28 @@ class AppGraph(context: Context) {
 
     suspend fun fixture(id: String): Fixture? = io { sportStore.fixture(id) }
 
+    /** A match as a card shows it, read again (its reminder may have changed). */
+    suspend fun matchCard(id: String): MatchCard? = io {
+        val fixture = sportStore.fixture(id) ?: return@io null
+        MatchCard(fixture, sportStore.team(fixture.homeRef), sportStore.team(fixture.awayRef), sportStore.reminders().any { it.id == id })
+    }
+
+    /**
+     * "In your guide" (4.16): the programmes the viewer's own guide lists for the match's two teams, from now to two weeks
+     * ahead, by every name Luz knows for them (Arabic and French included), both teams first and nearest to kick-off
+     * first. Only what the guide says: no channel is chosen or claimed (ADR-0057).
+     */
+    suspend fun matchGuide(playlistId: PlaylistId, fixture: Fixture): List<MatchProgramme> = io {
+        val home = sportStore.aliases(fixture.homeRef) + fixture.homeName
+        val away = sportStore.aliases(fixture.awayRef) + fixture.awayName
+        val query = MatchGuide.query(home, away) ?: return@io emptyList()
+        val now = SystemClock.now()
+        val hits = epg.searchProgrammes(playlistId.value, query, now - MATCH_LENGTH, now + MATCH_DAYS.days, MAX_GUIDE_HITS)
+        val channels = content.channelsByIds(playlistId, hits.map { it.channelId }.distinct()).associateBy { it.id.value }
+        val found = hits.mapNotNull { hit -> channels[hit.channelId]?.let { MatchProgramme(it, hit.title, hit.start, hit.end) } }
+        MatchGuide.order(found, home, away, fixture.kickoff, { it.title }, { it.start })
+    }
+
     suspend fun team(ref: String): SportTeam? = io { sportStore.team(ref) }
 
     suspend fun hasReminder(fixtureId: String): Boolean = io { sportStore.reminders().any { it.id == fixtureId } }
@@ -1391,6 +1417,7 @@ class AppGraph(context: Context) {
         const val MATCH_DAYS = 14
         const val MAX_SEARCH_MATCHES = 12
         const val MAX_LOOKUPS = 3
+        const val MAX_GUIDE_HITS = 60L
         const val LOG_TAG = "IptvImport"
 
         /** Channels compared when measuring a guide's time shift (ADR-0056), the short-guide limit. */

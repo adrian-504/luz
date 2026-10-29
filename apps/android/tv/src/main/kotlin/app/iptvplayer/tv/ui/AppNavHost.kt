@@ -47,6 +47,7 @@ import app.iptvplayer.tv.ui.player.OPEN_LAST_CHANNEL
 import app.iptvplayer.tv.ui.player.PlayerScreen
 import app.iptvplayer.tv.ui.shell.MainShell
 import app.iptvplayer.tv.ui.shell.Section
+import app.iptvplayer.tv.ui.sport.MatchGuideScreen
 import app.iptvplayer.tv.ui.theme.Tokens
 
 object Routes {
@@ -62,6 +63,9 @@ object Routes {
     const val SERIES = "series/{playlist}/{id}"
     const val CONTENT = "content/{playlist}/{type}/{id}?fromStart={fromStart}"
     const val PERSON = "person/{playlist}/{name}"
+    const val MATCH = "match/{playlist}/{fixture}"
+
+    fun match(playlist: PlaylistId, fixture: String) = "match/${Uri.encode(playlist.value)}/${Uri.encode(fixture)}"
 
     fun person(playlist: PlaylistId, name: String) = "person/${Uri.encode(playlist.value)}/${Uri.encode(name)}"
 
@@ -174,6 +178,20 @@ fun AppNavHost() {
                 onOpenSeries = { playlist, id -> navController.navigate(Routes.series(playlist, id)) },
                 onPlayContent = { playlist, type, id -> navController.navigate(Routes.content(playlist, type, id, fromStart = false)) },
                 onOpenPerson = { playlist, name -> navController.navigate(Routes.person(playlist, name)) },
+                onOpenMatch = { playlist, fixture -> navController.navigate(Routes.match(playlist, fixture)) },
+            )
+        }
+        composable(
+            Routes.MATCH,
+            enterTransition = { pageEnter() },
+            popExitTransition = { pageExit() },
+        ) { entry ->
+            val playlist = PlaylistId(Uri.decode(entry.arguments?.getString("playlist").orEmpty()))
+            MatchGuideScreen(
+                playlist,
+                Uri.decode(entry.arguments?.getString("fixture").orEmpty()),
+                onPlayChannel = { channel -> navController.navigate(Routes.channel(playlist, ChannelScope.All, channel)) },
+                onOpenGuide = { navController.navigate(Routes.main(Section.GUIDE)) },
             )
         }
         composable(

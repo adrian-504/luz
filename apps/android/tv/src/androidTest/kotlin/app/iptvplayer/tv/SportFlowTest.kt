@@ -1,5 +1,6 @@
 package app.iptvplayer.tv
 
+import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -21,6 +22,7 @@ import app.iptvplayer.tv.ui.library.SearchTags
 import app.iptvplayer.tv.ui.settings.SettingsTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
+import app.iptvplayer.tv.ui.sport.MatchGuideTags
 import app.iptvplayer.tv.ui.theme.LuzPromptTags
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -98,6 +100,25 @@ class SportFlowTest {
         press(KeyEvent.KEYCODE_DPAD_CENTER)
     }
 
+    /** OK held as the remote holds it: down, a long-press repeat, then up. */
+    private fun longPressOk() {
+        val down = SystemClock.uptimeMillis()
+        instrumentation.sendKeySync(KeyEvent(down, down, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, 0))
+        Thread.sleep(700)
+        instrumentation.sendKeySync(
+            KeyEvent.changeTimeRepeat(
+                KeyEvent(
+                    down, SystemClock.uptimeMillis(), KeyEvent.ACTION_DOWN,
+                    KeyEvent.KEYCODE_DPAD_CENTER, 1, 0, 0, 0, KeyEvent.FLAG_LONG_PRESS,
+                ),
+                SystemClock.uptimeMillis(),
+                1,
+            ),
+        )
+        instrumentation.sendKeySync(KeyEvent(down, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER, 0))
+        rule.waitForIdle()
+    }
+
     private fun shot(name: String) {
         rule.waitForIdle()
         screenshot(name)
@@ -124,7 +145,7 @@ class SportFlowTest {
         rule.waitUntil(5_000) { rule.onAllNodes(hasTestTag(LuzPromptTags.PROMPT)).fetchSemanticsNodes().isNotEmpty() }
         shot("r4-settings-sport-key-box")
         rule.onNodeWithTag(LuzPromptTags.FIELD).performTextInput(TestPanel.FOOTBALL_TOKEN)
-        press(KeyEvent.KEYCODE_BACK) // the keyboard takes the first Back; the prompt stays
+        // The keyboard waits for OK on the field, so nothing stands between the field and Save.
         repeat(4) { if (focusedTag() != LuzPromptTags.CONFIRM) press(KeyEvent.KEYCODE_DPAD_DOWN) }
         awaitFocus(LuzPromptTags.CONFIRM)
         rule.pressOkUntil(timeoutMs = 10_000) { rule.onAllNodes(hasTestTag(LuzPromptTags.PROMPT)).fetchSemanticsNodes().isEmpty() }
@@ -156,11 +177,37 @@ class SportFlowTest {
         rule.waitUntil(40_000) { rule.onAllNodes(hasTestTag(card)).fetchSemanticsNodes().isNotEmpty() }
         shot("r4-search-matches")
 
-        rule.onNodeWithTag(card).performClick()
+        // Holding OK on the card: the match's menu (4.8).
+        repeat(8) {
+            val at = focusedTag()
+            when {
+                at == card -> Unit
+                at?.startsWith("search-match-") == true -> press(KeyEvent.KEYCODE_DPAD_LEFT)
+                else -> press(KeyEvent.KEYCODE_DPAD_DOWN)
+            }
+        }
+        awaitFocus(card)
+        longPressOk()
         rule.waitUntil(5_000) { rule.onAllNodes(hasText("Follow Example City FC")).fetchSemanticsNodes().isNotEmpty() }
         shot("r4-match-menu")
         rule.onAllNodes(hasText("Follow Example City FC"))[0].performClick()
         rule.waitUntil(10_000) { runBlocking { graph.isFollowed(FollowKind.TEAM, "9065") } }
         assertEquals(listOf("Example City FC"), runBlocking { graph.follows() }.map { it.name })
+
+        // OK: "In your guide" (4.3), the guide's programmes for both teams first, then one team's.
+        rule.onNodeWithTag(card).performClick()
+        rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(MatchGuideTags.SCREEN)).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(30_000) {
+            val first = hasTestTag(MatchGuideTags.row(0)).and(hasText("Example City v Sample United", substring = true))
+            rule.onAllNodes(first).fetchSemanticsNodes().isNotEmpty()
+        }
+        rule.waitUntil(5_000) {
+            rule.onAllNodes(hasText("Example City magazine", substring = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        shot("r4-match-guide")
+        rule.onNodeWithTag(MatchGuideTags.REMIND).performClick()
+        rule.waitUntil(10_000) { runBlocking { graph.hasReminder("70001") } }
+        rule.waitUntil(5_000) { rule.onAllNodes(hasText("Reminder set")).fetchSemanticsNodes().isNotEmpty() }
+        shot("r4-match-guide-reminder")
     }
 }

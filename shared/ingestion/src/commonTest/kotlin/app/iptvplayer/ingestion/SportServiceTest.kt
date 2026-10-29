@@ -96,7 +96,7 @@ class SportServiceTest {
             """{"search":[{"id":"Q1","label":"Example City FC","description":"association football club"}]}"""
         } else {
             // The team's name in Arabic letters.
-            """{"entities":{"Q1":{"labels":{"ar":{"language":"ar","value":"مثال سيتي"}}}}}"""
+            """{"entities":{"Q1":{"labels":{"ar":{"language":"ar","value":"\u0645\u062b\u0627\u0644 \u0633\u064a\u062a\u064a"}}}}}"""
         }
     }
 
@@ -151,7 +151,7 @@ class SportServiceTest {
         )
         assertEquals(listOf("1", "2"), sport.fixtures(now, now + 14.days).map { it.id })
         assertEquals(listOf("65"), sport.standing("EXL").map { it.teamRef })
-        assertEquals(listOf("65"), sport.teamsMatching("مثال"), "found by its Arabic name")
+        assertEquals(listOf("65"), sport.teamsMatching("\u0645\u062b\u0627\u0644"), "found by its Arabic name")
 
         web.paths.clear()
         assertNull(service.refresh())

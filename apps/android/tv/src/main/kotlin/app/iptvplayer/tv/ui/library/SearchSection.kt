@@ -95,6 +95,7 @@ fun SearchSection(
     onOpenSeries: (PlaylistId, String) -> Unit,
     onOpenPerson: (PlaylistId, String) -> Unit,
     onAddSource: () -> Unit,
+    onOpenMatch: (PlaylistId, String) -> Unit = { _, _ -> },
 ) {
     val graph = LocalAppGraph.current
     val revision by graph.revision.collectAsState()
@@ -205,7 +206,8 @@ fun SearchSection(
                                     MatchCardView(
                                         match,
                                         Modifier.rememberedFocus(focus, SearchTags.result("match", match.fixture.id)),
-                                        onClick = { menuFor = match },
+                                        // OK opens "In your guide" (4.3); holding OK, the match's menu (4.8).
+                                        onClick = { onOpenMatch(current, match.fixture.id) },
                                         onLongClick = { menuFor = match },
                                     )
                                 }

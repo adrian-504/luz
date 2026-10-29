@@ -34,6 +34,9 @@ public data class GuideProgramme(
     public val description: String? = null,
 )
 
+/** A guide programme found by a search, with the channel of the viewer's it is on. */
+public data class GuideHit(public val channelId: String, public val title: String, public val start: Instant, public val end: Instant)
+
 public data class NowNextRow(public val current: GuideProgramme?, public val next: GuideProgramme?)
 
 /** Minimal programme input for writing a snapshot. */
@@ -303,6 +306,48 @@ public class EpgStore(private val driver: SqlDriver) {
             bindLong(2, snapshot)
             bindLong(3, limit)
         }.value
+    }
+
+    /**
+     * Programmes in the viewer's guide for [playlistId]'s channels matching [query] (an FTS5 query, from MatchGuide) that
+     * are on between [from] and [until], at their linked channel's shifted times (ADR-0056), soonest first. The guide's
+     * rows as they are: Luz decides nothing about them (ADR-0057). Empty when the search index is off or the query is bad.
+     */
+    public fun searchProgrammes(playlistId: String, query: String, from: Instant, until: Instant, limit: Long = 100): List<GuideHit> {
+        if (!searchEnabled()) return emptyList()
+        return runCatching {
+            driver.executeQuery(
+                null,
+                // The full-text index drives (CROSS JOIN, as in [search]); the link index finds each hit's channel.
+                "SELECT l.channel_id, p.title, p.start_utc + l.shift_minutes * 60, p.end_utc + l.shift_minutes * 60 " +
+                    "FROM epg_program_search s CROSS JOIN epg_program p ON p.row_id = s.rowid " +
+                    "JOIN epg_active_snapshot a ON a.source_id = p.source_id AND a.snapshot = p.snapshot " +
+                    "JOIN channel_epg_link l ON l.epg_source_id = p.source_id AND l.epg_channel_id = p.channel_key " +
+                    "AND l.playlist_id = ? " +
+                    "WHERE epg_program_search MATCH ? " +
+                    "AND p.end_utc + l.shift_minutes * 60 > ? AND p.start_utc + l.shift_minutes * 60 < ? " +
+                    "ORDER BY 3 LIMIT ?",
+                { cursor ->
+                    val out = ArrayList<GuideHit>()
+                    while (cursor.next().value) {
+                        out += GuideHit(
+                            cursor.getString(0)!!,
+                            cursor.getString(1)!!,
+                            Instant.fromEpochSeconds(cursor.getLong(2)!!),
+                            Instant.fromEpochSeconds(cursor.getLong(3)!!),
+                        )
+                    }
+                    QueryResult.Value(out)
+                },
+                5,
+            ) {
+                bindString(0, playlistId)
+                bindString(1, query)
+                bindLong(2, from.epochSeconds)
+                bindLong(3, until.epochSeconds)
+                bindLong(4, limit)
+            }.value
+        }.getOrDefault(emptyList())
     }
 
     internal companion object {

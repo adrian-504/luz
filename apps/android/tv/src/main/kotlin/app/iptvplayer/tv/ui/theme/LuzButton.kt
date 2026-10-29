@@ -49,6 +49,8 @@ fun LuzButton(
     modifier: Modifier = Modifier,
     kind: ButtonKind = ButtonKind.SECONDARY,
     icon: ImageVector? = null,
+    /** The symbol's colour at rest, for one that says something is on (the amber bell of "Reminder set"); dark when white. */
+    iconTint: Color? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(Tokens.radiusPill)
@@ -71,7 +73,8 @@ fun LuzButton(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val content = if (white) Color.Black else Tokens.textPrimary
-        icon?.let { Icon(it, contentDescription = null, tint = content, modifier = Modifier.size(ICON_SIZE)) }
+        val symbol = if (white) content else iconTint ?: content
+        icon?.let { Icon(it, contentDescription = null, tint = symbol, modifier = Modifier.size(ICON_SIZE)) }
         Text(text, style = MaterialTheme.typography.titleMedium, color = content, maxLines = 1)
     }
 }

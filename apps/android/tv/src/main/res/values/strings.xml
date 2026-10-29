@@ -345,6 +345,11 @@
     <string name="match_page_line">%1$s · %2$s</string>
     <string name="match_remind">Remind me</string>
     <string name="match_reminder_set">Reminder set</string>
+    <string name="match_remind_help">2 minutes before kick-off, while Luz is open</string>
+    <string name="search_in_guide">In your guide</string>
+    <string name="match_guide_intro">Programmes your guide lists for these teams, as it writes them.</string>
+    <string name="match_guide_empty">Your guide doesn\'t list this match yet.</string>
+    <string name="match_guide_empty_help">Guides usually add matches a few days before. Look again nearer the day, or keep the reminder: it brings you back here.</string>
     <string name="follow_team">Follow %1$s</string>
     <string name="settings_sport">Sport</string>
     <string name="settings_sport_summary">Teams and leagues you follow</string>
