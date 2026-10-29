@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
@@ -51,6 +52,7 @@ import app.iptvplayer.tv.R
 import app.iptvplayer.tv.ui.library.ArtworkImage
 import app.iptvplayer.tv.ui.shortTime
 import app.iptvplayer.tv.ui.theme.LuzBadge
+import app.iptvplayer.tv.ui.theme.NoteText
 import app.iptvplayer.tv.ui.theme.Tokens
 import app.iptvplayer.tv.ui.theme.luzClickable
 import kotlinx.coroutines.delay
@@ -326,7 +328,14 @@ fun LiveBar(info: LiveInfo, resolver: ((UrlTemplate) -> String?)?, badges: List<
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.space1)) {
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), verticalAlignment = Alignment.CenterVertically) {
-                info.number?.let { Text(it.toString(), style = MaterialTheme.typography.headlineMedium, color = Tokens.textSecondary) }
+                // The number in light weight: a reference, not reading text (Design 3.3).
+                info.number?.let {
+                    Text(
+                        it.toString(),
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Light),
+                        color = Tokens.textSecondary,
+                    )
+                }
                 Text(
                     info.name,
                     style = MaterialTheme.typography.headlineMedium,
@@ -340,7 +349,7 @@ fun LiveBar(info: LiveInfo, resolver: ((UrlTemplate) -> String?)?, badges: List<
                 info.group?.let {
                     Text(
                         it,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = NoteText,
                         color = Tokens.textTertiary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -362,7 +371,7 @@ fun LiveBar(info: LiveInfo, resolver: ((UrlTemplate) -> String?)?, badges: List<
             info.next?.let { next ->
                 Text(
                     stringResource(R.string.player_next_programme, shortTime(next.start), next.title),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = NoteText,
                     color = Tokens.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -371,7 +380,7 @@ fun LiveBar(info: LiveInfo, resolver: ((UrlTemplate) -> String?)?, badges: List<
             info.note?.let {
                 Text(
                     it,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = NoteText,
                     color = Tokens.textSecondary,
                     maxLines = 2,
                     modifier = Modifier.testTag(PlayerTags.BANNER_NOTE),

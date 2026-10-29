@@ -8,6 +8,7 @@ import androidx.core.content.edit
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.library.ExternalList
+import app.iptvplayer.domain.live.NewsChannels
 import app.iptvplayer.domain.live.ViewingSession
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.CustomisationTarget
@@ -117,6 +118,9 @@ data class ComingUp(val channel: ChannelRow, val programme: GuideProgramme)
 
 /** "Because you watch …": the genre the viewer watches most, and films of it they have not seen. */
 data class GenrePick(val genre: String, val movies: List<MovieRow>)
+
+/** One copy of a channel in "Choose copy" (x9). */
+data class CopyChoice(val id: ChannelId, val quality: String?, val startedWell: Boolean, val chosen: Boolean)
 
 /** Import activity per source, for the UI. */
 data class SourceActivity(
@@ -265,6 +269,18 @@ class AppGraph(context: Context) {
         }
     }
 
+    /** A channel's copies for "Choose copy" (x9), best first: each with its quality and whether it started well last time. */
+    suspend fun copyChoices(playlistId: PlaylistId, channelId: ChannelId): List<CopyChoice> = io {
+        val copies = liveChannels.copies(playlistId, channelId)
+        val rows = content.channelsByIds(playlistId, copies.map { it.value }).associateBy { it.id }
+        val memory = liveStore.playback(playlistId)
+        copies.map { id ->
+            val played = memory[id.value]
+            val ok = played?.lastOkAt
+            CopyChoice(id, rows[id]?.quality, ok != null && (played.lastFailAt ?: 0) < ok, played?.chosen == true)
+        }
+    }
+
     /** The viewer chose this copy of the channel (x9): it plays first until they choose another. */
     suspend fun chooseCopy(playlistId: PlaylistId, channelId: ChannelId) {
         io {
@@ -273,6 +289,16 @@ class AppGraph(context: Context) {
         }
         changed()
     }
+
+    /** The channels watched last, newest first, one row per channel (the strip's Recent tab, ADR-0053). */
+    suspend fun recentChannels(playlistId: PlaylistId, limit: Int): List<ChannelRow> = io {
+        val ids = liveStore.recentChannels(playlistId, limit)
+        val rows = content.channelsByIds(playlistId, ids).associateBy { it.id.value }
+        liveChannels.collapse(playlistId, ids.mapNotNull { rows[it] })
+    }
+
+    /** News channels by language for the strip's News tab (s0); worked out once per channel import. */
+    suspend fun newsChannels(playlistId: PlaylistId): Map<NewsChannels.Language, List<ChannelRow>> = io { liveChannels.news(playlistId) }
 
     /** The channel watched last, if it is still in the source's channels (3.9). */
     suspend fun lastChannel(playlistId: PlaylistId): ChannelId? = io {

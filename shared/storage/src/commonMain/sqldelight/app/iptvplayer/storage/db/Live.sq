@@ -98,6 +98,10 @@ choose:
 INSERT INTO channel_playback(playlist_id, channel_id, chosen) VALUES (:playlistId, :channelId, 1)
 ON CONFLICT(playlist_id, channel_id) DO UPDATE SET chosen = 1;
 
+-- The channels watched last, newest first: the strip's Recent tab (ADR-0053).
+recentChannels:
+SELECT channel_id FROM channel_watch WHERE playlist_id = ? ORDER BY last_played_at DESC LIMIT ?;
+
 -- The channel watched last, for opening Luz on it (3.9).
 lastPlayedChannel:
 SELECT channel_id FROM channel_watch WHERE playlist_id = ? ORDER BY last_played_at DESC LIMIT 1;

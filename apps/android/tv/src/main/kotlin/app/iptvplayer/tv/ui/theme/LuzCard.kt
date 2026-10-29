@@ -73,7 +73,7 @@ fun LuzCard(
                 .luzLift(focused, corners)
                 .clip(corners)
                 .background(Tokens.bgSurface2)
-                .then(if (focused) Modifier.border(Tokens.focusRingWidth, FOCUS_EDGE, corners) else Modifier)
+                .then(if (focused) Modifier.border(Tokens.focusRingWidth, FocusEdge, corners) else Modifier)
                 .luzClickable(onClick = onClick, onLongClick = onLongClick, onFocus = { focused = it }),
         ) {
             // At rest the picture sits a shade back; under the remote it comes up to full brightness with the lift. Read
@@ -140,4 +140,3 @@ private val PROGRESS_HEIGHT = 3.dp
 private const val RESTING_VEIL = 0.12f
 private const val PROGRESS_TRACK_ALPHA = 0.55f
 private const val RESTING_TITLE_ALPHA = 0.86f
-private val FOCUS_EDGE = Color.White.copy(alpha = 0.35f)

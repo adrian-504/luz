@@ -26,7 +26,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -74,7 +73,7 @@ fun CompanionNote() {
                 Icon(LuzIcons.Phone, contentDescription = null, tint = Tokens.textSecondary, modifier = Modifier.size(ICON_SIZE))
                 Text(
                     stringResource(R.string.phone_note, what(note)),
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = NOTE_TEXT),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = Tokens.note),
                     color = Tokens.textPrimary,
                     maxLines = 1,
                 )
@@ -115,6 +114,3 @@ private fun what(note: CompanionNotice): String {
 private const val NOTE_MS = 2_000L
 private val NOTE_HEIGHT = 32.dp
 private val ICON_SIZE = 16.dp
-
-// Design 2.3: 13 sp, one step above caption, readable at three metres.
-private val NOTE_TEXT = 13.sp

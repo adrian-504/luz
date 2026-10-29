@@ -149,6 +149,13 @@ Round 3 batch A's full check (2026-10-29) ran with the Apple targets left out (`
 Gradle worker, because the Mac was short of memory; the Apple simulator tests of the shared modules were not run for
 it. The next full check with memory to spare runs them again.
 
+**Round 3's screens are NOT YET SEEN** (2026-10-29). They were built without the virtual TV or the owner's Bbox (the
+owner's terms that evening), so no screenshot exists; the Design chat checked the code against its approved files by
+reading it. **First thing in the TV session:** run `Screenshots.kt` (the screenshot device tests) and have Design look at
+every round 3 screen: the strip and its tabs, the live bar's note and list name, the preview box and its plate, Live TV
+rows at 15 sp with the amber bar, Choose copy, Home's channel cards and channel stage, Settings → Live TV and the
+categories page. Then the strip's rise on the Bbox: if it drops frames, it fades in instead (ADR-0053).
+
 ## 5. Device matrix (initial proposal, finalized per platform phase)
 
 **Devices used so far:** Google TV emulator API 34 (arm64, on the development Mac); owner's **Bbox TV** (Technicolor

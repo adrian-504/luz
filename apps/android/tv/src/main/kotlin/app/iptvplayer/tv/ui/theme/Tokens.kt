@@ -98,7 +98,8 @@ object Tokens {
     val title = 19.sp
     val subtitle = 16.sp
     val body = 15.sp
-    val callout = 14.sp
+    val callout = 15.sp
+    val note = 13.sp
     val caption = 12.sp
     val micro = 11.sp
 

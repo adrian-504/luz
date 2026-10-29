@@ -6,6 +6,7 @@ import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.live.ChannelFamilies
 import app.iptvplayer.domain.live.ChannelNumbers
+import app.iptvplayer.domain.live.NewsChannels
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.storage.ChannelRow
 import app.iptvplayer.storage.ContentStore
@@ -26,6 +27,7 @@ class LiveChannels(private val content: ContentStore, private val live: LiveStor
     )
 
     private val built = ConcurrentHashMap<PlaylistId, Built>()
+    private val news = ConcurrentHashMap<PlaylistId, Pair<Long?, Map<NewsChannels.Language, List<String>>>>()
 
     /** Forget what was built for [playlistId]: a new import, or a copy that just played or failed. */
     fun forget(playlistId: PlaylistId) {
@@ -71,6 +73,48 @@ class LiveChannels(private val content: ContentStore, private val live: LiveStor
         return built.families.members.getValue(family).map(::ChannelId)
     }
 
+    /**
+     * The News tab (s0): news channels by language, most watched first, one row per channel. A channel is judged by its
+     * name, or by the name of a category it is in; worked out once per channel import (it reads every channel).
+     */
+    fun news(playlistId: PlaylistId): Map<NewsChannels.Language, List<ChannelRow>> {
+        val snapshot = content.unitState(playlistId, ImportUnit.LIVE)?.activeSnapshot
+        val ids = news[playlistId]?.takeIf { it.first == snapshot }?.second ?: run {
+            val watched = watchedRank(playlistId)
+            val byName = content.channels(playlistId, null).map {
+                NewsChannels.Candidate(it.id.value, it.name, null, watched[it.id.value] ?: 0)
+            }
+            // A channel in a category named for news is judged with that name too (its language may be in it).
+            val inGroups = content.groups(playlistId).flatMap { group ->
+                if (!NewsChannels.isNewsWord(group.title)) return@flatMap emptyList()
+                content.channels(playlistId, group.id).map {
+                    NewsChannels.Candidate(
+                        it.id.value,
+                        it.name,
+                        group.title,
+                        watched[it.id.value] ?: 0,
+                    )
+                }
+            }
+            val candidates = (inGroups + byName).distinctBy { it.id }
+            NewsChannels.classify(candidates).also { news[playlistId] = snapshot to it }
+        }
+        val all = ids.values.flatten()
+        val rows = collapse(
+            playlistId,
+            content.channelsByIds(playlistId, all).let { found ->
+                val byId = found.associateBy { it.id.value }
+                all.mapNotNull { byId[it] }
+            },
+        ).associateBy { it.id.value }
+        return ids.mapValues { (_, list) -> list.mapNotNull { rows[it] }.distinctBy { it.id } }.filterValues { it.isNotEmpty() }
+    }
+
+    private fun watchedRank(playlistId: PlaylistId): Map<String, Int> {
+        val ids = live.recentChannels(playlistId, WATCHED_FOR_NEWS)
+        return ids.withIndex().associate { (index, id) -> id to (ids.size - index) }
+    }
+
     /** Gives every channel its number after an import: kept from before, new ones after the last (x5). */
     fun assignNumbers(playlistId: PlaylistId) {
         forget(playlistId)
@@ -84,5 +128,6 @@ class LiveChannels(private val content: ContentStore, private val live: LiveStor
 
     private companion object {
         const val LOG_TAG = "IptvImport"
+        const val WATCHED_FOR_NEWS = 200
     }
 }

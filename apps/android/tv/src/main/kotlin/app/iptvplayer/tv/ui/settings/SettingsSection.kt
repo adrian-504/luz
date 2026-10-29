@@ -73,6 +73,7 @@ import app.iptvplayer.tv.ui.theme.LuzMenu
 import app.iptvplayer.tv.ui.theme.LuzMenuItem
 import app.iptvplayer.tv.ui.theme.LuzPrompt
 import app.iptvplayer.tv.ui.theme.LuzRow
+import app.iptvplayer.tv.ui.theme.NoteText
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -86,6 +87,7 @@ object SettingsTags {
     const val LIVE = "settings-live"
     const val OPEN_LAST = "settings-open-last"
     const val BAR_TIME = "settings-bar-time"
+    const val NEWS = "settings-news"
 
     fun category(id: String) = "settings-category-$id"
     const val DETAILS = "settings-details"
@@ -534,9 +536,11 @@ private fun NewPill(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.labelSmall,
-        color = Tokens.onAccent,
+        // Soft: amber words on a faint amber ground, the only amber in Settings (Design 3.8).
+        color = Tokens.accent,
         maxLines = 1,
-        modifier = Modifier.background(Tokens.accent, RoundedCornerShape(Tokens.radiusPill)).padding(horizontal = Tokens.space2),
+        modifier = Modifier.background(Tokens.accent.copy(alpha = PILL_ALPHA), RoundedCornerShape(Tokens.radiusPill))
+            .padding(horizontal = Tokens.space2),
     )
 }
 
@@ -550,16 +554,28 @@ private fun LiveTvPane(focus: FocusMemory) {
     val scope = rememberCoroutineScope()
     var openLast by remember { mutableStateOf(true) }
     var barSeconds by remember { mutableIntStateOf(BAR_CHOICES.first()) }
+    // How many news channels the strip's News tab found (s0), so the list can be checked on the TV itself.
+    var newsCount by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
+        newsCount = graph.currentSource()?.let { source -> graph.newsChannels(source.playlistId).values.sumOf { it.size } } ?: 0
         openLast = graph.preference(OPEN_LAST_CHANNEL) != "false"
         barSeconds = graph.preference(LIVE_BAR_SECONDS)?.toIntOrNull()?.takeIf { it in BAR_CHOICES } ?: BAR_CHOICES.first()
     }
     PaneHeading(stringResource(R.string.settings_live_title))
+    // One explanation under the list, for the line the remote is on (Design 3.8): three at once read as clutter.
+    var helpFor by remember { mutableStateOf(SettingsTags.OPEN_LAST) }
+    val help = mapOf(
+        SettingsTags.OPEN_LAST to stringResource(R.string.settings_open_last_help),
+        SettingsTags.BAR_TIME to stringResource(R.string.settings_bar_time_help),
+        SettingsTags.NEWS to stringResource(R.string.settings_news_help),
+    )
+
+    @Composable
+    fun Modifier.line(tag: String) = rememberedFocus(focus, tag).onFocusChanged { if (it.isFocused) helpFor = tag }
     SettingLine(
         stringResource(R.string.settings_open_last),
         stringResource(if (openLast) R.string.settings_on else R.string.settings_off),
-        stringResource(R.string.settings_open_last_help),
-        Modifier.rememberedFocus(focus, SettingsTags.OPEN_LAST),
+        Modifier.line(SettingsTags.OPEN_LAST),
     ) {
         openLast = !openLast
         scope.launch { graph.setPreference(OPEN_LAST_CHANNEL, openLast.toString()) }
@@ -567,27 +583,29 @@ private fun LiveTvPane(focus: FocusMemory) {
     SettingLine(
         stringResource(R.string.settings_bar_time),
         pluralStringResource(R.plurals.settings_bar_time_value, barSeconds, barSeconds),
-        stringResource(R.string.settings_bar_time_help),
-        Modifier.rememberedFocus(focus, SettingsTags.BAR_TIME),
+        Modifier.line(SettingsTags.BAR_TIME),
     ) {
         barSeconds = BAR_CHOICES[(BAR_CHOICES.indexOf(barSeconds) + 1) % BAR_CHOICES.size]
         scope.launch { graph.setPreference(LIVE_BAR_SECONDS, barSeconds.toString()) }
     }
+    SettingLine(
+        stringResource(R.string.settings_news),
+        pluralStringResource(R.plurals.settings_news_count, newsCount, newsCount),
+        Modifier.line(SettingsTags.NEWS),
+    ) {}
+    Text(
+        help.getValue(helpFor),
+        style = NoteText,
+        color = Tokens.textSecondary,
+        modifier = Modifier.padding(horizontal = Tokens.space4, vertical = Tokens.space2),
+    )
 }
 
 @Composable
-private fun SettingLine(title: String, value: String, help: String, modifier: Modifier, onClick: () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(Tokens.space1)) {
-        LuzRow(onClick = onClick, modifier = modifier) {
-            Text(title, style = MaterialTheme.typography.titleSmall, color = Tokens.textPrimary, modifier = Modifier.weight(1f))
-            Text(value, style = MaterialTheme.typography.titleSmall, color = Tokens.textSecondary)
-        }
-        Text(
-            help,
-            style = MaterialTheme.typography.bodySmall,
-            color = Tokens.textTertiary,
-            modifier = Modifier.padding(horizontal = Tokens.space4),
-        )
+private fun SettingLine(title: String, value: String, modifier: Modifier, onClick: () -> Unit) {
+    LuzRow(onClick = onClick, modifier = modifier) {
+        Text(title, style = MaterialTheme.typography.titleSmall, color = Tokens.textPrimary, modifier = Modifier.weight(1f))
+        Text(value, style = MaterialTheme.typography.titleSmall, color = Tokens.textSecondary)
     }
 }
 
@@ -839,3 +857,6 @@ private fun HomeRows(focus: FocusMemory) {
 
 /** x7: the channel bar's choices, in seconds; the first is the default. */
 private val BAR_CHOICES = listOf(3, 5, 8, 15)
+
+// The soft pill's ground: amber at about a sixth (Design 3.8).
+private const val PILL_ALPHA = 0.16f

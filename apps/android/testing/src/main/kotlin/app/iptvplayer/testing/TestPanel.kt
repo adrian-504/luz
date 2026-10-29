@@ -57,7 +57,7 @@ object TestPanel {
         TestChannel(401, "Test Copies FHD", "4", null),
         TestChannel(402, "Test Copies HD", "4", null),
         TestChannel(403, "Test Copies SD", "4", null),
-        TestChannel(501, "Test News Arabic", "5", null),
+        TestChannel(501, "AR| Test News Arabic", "5", null),
         TestChannel(502, "FR| Test Info", "5", null),
     )
 

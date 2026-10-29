@@ -52,6 +52,8 @@ import kotlinx.coroutines.flow.filterNotNull
 @Immutable
 data class StageInfo(
     val eyebrow: String?,
+    /** The greeting, shown once after Luz opens, keeps the accent; a shelf's name is secondary grey (D6). */
+    val greeting: Boolean = false,
     val title: String,
     val facts: List<String> = emptyList(),
     val badges: List<String> = emptyList(),
@@ -150,11 +152,23 @@ private fun StageScene(info: StageInfo, resolver: ((UrlTemplate) -> String?)?) {
             verticalArrangement = Arrangement.spacedBy(Tokens.space2),
         ) {
             info.eyebrow?.let {
-                Text(it, style = MaterialTheme.typography.labelLarge, color = Tokens.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    it,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (info.greeting) Tokens.accent else Tokens.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            // The title's logo when TMDB has one (D6): stored ones at once, TMDB asked only once the remote has rested
+            // on the card for 350 ms, through its cache (one request per title, ever).
+            var rested by remember(info.title) { mutableStateOf(false) }
+            LaunchedEffect(info.title) {
+                delay(LOGO_REST_MS)
+                rested = true
             }
             val logo = info.logoOf?.let { type ->
-                // Only a logo already stored from a page the viewer opened: the stage asks TMDB nothing.
-                rememberTitlePageArt(type, info.title, info.year, null, emptyList(), ask = false).logoUrl
+                rememberTitlePageArt(type, info.title, info.year, null, emptyList(), ask = rested).logoUrl
             }
             if (info.logoOf != null) TitleLogo(logo, info.title) else HeroTitle(info.title)
             if (info.facts.isNotEmpty() || info.badges.isNotEmpty()) {
@@ -204,8 +218,10 @@ private const val FOOT_START = 0.6f
 private const val SYNOPSIS_LINES = 3
 private const val POSTER_HEIGHT = 0.86f
 private val POSTER_WIDTH = 138.dp
-private val CHANNEL_PLATE_WIDTH = 240.dp
-private val CHANNEL_PLATE_HEIGHT = 135.dp
+
+// D1: the logo plate where a picture would be, 160 × 112.
+private val CHANNEL_PLATE_WIDTH = 160.dp
+private val CHANNEL_PLATE_HEIGHT = 112.dp
 private val TEXT_WIDTH = 460.dp
 private val PROGRESS_WIDTH = 200.dp
 private val PROGRESS_HEIGHT = 3.dp
@@ -227,3 +243,5 @@ fun StageShelves(modifier: Modifier = Modifier, content: @Composable () -> Unit)
 }
 
 private val TOP_FADE = 36.dp
+
+private const val LOGO_REST_MS = 350L

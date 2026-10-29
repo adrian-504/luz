@@ -41,6 +41,7 @@ import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.library.ExternalList
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.security.UrlTemplate
+import app.iptvplayer.storage.GuideProgramme
 import app.iptvplayer.storage.MovieRow
 import app.iptvplayer.storage.SeriesRow
 import app.iptvplayer.tv.R
@@ -50,6 +51,7 @@ import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.live.ChannelScope
 import app.iptvplayer.tv.ui.rememberedFocus
+import app.iptvplayer.tv.ui.shortTime
 import app.iptvplayer.tv.ui.theme.ButtonKind
 import app.iptvplayer.tv.ui.theme.CalmScrolling
 import app.iptvplayer.tv.ui.theme.CardShape
@@ -125,6 +127,12 @@ private data class HomeCard(
     val year: Int? = null,
     /** For a channel's card: the name, drawn as a monogram when the logo is missing. */
     val channelName: String? = null,
+    /** A channel's number and what is on now and next (D1): the card and the stage say what is on. */
+    val number: Int? = null,
+    val now: GuideProgramme? = null,
+    val next: GuideProgramme? = null,
+    /** Drawn as a channel card that says what is on (D1), not as a logo. */
+    val face: Boolean = false,
     /** Plays it (a film, an episode to resume) or, for a series, opens it. */
     val open: () -> Unit,
     /** Opens its detail page, where there is one. */
@@ -395,8 +403,12 @@ fun HomeSection(
     var menuFor by remember { mutableStateOf<Pair<String, HomeCard>?>(null) }
     val listState = rememberLazyListState()
     val greeting = greeting(resources, java.time.LocalTime.now().hour)
-    fun stageOf(row: HomeRow, card: HomeCard) = StageInfo(
-        eyebrow = if (row.id == shown.first().id && !myLuz) "$greeting · ${row.title}" else row.title,
+
+    // The greeting shows once, on the first stage after Luz opens (D6): gone as soon as the remote moves.
+    fun greetNow(row: HomeRow) = row.id == shown.first().id && !myLuz && !HomeGreeting.done
+    fun stageOf(row: HomeRow, card: HomeCard) = card.now?.let { now -> channelStage(card, now, resources) } ?: StageInfo(
+        eyebrow = if (greetNow(row)) "$greeting · ${row.title}" else row.title,
+        greeting = greetNow(row),
         title = card.title,
         facts = card.facts.ifEmpty { listOfNotNull(card.caption) },
         synopsis = card.plot,
@@ -445,6 +457,7 @@ fun HomeSection(
                                         .rememberedFocus(focus, HomeTags.item(row.id, card.key))
                                         .onFocusChanged {
                                             if (it.isFocused) {
+                                                if (onCardKey.value != null && onCardKey.value != card.key) HomeGreeting.done = true
                                                 onCard.value = stageOf(row, card)
                                                 onCardKey.value = card.key
                                             }
@@ -452,7 +465,9 @@ fun HomeSection(
                                     onLongClick = if (hasMenu(card)) ({ menuFor = row.id to card }) else null,
                                     onClick = card.open,
                                 ) { modifier ->
-                                    if (channel) {
+                                    if (card.face) {
+                                        ChannelCardFace(card.poster, card.channelName ?: card.title, card.now, resolver, modifier)
+                                    } else if (channel) {
                                         ArtworkImage(card.poster, resolver, null, modifier, fit = true, name = card.channelName)
                                     } else {
                                         // A wide card shows the wide picture: a film's backdrop in Continue watching, not its
@@ -528,6 +543,26 @@ internal fun greeting(resources: android.content.res.Resources, hour: Int): Stri
     },
 )
 
+/**
+ * A channel on the stage (D1): "2 · beIN Sports 1" above, the programme as the title, its times and what is left, and
+ * what comes next; the logo plate stands where a picture would.
+ */
+private fun channelStage(card: HomeCard, now: GuideProgramme, resources: android.content.res.Resources): StageInfo {
+    val name = card.channelName ?: card.title
+    val left = now.end - kotlin.time.Clock.System.now()
+    return StageInfo(
+        eyebrow = card.number?.let { resources.getString(R.string.stage_channel_line, it, name) } ?: name,
+        title = now.title,
+        facts = listOfNotNull(
+            "${shortTime(now.start)} – ${shortTime(now.end)}",
+            left.takeIf { it.isPositive() }?.let { timeLeft(resources, it) },
+        ),
+        synopsis = card.next?.let { resources.getString(R.string.stage_next, it.title, shortTime(it.start)) },
+        poster = card.poster,
+        isChannel = true,
+    )
+}
+
 /** "32 min left", "1 h 5 min left". */
 internal fun timeLeft(resources: android.content.res.Resources, left: kotlin.time.Duration): String {
     val minutes = left.inWholeMinutes.coerceAtLeast(1)
@@ -586,11 +621,16 @@ private suspend fun channelCards(
     return channels.map { channel ->
         HomeCard(
             key = channel.id.value,
+            // The name sits under the card; what is on is written on the card itself (D1).
             title = channel.label,
-            caption = guide[channel.id.value]?.current?.title,
+            caption = null,
             poster = channel.logo,
             fraction = null,
             channelName = channel.label,
+            number = channel.number,
+            now = guide[channel.id.value]?.current,
+            next = guide[channel.id.value]?.next,
+            face = true,
             // Zapping from a favourite stays among favourites; from any other channel, the whole list.
             open = { onPlay(playlist, if (channel.isFavorite) ChannelScope.Favorites else ChannelScope.All, channel.id) },
         )
@@ -632,3 +672,8 @@ private const val MY_LIST_LIMIT = 100
 
 /** Home is rebuilt for background film pages once every this many progress steps (each step is 50 pages). */
 private const val DETAIL_REFRESH_STEP = 10
+
+/** Whether Home's greeting has had its moment since Luz opened (D6): once per run of the app. */
+private object HomeGreeting {
+    var done = false
+}

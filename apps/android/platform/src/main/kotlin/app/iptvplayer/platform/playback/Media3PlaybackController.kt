@@ -357,6 +357,11 @@ class Media3PlaybackController(
         mutableTracks.value = TrackSet(audio, subtitles)
     }
 
+    /** Silences the picture's sound (Live TV's preview is always muted, ADR-0053); main thread, as every call here. */
+    fun setMuted(muted: Boolean) {
+        player.volume = if (muted) 0f else 1f
+    }
+
     override fun attachSurfaceView(view: SurfaceView?) {
         if (view === surfaceView) return
         surfaceView?.let { player.clearVideoSurfaceView(it) }

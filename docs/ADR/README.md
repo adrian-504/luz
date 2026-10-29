@@ -73,3 +73,4 @@ line. Product-scope decisions still go to the owner.
 | [0050](0050-the-phone-companion.md) | The phone companion, a page Luz serves on the home network | Accepted |
 | [0051](0051-last-known-screens-and-lighter-pictures.md) | Last known screens, and pictures decoded at the size they are drawn | Accepted |
 | [0052](0052-one-channel-from-many-copies.md) | One channel from many copies, numbers that stay, new groups that wait, and opening on the last channel | Accepted |
+| [0053](0053-the-channel-strip-and-the-live-preview.md) | The channel strip, the Down key in live TV, and the live preview | Accepted |

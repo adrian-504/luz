@@ -38,7 +38,14 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
 /** One line of a context menu: what it says and does; [checked] true adds an amber tick (Design 2.10). */
-data class LuzMenuItem(val key: String, val label: String, val checked: Boolean? = null, val onSelect: () -> Unit)
+data class LuzMenuItem(
+    val key: String,
+    val label: String,
+    val checked: Boolean? = null,
+    /** A short value at the line's right, such as the copy in use ("Choose copy   FHD", Design 3.4). */
+    val value: String? = null,
+    val onSelect: () -> Unit,
+)
 
 object LuzMenuTags {
     const val MENU = "luz-menu"
@@ -53,7 +60,13 @@ object LuzMenuTags {
  * outside it is dimmed rather than hidden: the viewer keeps their place in the list they came from.
  */
 @Composable
-fun LuzMenu(title: String, items: List<LuzMenuItem>, onDismiss: () -> Unit) {
+fun LuzMenu(
+    title: String,
+    items: List<LuzMenuItem>,
+    onDismiss: () -> Unit,
+    /** A second header line saying what the menu is for, such as "Channel 2 · beIN Sport 4K" (Design 3.4). */
+    subtitle: String? = null,
+) {
     val first = remember { FocusRequester() }
     BackHandler(enabled = true, onBack = onDismiss)
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
@@ -98,6 +111,15 @@ fun LuzMenu(title: String, items: List<LuzMenuItem>, onDismiss: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = Tokens.space4, vertical = Tokens.space2),
             )
+            subtitle?.let {
+                Text(
+                    it,
+                    style = NoteText,
+                    color = Tokens.textSecondary,
+                    maxLines = 2,
+                    modifier = Modifier.padding(start = Tokens.space4, end = Tokens.space4, bottom = Tokens.space2),
+                )
+            }
             items.forEachIndexed { index, item ->
                 LuzRow(
                     onClick = {
@@ -115,6 +137,7 @@ fun LuzMenu(title: String, items: List<LuzMenuItem>, onDismiss: () -> Unit) {
                             color = Tokens.textPrimary,
                             modifier = Modifier.weight(1f, fill = false),
                         )
+                        item.value?.let { Text(it, style = MaterialTheme.typography.titleSmall, color = Tokens.textSecondary) }
                         if (item.checked == true) {
                             Icon(LuzIcons.Check, contentDescription = null, tint = Tokens.accent, modifier = Modifier.size(TICK_SIZE))
                         }

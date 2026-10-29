@@ -36,6 +36,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,6 +49,7 @@ import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.library.StableLists
+import app.iptvplayer.domain.live.GroupNames
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.CustomisationTarget
 import app.iptvplayer.domain.security.UrlTemplate
@@ -56,6 +60,7 @@ import app.iptvplayer.storage.NowNextRow
 import app.iptvplayer.storage.SourceRecord
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.AppGraph
+import app.iptvplayer.tv.app.CopyChoice
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
@@ -75,6 +80,7 @@ import app.iptvplayer.tv.ui.theme.LuzMenuItem
 import app.iptvplayer.tv.ui.theme.LuzPrompt
 import app.iptvplayer.tv.ui.theme.LuzRow
 import app.iptvplayer.tv.ui.theme.LuzSkeletonRows
+import app.iptvplayer.tv.ui.theme.NoteText
 import app.iptvplayer.tv.ui.theme.ProgressBar
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
@@ -97,16 +103,26 @@ sealed interface ChannelScope {
     /** One of the viewer's own groups (FR-FAV-002), which holds channels they chose rather than ones a provider grouped. */
     data class Mine(val id: String) : ChannelScope
 
+    /** The channels watched last (the strip's Recent tab, ADR-0053). */
+    data object Recent : ChannelScope
+
+    /** News channels in Arabic, French and English (the strip's News tab, s0). */
+    data object News : ChannelScope
+
     fun key(): String = when (this) {
         All -> "all"
         Favorites -> "favorites"
         is Group -> "g:$id"
         is Mine -> "m:$id"
+        Recent -> "recent"
+        News -> "news"
     }
 
     companion object {
         fun of(key: String): ChannelScope = when {
             key == "favorites" -> Favorites
+            key == "recent" -> Recent
+            key == "news" -> News
             key.startsWith("g:") -> Group(key.removePrefix("g:"))
             key.startsWith("m:") -> Mine(key.removePrefix("m:"))
             else -> All
@@ -117,6 +133,7 @@ sealed interface ChannelScope {
 object LiveTags {
     const val GROUP_ALL = "live-group-all"
     const val NEW_LIST = "live-new-list"
+    const val PREVIEW_NOT_PLAYING = "live-preview-not-playing"
     const val GROUP_FAVORITES = "live-group-favorites"
     const val SWITCH_SOURCE = "live-switch-source"
 
@@ -163,6 +180,9 @@ fun LiveTvSection(
     // Design 2.9: making a list here (null id) or adding more to one; the outer null means the maker is closed.
     var making by remember { mutableStateOf<Making?>(null) }
     var addingToGroup by remember { mutableStateOf<ChannelRow?>(null) }
+    // x9: the copies of a channel, to choose which one plays.
+    var copiesFor by remember { mutableStateOf<Pair<ChannelRow, List<CopyChoice>>?>(null) }
+    var copyCount by remember { mutableStateOf(0) }
     var newGroupFor by remember { mutableStateOf<ChannelRow?>(null) }
 
     LaunchedEffect(revision) {
@@ -303,7 +323,8 @@ fun LiveTvSection(
                         items(groups.size, key = { groups[it].id }) { index ->
                             val group = groups[index]
                             GroupItem(
-                                group.title,
+                                // The provider's capitals read as sentence case; the viewer's own lists keep their names (D2).
+                                GroupNames.display(group.title),
                                 group.channelCount,
                                 scope == ChannelScope.Group(group.id),
                                 Modifier.rememberedFocus(focus, LiveTags.group(group.id)),
@@ -330,31 +351,71 @@ fun LiveTvSection(
                         { handOverFocus = false },
                         { channel, guide -> menuFor = channel to guide },
                         Modifier.padding(start = if (favoritesOnly) 0.dp else Tokens.space8).weight(1f),
+                        menusClosed = menuFor == null && infoFor == null && copiesFor == null && making == null &&
+                            addingToGroup == null && newGroupFor == null,
                     )
                 }
             }
         }
 
+        LaunchedEffect(menuFor) { copyCount = menuFor?.let { graph.channelCopies(current, it.first.id).size } ?: 0 }
+        copiesFor?.let { (channel, copies) ->
+            LuzMenu(
+                title = stringResource(R.string.menu_choose_copy),
+                subtitle = pluralStringResource(R.plurals.copies_intro, copies.size, copies.size),
+                items = copies.map { copy ->
+                    // Nothing is playing in this list, so only how each copy did last time (the player's menu says "Playing").
+                    val note = if (copy.startedWell) stringResource(R.string.copies_good) else null
+                    val name = copy.quality ?: channel.label
+                    LuzMenuItem(copy.id.value, listOfNotNull(name, note).joinToString(" · "), checked = copy.chosen) {
+                        // Plays that copy and keeps it first until another is chosen (x9).
+                        coroutines.launch {
+                            graph.chooseCopy(current, copy.id)
+                            onPlay(current, scope, copy.id)
+                        }
+                    }
+                },
+                onDismiss = {
+                    copiesFor = null
+                    coroutines.launch { returnFocusTo(focus, LiveTags.channel(channel.id)) }
+                },
+            )
+        }
         menuFor?.let { (channel, guide) ->
             val back = {
                 menuFor = null
                 coroutines.launch { returnFocusTo(focus, LiveTags.channel(channel.id)) }
                 Unit
             }
+            // Which channel the menu is for, over the dimmed screen: "Channel 2 · Sports" (Design 3.4), when both are known.
+            val listName = when (scope) {
+                is ChannelScope.Group -> groups.firstOrNull { it.id == scope.id }?.title?.let(GroupNames::display)
+                is ChannelScope.Mine -> myGroups.firstOrNull { it.id == scope.id }?.title
+                else -> null
+            }
+            val header = channel.number?.let { number -> listName?.let { stringResource(R.string.menu_header_line, number, it) } }
+            // In Design 3.4's order: Watch, favourite, lists, copies, hide, information, guide.
             LuzMenu(
                 title = channel.label,
+                subtitle = header,
                 items = listOf(
                     LuzMenuItem("play", stringResource(R.string.menu_watch)) { onPlay(current, scope, channel.id) },
                     LuzMenuItem(
                         "favorite",
                         stringResource(if (channel.isFavorite) R.string.menu_remove_favorite else R.string.menu_add_favorite),
                     ) { coroutines.launch { graph.setFavorite(channel.id, !channel.isFavorite) } },
-                    LuzMenuItem("info", stringResource(R.string.menu_information)) { infoFor = channel to guide },
-                    LuzMenuItem("guide", stringResource(R.string.menu_open_guide)) { onOpenGuide(channel.id) },
                     LuzMenuItem("add-to-group", stringResource(R.string.menu_add_to_list)) { addingToGroup = channel },
+                ) + listOfNotNull(
+                    // Only when the provider sends this channel more than once; the copy in use at the right.
+                    LuzMenuItem("choose-copy", stringResource(R.string.menu_choose_copy), value = channel.quality) {
+                        coroutines.launch { copiesFor = channel to graph.copyChoices(current, channel.id) }
+                    }.takeIf { copyCount > 1 },
+                ) + listOf(
                     LuzMenuItem("hide", stringResource(R.string.menu_hide_channel)) {
                         coroutines.launch { graph.hide(current, CustomisationTarget.CHANNEL, channel.id.value) }
                     },
+                    LuzMenuItem("info", stringResource(R.string.menu_information)) { infoFor = channel to guide },
+                    LuzMenuItem("guide", stringResource(R.string.menu_open_guide)) { onOpenGuide(channel.id) },
                 ),
                 onDismiss = back,
             )
@@ -559,8 +620,12 @@ private fun ChannelList(
     onFocusTaken: () -> Unit,
     onMenu: (ChannelRow, NowNextRow?) -> Unit,
     modifier: Modifier,
+    /** False while a menu or prompt covers Live TV: the preview stops (ADR-0053). */
+    menusClosed: Boolean = true,
 ) {
     val graph = LocalAppGraph.current
+    // The preview plays only while the remote is in the channel list: on the rail or the categories it stops.
+    var listHasFocus by remember { mutableStateOf(false) }
     val coroutines = rememberCoroutineScope()
     val resolver = rememberArtworkResolver(playlist)
     // A list shown before comes back at once from memory; placeholder rows only for one never shown (ADR-0051).
@@ -581,6 +646,8 @@ private fun ChannelList(
             ChannelScope.Favorites -> graph.favoriteChannels(playlist)
             is ChannelScope.Group -> graph.channels(playlist, scope.id)
             is ChannelScope.Mine -> graph.channelsInUserGroup(playlist, scope.id)
+            ChannelScope.Recent -> graph.recentChannels(playlist, RECENT_CHANNELS)
+            ChannelScope.News -> graph.newsChannels(playlist).values.flatten()
         }
         val before = channels
         // Replaced in place, and only when something changed: the rows keep their keys, so the remote stays on its channel.
@@ -647,10 +714,12 @@ private fun ChannelList(
                     { id -> onScreenGuide[id] ?: storedGuide[id] },
                     now,
                     resolver,
+                    playlist,
+                    previewing = menusClosed && listHasFocus,
                 )
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize().focusRestorer(),
+                    modifier = Modifier.fillMaxSize().focusRestorer().onFocusChanged { listHasFocus = it.hasFocus },
                     verticalArrangement = Arrangement.spacedBy(Tokens.space1),
                     contentPadding = PaddingValues(bottom = Tokens.space8),
                 ) {
@@ -697,8 +766,11 @@ private fun OnNowPanel(
     guideFor: (String) -> NowNextRow?,
     now: Instant,
     resolver: ((UrlTemplate) -> String?)?,
+    playlist: PlaylistId,
+    previewing: Boolean,
 ) {
     val channel = underRemote.value ?: fallback
+    var previewFailed by remember(channel?.id) { mutableStateOf(false) }
     val guide = channel?.let { guideFor(it.id.value) }
     val current = guide?.current
     Row(
@@ -706,16 +778,6 @@ private fun OnNowPanel(
         horizontalArrangement = Arrangement.spacedBy(Tokens.space5),
         verticalAlignment = Alignment.Bottom,
     ) {
-        if (channel != null) {
-            ArtworkImage(
-                channel.logo,
-                resolver,
-                channel.label,
-                Modifier.width(ON_NOW_LOGO_WIDTH).height(ON_NOW_HEIGHT).clip(RoundedCornerShape(Tokens.radiusMedium)),
-                fit = true,
-                inset = Tokens.space3,
-            )
-        }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.space1, Alignment.Bottom)) {
             Text(
                 if (current !=
@@ -736,26 +798,51 @@ private fun OnNowPanel(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), verticalAlignment = Alignment.CenterVertically) {
-                if (current != null) {
+            if (current != null) {
+                // "21:00 – 22:55 · 40 min left" with the bar (Design 3.1); the guide stores no category for "LaLiga ·".
+                Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), verticalAlignment = Alignment.CenterVertically) {
+                    val left = (current.end - now).inWholeMinutes.coerceAtLeast(1)
                     Text(
-                        stringResource(R.string.live_time_range, shortTime(current.start), shortTime(current.end)),
+                        stringResource(R.string.live_time_range, shortTime(current.start), shortTime(current.end)) + " · " +
+                            stringResource(R.string.home_minutes_left, left),
                         style = MaterialTheme.typography.bodyMedium,
                         color = Tokens.textSecondary,
+                        maxLines = 1,
                     )
                     Box(Modifier.width(ON_NOW_BAR)) { ProgressBar(progressOf(current, now), Modifier.padding(0.dp)) }
                 }
-                guide?.next?.let {
-                    Text(
-                        stringResource(R.string.live_next_at, shortTime(it.start), it.title),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Tokens.textTertiary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+            } else if (channel != null) {
+                // No guide: one quiet line under the name.
+                Text(stringResource(R.string.live_no_listings), style = NoteText, color = Tokens.textSecondary, maxLines = 1)
+            }
+            guide?.next?.let {
+                Text(
+                    stringResource(R.string.live_next_at, shortTime(it.start), it.title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Tokens.textTertiary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            // The preview would not start: the plate stays and the band says so (Design 3.1).
+            if (previewFailed) {
+                Text(
+                    stringResource(R.string.live_not_playing),
+                    style = NoteText,
+                    color = Tokens.textSecondary,
+                    modifier = Modifier.testTag(LiveTags.PREVIEW_NOT_PLAYING),
+                )
             }
         }
+        // D2: the channel under the remote, playing muted in a box at the right once the remote rests (ADR-0053).
+        LivePreview(
+            playlist,
+            channel,
+            previewing,
+            resolver,
+            Modifier.width(PREVIEW_WIDTH).height(ON_NOW_HEIGHT),
+            onFailed = { previewFailed = it },
+        )
     }
 }
 
@@ -805,8 +892,9 @@ private fun ChannelItem(
                 // 4K, FHD or HD, the copy that will play (3.11); never SD, which says nothing worth a badge.
                 channel.quality?.takeIf { it != "SD" }?.let { LuzBadge(it) }
                 if (channel.isFavorite) {
+                    // The amber star, the favourite's mark on the TV and the phone alike (Design 2b, 3).
                     Icon(
-                        LuzIcons.Favorites,
+                        LuzIcons.Star,
                         contentDescription = stringResource(R.string.section_favorites),
                         tint = Tokens.accent,
                         modifier = Modifier.size(FAVORITE_MARK),
@@ -814,18 +902,19 @@ private fun ChannelItem(
                 }
             }
             // A channel with nothing listed has just its name: a line saying so on every row says nothing new.
-            current?.title?.let {
+            current?.let { programme ->
                 Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
+                    programme.title,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = Tokens.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // How far through, directly under what is on (D2): thin, amber, on a faint white track.
+                Box(Modifier.padding(top = Tokens.space1).width(ROW_BAR).height(ROW_BAR_HEIGHT).background(ROW_BAR_TRACK)) {
+                    Box(Modifier.fillMaxWidth(progressOf(programme, now)).height(ROW_BAR_HEIGHT).background(Tokens.accent))
+                }
             }
-        }
-        if (current != null) {
-            Box(Modifier.width(ROW_BAR)) { ProgressBar(progressOf(current, now), Modifier.padding(0.dp)) }
         }
     }
 }
@@ -842,13 +931,19 @@ fun EmptyState(message: String, action: String, focus: FocusMemory, actionKey: S
 }
 
 private val CATEGORY_WIDTH = 220.dp
-private val ON_NOW_HEIGHT = 84.dp
-private val ON_NOW_LOGO_WIDTH = 150.dp
+
+// D2: the preview box is 288 × 162 (16:9); the words beside it share its height.
+private val ON_NOW_HEIGHT = 162.dp
+private val PREVIEW_WIDTH = 288.dp
 private val ON_NOW_BAR = 120.dp
-private val ROW_BAR = 72.dp
+private val ROW_BAR = 120.dp
+private val ROW_BAR_HEIGHT = 2.dp
+private val ROW_BAR_TRACK = Color.White.copy(alpha = 0.25f)
 private val LOGO_WIDTH = 56.dp
 private val LOGO_HEIGHT = 34.dp
-private val NUMBER_WIDTH = 28.dp
+
+// Room for a four-digit number at 15 sp: large providers send twelve thousand channels.
+private val NUMBER_WIDTH = 40.dp
 private val FAVORITE_MARK = 12.dp
 
 /** How long the channels get to appear before the handover gives up (ADR-0032). */
@@ -862,3 +957,6 @@ private suspend fun returnFocusTo(focus: FocusMemory, key: String) {
         delay(FOCUS_RETRY_MS)
     }
 }
+
+/** How many channels Recent holds (the strip, ADR-0053). */
+const val RECENT_CHANNELS = 20

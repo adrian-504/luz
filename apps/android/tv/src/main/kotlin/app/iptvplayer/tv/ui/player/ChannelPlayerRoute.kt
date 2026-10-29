@@ -19,6 +19,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.live.GroupNames
+import app.iptvplayer.domain.live.NewsChannels
 import app.iptvplayer.domain.live.ViewingSession
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.playback.ChannelHistory
@@ -32,6 +34,7 @@ import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.companion.CompanionLibrary
 import app.iptvplayer.tv.ui.library.rememberArtworkResolver
 import app.iptvplayer.tv.ui.live.ChannelScope
+import app.iptvplayer.tv.ui.live.RECENT_CHANNELS
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
@@ -44,7 +47,7 @@ import kotlin.time.Clock
  * starts the player. Resolved streams stay in memory only and are dropped when the channel data changes.
  */
 @Composable
-fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel: ChannelId) {
+fun ChannelPlayerRoute(playlistId: PlaylistId, startScope: ChannelScope, startChannel: ChannelId) {
     val graph = LocalAppGraph.current
     // The background fetch of film pages waits while anything plays, so it never competes with the stream.
     DisposableEffect(Unit) {
@@ -55,6 +58,9 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
     val revision by graph.revision.collectAsState()
     var channels by remember { mutableStateOf<List<ChannelRow>?>(null) }
     var target by rememberSaveable { mutableStateOf(startChannel.value) }
+    // The list Ch +/− moves through; a channel chosen from another tab of the strip makes that tab the list (x4).
+    var scopeKey by rememberSaveable { mutableStateOf(startScope.key()) }
+    val scope = ChannelScope.of(scopeKey)
     var request by remember { mutableStateOf<PlaybackRequest?>(null) }
     var unavailable by remember { mutableStateOf(false) }
     var subtitle by remember { mutableStateOf<String?>(null) }
@@ -101,7 +107,7 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
     LaunchedEffect(Unit) {
         bannerMs = (graph.preference(LIVE_BAR_SECONDS)?.toLongOrNull() ?: DEFAULT_BAR_SECONDS) * MS_PER_SECOND
     }
-    LaunchedEffect(revision) {
+    LaunchedEffect(revision, scopeKey) {
         prepared.clear()
         val scoped = when (scope) {
             ChannelScope.All -> graph.channels(playlistId, null)
@@ -109,12 +115,14 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
             is ChannelScope.Group -> graph.channels(playlistId, scope.id)
             // Zapping stays inside the list the viewer came from, their own groups included.
             is ChannelScope.Mine -> graph.channelsInUserGroup(playlistId, scope.id)
+            ChannelScope.Recent -> graph.recentChannels(playlistId, RECENT_CHANNELS)
+            ChannelScope.News -> graph.newsChannels(playlistId).values.flatten()
         }
         // A list that is gone or emptied falls back to all channels (x4).
         channels = scoped.ifEmpty { graph.channels(playlistId, null) }
         groupName = when {
             scoped.isEmpty() -> null
-            scope is ChannelScope.Group -> graph.groups(playlistId).firstOrNull { it.id == scope.id }?.title
+            scope is ChannelScope.Group -> graph.groups(playlistId).firstOrNull { it.id == scope.id }?.title?.let(GroupNames::display)
             scope is ChannelScope.Mine -> graph.userGroups(playlistId).firstOrNull { it.id == scope.id }?.title
             else -> null
         }
@@ -164,6 +172,17 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
         listGuide = listGuide + graph.storedNowNext(playlistId, around.filter { it.id.value !in listGuide }, Clock.System.now())
     }
     val resolver = rememberArtworkResolver(playlistId)
+    val recentWord = stringResource(R.string.strip_recent)
+    val favouritesWord = stringResource(R.string.live_favorites)
+    val newsWord = stringResource(R.string.strip_news)
+    val recentEmpty = stringResource(R.string.strip_empty_recent)
+    val favouritesEmpty = stringResource(R.string.strip_empty_fav_title) to stringResource(R.string.strip_empty_fav_body)
+    val newsLabels = mapOf(
+        NewsChannels.Language.ARABIC to stringResource(R.string.strip_news_ar),
+        NewsChannels.Language.FRENCH to stringResource(R.string.strip_news_fr),
+        NewsChannels.Language.ENGLISH to stringResource(R.string.strip_news_en),
+    )
+    val stripGroup = if (scope is ChannelScope.Group || scope is ChannelScope.Mine) groupName else null
     PlayerScreen(
         request = request,
         live = LiveInfo(
@@ -176,6 +195,46 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
             note,
         ),
         bannerMs = bannerMs,
+        // The strip (ADR-0053): Recent, Favourites, the list Ch +/− moves through, and News; the stored guide only.
+        loadStrip = {
+            val recent = graph.recentChannels(playlistId, RECENT_CHANNELS)
+            val favourites = graph.favoriteChannels(playlistId).take(STRIP_CARDS)
+            val own = stripGroup?.let {
+                list.subList((index - STRIP_CARDS / 2).coerceAtLeast(0), (index + STRIP_CARDS / 2).coerceAtMost(list.size))
+            }
+            val news = graph.newsChannels(playlistId).mapValues { it.value.take(STRIP_CARDS) }
+            val rows = (recent + favourites + own.orEmpty() + news.values.flatten()).distinctBy { it.id }
+            val guide = graph.storedNowNext(playlistId, rows, Clock.System.now())
+            fun cards(rows: List<ChannelRow>) = rows.map {
+                val now = guide[it.id.value]?.current
+                StripCard(it.id.value, it.label, it.logo, it.quality, now?.title, now?.start, now?.end)
+            }
+            buildList {
+                add(StripTab(ChannelScope.Recent.key(), recentWord, cards(recent), empty = recentEmpty to null))
+                add(StripTab(ChannelScope.Favorites.key(), favouritesWord, cards(favourites), empty = favouritesEmpty))
+                if (own != null) add(StripTab(scope.key(), stripGroup, cards(own)))
+                // Only when Luz finds at least two news channels (s0); each run labelled in its own language.
+                if (news.values.sumOf { it.size } >= MIN_NEWS) {
+                    val runs = mutableMapOf<Int, String>()
+                    var at = 0
+                    news.forEach { (language, channels) ->
+                        runs[at] = newsLabels.getValue(language)
+                        at += channels.size
+                    }
+                    add(StripTab(ChannelScope.News.key(), newsWord, cards(news.values.flatten()), runs))
+                }
+            }
+        },
+        onStripChoose = { tab, id ->
+            if (tab != scopeKey) scopeKey = tab
+            if (id != target) {
+                intentAtMs = SystemClock.elapsedRealtime()
+                direction = 0
+                target = id
+                subtitle = null
+                guide = null
+            }
+        },
         // The playing copy's own quality on the live bar (3.11), never SD.
         badges = listOfNotNull(playingQuality?.takeIf { it != "SD" }),
         onState = { state, firstFrameMs ->
@@ -254,6 +313,10 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, scope: ChannelScope, startChannel
 }
 
 private const val ZAP_SETTLE_MS = 350L
+
+/** Design 3.2: up to 60 cards a tab. */
+private const val STRIP_CARDS = 60
+private const val MIN_NEWS = 2
 private const val DEFAULT_BAR_SECONDS = 3L
 private const val MS_PER_SECOND = 1000L
 

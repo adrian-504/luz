@@ -3,6 +3,11 @@ package app.iptvplayer.tv.ui.player
 import android.view.KeyEvent
 import android.view.SurfaceView
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -81,6 +86,7 @@ import app.iptvplayer.tv.ui.theme.LuzButton
 import app.iptvplayer.tv.ui.theme.LuzIconButton
 import app.iptvplayer.tv.ui.theme.LuzIcons
 import app.iptvplayer.tv.ui.theme.Tokens
+import app.iptvplayer.tv.ui.theme.luzTween
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration
@@ -190,6 +196,10 @@ fun PlayerScreen(
     onFailed: (() -> Boolean)? = null,
     /** How long the live bar stays after a channel change (x7). */
     bannerMs: Long = BANNER_TIMEOUT_MS,
+    /** Live TV: the strip's tabs, read when Down raises it (ADR-0053); null keeps Down on the Info panel (films). */
+    loadStrip: (suspend () -> List<StripTab>)? = null,
+    /** A channel chosen on the strip, with the tab (zapping list) it was chosen from. */
+    onStripChoose: ((tab: String, id: String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val controller = remember { Media3PlaybackController(context.applicationContext) }
@@ -234,6 +244,9 @@ fun PlayerScreen(
     val cues by controller.subtitleCues.collectAsState()
     var panel by remember { mutableStateOf<PanelTab?>(null) }
     var channelList by remember { mutableStateOf(false) }
+    var strip by remember { mutableStateOf(false) }
+    var stripTabs by remember { mutableStateOf<List<StripTab>?>(null) }
+    LaunchedEffect(strip) { stripTabs = if (strip) loadStrip?.invoke() else null }
     var overlayVisible by remember { mutableStateOf(true) }
     // A channel number being typed on the remote: it tunes once the viewer stops typing (ADR-0047).
     var typed by remember { mutableStateOf("") }
@@ -460,7 +473,7 @@ fun PlayerScreen(
                 }
                 if (event.type != ComposeKeyEventType.KeyDown) return@onPreviewKeyEvent false
                 lastInputAt = System.nanoTime()
-                val bare = !overlayVisible && panel == null && !channelList && !diagnosticsVisible && !isError
+                val bare = !overlayVisible && panel == null && !channelList && !strip && !diagnosticsVisible && !isError
                 when (keyCode) {
                     KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                         if (snapshot.state == PlaybackState.PAUSED) controller.play() else controller.pause()
@@ -494,7 +507,11 @@ fun PlayerScreen(
                         if (!it) return@also
                         if (channels != null) channelList = true else overlayVisible = true
                     }
-                    KeyEvent.KEYCODE_DPAD_DOWN -> bare.also { if (it) openPanel(PanelTab.INFO, null) }
+                    // Live TV: Down raises the channel strip; the Info panel moved to the Info button (ADR-0053).
+                    KeyEvent.KEYCODE_DPAD_DOWN -> bare.also {
+                        if (!it) return@also
+                        if (isLive && loadStrip != null) strip = true else openPanel(PanelTab.INFO, null)
+                    }
                     in SELECT_KEYS -> if (!overlayVisible && !isError && panel == null && !channelList) {
                         // On the pause card OK carries on; anywhere else it brings the controls up.
                         if (isVod && snapshot.state == PlaybackState.PAUSED) controller.play() else overlayVisible = true
@@ -740,6 +757,26 @@ fun PlayerScreen(
                 channelList = false
                 runCatching { rootFocus.requestFocus() }
                 onChooseChannel?.invoke(id)
+            }
+        }
+
+        AnimatedVisibility(
+            visible = strip && stripTabs != null,
+            enter = slideInVertically(luzTween(Tokens.MOTION_STANDARD_MS)) { it } + fadeIn(luzTween(Tokens.MOTION_STANDARD_MS)),
+            exit = slideOutVertically(luzTween(Tokens.MOTION_FOCUS_MS)) { it } + fadeOut(luzTween(Tokens.MOTION_FOCUS_MS)),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            stripTabs?.let { tabs ->
+                ChannelStrip(
+                    tabs,
+                    currentChannelId,
+                    resolver,
+                    onChoose = { tab, id -> onStripChoose?.invoke(tab, id) },
+                    onClose = {
+                        strip = false
+                        runCatching { rootFocus.requestFocus() }
+                    },
+                )
             }
         }
 

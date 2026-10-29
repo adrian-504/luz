@@ -4,6 +4,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.TweenSpec
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
@@ -56,6 +57,12 @@ private val typography = Typography(
     labelMedium = style(Tokens.caption, FontWeight.Medium),
     labelSmall = style(Tokens.micro, FontWeight.Medium, tracking = 0.02),
 )
+
+/** 13 sp: one-line explanations and notes, one size everywhere (Design 3.10; `note` in tokens.json). */
+val NoteText: TextStyle = style(Tokens.note, FontWeight.Normal)
+
+/** The faint white edge on whatever the remote is on: a card, a strip card ("one white thing"). */
+val FocusEdge = Color.White.copy(alpha = 0.35f)
 
 @Composable
 fun IptvTheme(content: @Composable () -> Unit) {

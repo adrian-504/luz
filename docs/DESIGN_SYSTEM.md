@@ -226,7 +226,9 @@ remote reaches the list) — updated without rebuilding the list; channel rows w
 plate, number, name, programme, thin progress and a small heart for favourites. OK plays; holding OK opens the channel's
 menu. **Logos** (ADR-0040) are cleaned once — the box around them cut away, margins trimmed — and sit on a plate that
 follows them (light behind a dark logo, a faint glow of the logo's colour otherwise); a channel without one shows a
-monogram on a colour of its own. Holding OK on a **category** offers Pin to the top, Rename and Hide; pinned categories
+monogram on a colour of its own. Above the channels, what is on sits beside a 288 × 162 box where the channel under the
+remote plays, muted, after the remote rests 600 ms (ADR-0053); provider categories sent in capitals read in sentence
+case; a thin amber bar sits directly under what is on. Holding OK on a **category** offers Pin to the top, Rename and Hide; pinned categories
 come first with a small pin, and Settings → Live TV categories arranges them all. Copies of one channel (FHD, HD, SD) are one row, with a small outlined badge for the copy that
 will play (4K, FHD or HD; never SD) (ADR-0052). Live TV opens on the category used
 last with that source. While a refresh runs longer than a second, *Updating channels…* or *Updating guide…* sits
@@ -292,7 +294,10 @@ in the top corner:
   times and progress, and what is next — over the symbols Play/Pause, favourite, previous channel, channel list,
   Subtitles, Audio, Info. A channel change shows the live bar alone for three seconds.
 
-The **panel** comes down from the top on Down (or Subtitles / Audio / Info): tabs Info, Subtitles, Audio; Info holds the
+**Live TV: Down raises the channel strip** (ADR-0053): a lower-third band of small channel cards under the tabs Recent ·
+Favourites · the list it came from · News, the tab under the amber underline, the remote's tab white; OK tunes, Back or
+8 s lowers it. For live TV the panel comes from the Info button. The **panel** comes down from the top on Down for films
+and episodes (or Subtitles / Audio / Info): tabs Info, Subtitles, Audio; Info holds the
 description of the film or the programme and **Advanced**, behind which the diagnostics sit. The **channel list** lays
 the list the channel came from over the left of the picture on Up, the playing channel focused. **Up next** is a glass
 card in the lower right during an episode's last 20 seconds, then counts down from 10 and plays the next one. Buffering is
@@ -303,6 +308,11 @@ what happened, what to do, and Try again (white), Next channel (television), Det
 audio or subtitles, My List, or finishes typing), a glass pill shows at the top centre for two seconds, the change first
 and then *· from your phone* (13 sp, a phone symbol). It never takes focus; a second change replaces it; the arrow pad
 gives none. It sits above every screen, not only the player.
+
+**Channel cards** (ADR-0053, D1) on Home and My Luz say what is on: the logo small in a corner, the programme, an amber
+bar and "Until 21:30" on the card, the channel's name under it; without a guide the name stands large. The stage for a
+channel reads "2 · beIN Sports 1", the programme, its times and what is left, what comes next, with the logo plate at the
+right.
 
 **Lists** (ADR-0050 2b): the viewer's own sets are *lists* everywhere ("Add to a list…", "New list…", "Rename this
 list"); the provider's are *categories*. Choosing *Add to a list…* shows "Add France 24 to a list" with every list on

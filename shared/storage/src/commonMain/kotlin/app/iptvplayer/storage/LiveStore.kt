@@ -78,6 +78,9 @@ public class LiveStore(private val content: ContentStore, private val clock: Clo
         }
     }
 
+    public fun recentChannels(playlistId: PlaylistId, limit: Int): List<String> =
+        queries.recentChannels(playlistId.value, limit.toLong()).executeAsList()
+
     public fun lastPlayedChannel(playlistId: PlaylistId): String? = queries.lastPlayedChannel(playlistId.value).executeAsOneOrNull()
 
     public fun addSession(playlistId: PlaylistId, kind: String, contentId: String, work: String?, startedAt: Long, seconds: Long) {

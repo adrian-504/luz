@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.iptvplayer.domain.live.NewsChannels
 import app.iptvplayer.domain.live.ViewingSession
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.testing.TestPanel
@@ -23,10 +24,13 @@ import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.COMPANION_NOTE_TAG
 import app.iptvplayer.tv.ui.library.ListMakerTags
 import app.iptvplayer.tv.ui.library.SearchTags
+import app.iptvplayer.tv.ui.live.ChannelScope
+import app.iptvplayer.tv.ui.live.LivePreviewTags
 import app.iptvplayer.tv.ui.live.LiveTags
 import app.iptvplayer.tv.ui.player.LAST_CHANNEL_SCOPE
 import app.iptvplayer.tv.ui.player.LIVE_BAR_SECONDS
 import app.iptvplayer.tv.ui.player.PlayerTags
+import app.iptvplayer.tv.ui.player.StripTags
 import app.iptvplayer.tv.ui.theme.LuzPromptTags
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
@@ -556,13 +560,121 @@ class LivePlayerTest {
         awaitGone(PlayerTags.CHANNEL_LIST)
         awaitExists(PlayerTags.TITLE, second.name)
 
-        // Down brings the panel with what is on; Back puts it away.
+        // The owner's decision (ADR-0053, Design D4/A): in live TV Down raises the channel strip, and the panel with what
+        // is on comes from the Info button in the controls. Back puts each away.
         rule.waitUntil(10_000) { focusedTag() == PlayerTags.ROOT }
         press(KeyEvent.KEYCODE_DPAD_DOWN)
+        awaitExists(StripTags.STRIP)
+        shot("live-strip")
+        press(KeyEvent.KEYCODE_BACK)
+        awaitGone(StripTags.STRIP)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(PlayerTags.PLAY_PAUSE)
+        repeat(8) { if (focusedTag() != PlayerTags.INFO) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        awaitFocus(PlayerTags.INFO)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitExists(PlayerTags.TRACK_PANEL)
         awaitFocus(PlayerTags.tab("INFO"))
         shot("live-info-panel")
         press(KeyEvent.KEYCODE_BACK)
         awaitGone(PlayerTags.TRACK_PANEL)
+    }
+
+    /** Puts the picture alone on screen while a channel plays, as when the viewer has put the controls away. */
+    private fun pictureAlone() {
+        press(KeyEvent.KEYCODE_BACK)
+        rule.waitUntil(10_000) { focusedTag() == PlayerTags.ROOT }
+    }
+
+    /** Down while watching (ADR-0053): the strip opens on Recent with the playing channel under the remote. */
+    @Test
+    fun downRaisesTheStripOnRecentWithThePlayingChannel() {
+        val channels = runBlocking { graph.channels(playlist, null) }
+        playChannel(0)
+        pictureAlone()
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        awaitExists(StripTags.STRIP)
+        awaitFocus(StripTags.card(ChannelScope.Recent.key(), channels[0].id.value))
+    }
+
+    /** Up from the cards reaches the tabs; Right moves to Favourites and its cards (or its empty words) show at once. */
+    @Test
+    fun upFromTheStripReachesTheTabsAndChangesTab() {
+        playChannel(0)
+        pictureAlone()
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        awaitExists(StripTags.STRIP)
+        press(KeyEvent.KEYCODE_DPAD_UP)
+        awaitFocus(StripTags.tab(ChannelScope.Recent.key()))
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        awaitFocus(StripTags.tab(ChannelScope.Favorites.key()))
+        awaitExists(StripTags.STRIP, rule.activity.getString(R.string.strip_empty_fav_title))
+    }
+
+    /** OK on a card tunes; the strip holds a moment on the new channel, then lowers. */
+    @Test
+    fun okOnAStripCardTunesAndTheStripCloses() {
+        val channels = runBlocking { graph.channels(playlist, null) }
+        playChannel(1)
+        pictureAlone()
+        // Recent now holds two channels: the second (playing) and, after a zap back, the first.
+        press(KeyEvent.KEYCODE_CHANNEL_DOWN)
+        awaitExists(PlayerTags.TITLE, channels[0].label)
+        rule.waitUntil(10_000) { runBlocking { graph.recentChannels(playlist, 5) }.size == 2 }
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        awaitExists(StripTags.STRIP)
+        // Recent is newest first: the playing channel, then the one before it.
+        awaitFocus(StripTags.card(ChannelScope.Recent.key(), channels[0].id.value))
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        awaitFocus(StripTags.card(ChannelScope.Recent.key(), channels[1].id.value))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitExists(PlayerTags.TITLE, channels[1].label)
+        awaitGone(StripTags.STRIP)
+    }
+
+    /** Eight seconds without a press lowers the strip. */
+    @Test
+    fun theStripClosesAfterEightSeconds() {
+        playChannel(0)
+        pictureAlone()
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        awaitExists(StripTags.STRIP)
+        Thread.sleep(6_000)
+        assertTrue("still up after 6 s", rule.onAllNodes(hasTestTag(StripTags.STRIP)).fetchSemanticsNodes().isNotEmpty())
+        awaitGone(StripTags.STRIP)
+    }
+
+    /** The News tab (s0): the test panel's Arabic and French news channels, in that order, labelled by language. */
+    @Test
+    fun theNewsTabListsNewsByLanguage() {
+        val news = runBlocking { graph.newsChannels(playlist) }
+        assertEquals(listOf("Test News Arabic"), news[NewsChannels.Language.ARABIC]?.map { it.label })
+        assertEquals(listOf("Test Info"), news[NewsChannels.Language.FRENCH]?.map { it.label })
+        playChannel(0)
+        pictureAlone()
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        awaitExists(StripTags.tab(ChannelScope.News.key()))
+    }
+
+    /** "Choose copy" (x9): choosing the SD copy plays it and keeps it first until another is chosen. */
+    @Test
+    fun chooseCopyPlaysThatCopyAndRemembersIt() {
+        val copies = runBlocking { graph.channels(playlist, null) }.single { it.label == "Test Copies" }
+        val sd = runBlocking { graph.copyChoices(playlist, copies.id) }.single { it.quality == "SD" }
+        runBlocking { graph.chooseCopy(playlist, sd.id) }
+        assertEquals(sd.id, runBlocking { graph.channelCopies(playlist, copies.id) }.first())
+        assertEquals("SD", runBlocking { graph.channels(playlist, null) }.single { it.label == "Test Copies" }.quality)
+        assertTrue(runBlocking { graph.copyChoices(playlist, copies.id) }.single { it.id == sd.id }.chosen)
+    }
+
+    /** The live preview (D2): after the remote rests on a channel, the box shows its picture; leaving Live TV stops it. */
+    @Test
+    fun thePreviewPlaysAfterARestAndLeavingLiveTvStopsIt() {
+        focusChannel(0)
+        rule.waitUntil(15_000) { graph.playing }
+        assertTrue(rule.onAllNodes(hasTestTag(LivePreviewTags.BOX)).fetchSemanticsNodes().isNotEmpty())
+        // To the categories: the remote has left the channel list, so the preview stops.
+        press(KeyEvent.KEYCODE_DPAD_LEFT)
+        rule.waitUntil(5_000) { !graph.playing }
     }
 }
