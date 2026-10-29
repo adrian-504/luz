@@ -299,6 +299,10 @@ gives none. It sits above every screen, not only the player.
 **Lists** (ADR-0050 2b): the viewer's own sets are *lists* everywhere ("Add to a list…", "New list…", "Rename this
 list"); the provider's are *categories*. Choosing *Add to a list…* shows "Add France 24 to a list" with every list on
 its own line and an amber tick beside the ones that hold it; OK puts it in or takes it out.
+**Making a list** (Design 2.9): *New list…* at the foot of Live TV's own lists asks for a name (*Start adding*, white) or
+*Name it later*; then a full screen with "Adding to" over "My sports · 2" and *Done* at the top, the search line and the
+Search screen's letter strip, and the results as rows: *+ Add* in a pill, white under the remote, or an amber tick and
+*Added*. With the search empty it shows what is in the list so far.
 
 ## 18. Remote behaviour
 

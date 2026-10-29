@@ -51,6 +51,7 @@ import app.iptvplayer.storage.SourceRecord
 import app.iptvplayer.storage.TitleDetailRow
 import app.iptvplayer.storage.UnitStateRecord
 import app.iptvplayer.storage.db.IptvDatabase
+import app.iptvplayer.tv.R
 import app.iptvplayer.tv.companion.CompanionLibrary
 import app.iptvplayer.tv.companion.PhoneCompanion
 import app.iptvplayer.tv.developer.DeveloperStreams
@@ -339,6 +340,13 @@ class AppGraph(context: Context) {
      */
     fun createGroupWith(playlistId: PlaylistId, title: String, type: ContentType, contentId: String) {
         scope.launch { createGroup(playlistId, title)?.let { addToGroup(playlistId, it, type, contentId) } }
+    }
+
+    /** "New list", "New list 2"… (Words 2b, list_unnamed): a name for a list the viewer has not named yet. */
+    fun unnamedListTitle(existing: List<String>): String {
+        val base = appContext.getString(R.string.list_unnamed)
+        return generateSequence(1) { it + 1 }.map { if (it == 1) base else "$base $it" }
+            .first { candidate -> existing.none { it.equals(candidate, ignoreCase = true) } }
     }
 
     suspend fun renameGroup(playlistId: PlaylistId, id: String, title: String) {

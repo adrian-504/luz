@@ -76,8 +76,11 @@ companion must work on any phone, the owner's or a guest's, without installing a
      out (`POST /api/list`), and favourites channels (`POST /api/favorite`); a name already used is refused
      (`409 name-taken`). A `lists` event tells the phone to fetch again whenever a list or favourite changes on either
      side. The TV notes each change ("beIN Sports 3 added to My sports · from your phone"), several adds to one list
-     within two seconds as one ("3 added to My sports"). The TV's own menus show the lists with ticks. Making a list on
-     the TV itself (Design 2.9) follows as its own change.
+     within two seconds as one ("3 added to My sports"). The TV's own menus show the lists with ticks. **On the TV
+     itself** (Design 2.9, the same flow): Live TV → *New list…* asks for a name or *Name it later*, then opens search
+     with the letter strip under "Adding to My sports · 2"; OK on a result puts it in, OK again takes it out; Done or
+     Back leaves, asking once for a name if there is none; a list's menu gains *Add more*. While it is open, the phone's
+     notes for that list stay quiet (the screen already shows each change).
 6. **No encryption on the wire, and what follows from it.** A page on a home-network address cannot have a trusted
    certificate, and browsers only give cryptography to secure pages. So the companion is plain HTTP inside the home, like
    the provider links most viewers already use. In step 1 nothing secret travels except what the viewer types; the
@@ -108,7 +111,8 @@ companion must work on any phone, the owner's or a guest's, without installing a
   (`CompanionSetupTest`, five tests; `LivePlayerTest.thePhoneHearsTheTvNameAndWhatIsPlaying` and
   `aPhoneChangeShowsANoteOnTheTv`) are written and compiled, not run. Changing audio or subtitles from the phone has no
   device test yet: the test provider's films carry one audio track and no subtitles.
-- 2b's device test (`LivePlayerTest.aPhoneMakesAListFillsItAndTheTvSaysSo`) is written and compiled, not run.
+- 2b's device tests (`LivePlayerTest.aPhoneMakesAListFillsItAndTheTvSaysSo`, `aListIsMadeOnTheTvBySearchingAndPressingOk`)
+  are written and compiled, not run.
 - Anyone on the home network who can read its traffic could read a login sent from the phone (choice B). The same is
   true today of the provider's own plain links, and C would close it.
 

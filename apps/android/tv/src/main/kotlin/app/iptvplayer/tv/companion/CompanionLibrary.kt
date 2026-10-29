@@ -11,7 +11,6 @@ import app.iptvplayer.storage.GroupRow
 import app.iptvplayer.storage.MovieRow
 import app.iptvplayer.storage.NowNextRow
 import app.iptvplayer.storage.SeriesRow
-import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.AppGraph
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
@@ -176,7 +175,7 @@ class CompanionLibrary(private val context: Context, private val graph: AppGraph
         val existing = graph.userGroups(p).map { it.title }
         val name = title?.trim()?.take(MAX_TITLE)?.ifEmpty { null }
         if (name != null && existing.any { it.equals(name, ignoreCase = true) }) return ListResult.NameTaken(name)
-        val chosen = name ?: unnamed(existing)
+        val chosen = name ?: graph.unnamedListTitle(existing)
         val type = add?.let { type(it.first) ?: return ListResult.Missing }
         if (add != null && itemName(add.first, add.second) == null) return ListResult.NotFound
         val id = graph.createGroup(p, chosen) ?: return ListResult.NotFound
@@ -234,13 +233,6 @@ class CompanionLibrary(private val context: Context, private val graph: AppGraph
         graph.channelsInUserGroup(p, list).forEach { add(ContentType.CHANNEL to it.id.value) }
         graph.moviesInUserGroup(p, list, LIST_TITLES).forEach { add(ContentType.MOVIE to it.id) }
         graph.seriesInUserGroup(p, list, LIST_TITLES).forEach { add(ContentType.SERIES to it.id) }
-    }
-
-    // "New list", "New list 2"… (Words 2b, list_unnamed), until the viewer names it.
-    private fun unnamed(existing: List<String>): String {
-        val base = context.getString(R.string.list_unnamed)
-        return generateSequence(1) { it + 1 }.map { if (it == 1) base else "$base $it" }
-            .first { candidate -> existing.none { it.equals(candidate, ignoreCase = true) } }
     }
 
     private fun type(kind: String): ContentType? = when (kind) {

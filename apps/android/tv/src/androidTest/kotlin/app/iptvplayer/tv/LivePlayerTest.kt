@@ -8,6 +8,9 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -16,8 +19,11 @@ import app.iptvplayer.tv.app.IptvApplication
 import app.iptvplayer.tv.companion.CompanionHub
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.COMPANION_NOTE_TAG
+import app.iptvplayer.tv.ui.library.ListMakerTags
+import app.iptvplayer.tv.ui.library.SearchTags
 import app.iptvplayer.tv.ui.live.LiveTags
 import app.iptvplayer.tv.ui.player.PlayerTags
+import app.iptvplayer.tv.ui.theme.LuzPromptTags
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -208,6 +214,47 @@ class LivePlayerTest {
             runBlocking { graph.userGroups(playlist).forEach { graph.deleteGroup(playlist, it.id) } }
             companion.pairing.phones.value.forEach { companion.pairing.forget(it.id) }
             companion.setOn(false)
+        }
+    }
+
+    /**
+     * Making a list on the TV (Design 2.9): New list…, "Name it later", search, OK adds and OK again takes out, and Back
+     * asks for a name once ("Later" keeps "New list"). The phone's notes stay quiet for the list being filled.
+     */
+    @Test
+    fun aListIsMadeOnTheTvBySearchingAndPressingOk() {
+        awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
+        val target = runBlocking { graph.channels(playlist, null) }[1]
+        try {
+            repeat(4) { if (focusedTag() != LiveTags.NEW_LIST) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+            awaitFocus(LiveTags.NEW_LIST)
+            press(KeyEvent.KEYCODE_DPAD_CENTER)
+            awaitExists(LuzPromptTags.CLEAR)
+            rule.onNodeWithTag(LuzPromptTags.CLEAR).performClick()
+            awaitExists(ListMakerTags.HEADER)
+            val list = runBlocking { graph.userGroups(playlist) }.single()
+            assertEquals("New list", list.title)
+            assertEquals(list.id, CompanionHub.addingTo.value)
+
+            rule.onNodeWithTag(SearchTags.FIELD).performTextInput(target.label)
+            val row = ListMakerTags.row("channel", target.id.value)
+            awaitExists(row)
+            rule.onNodeWithTag(row).performClick()
+            rule.waitUntil(5_000) { runBlocking { graph.channelsInUserGroup(playlist, list.id) }.map { it.id } == listOf(target.id) }
+            awaitExists(ListMakerTags.HEADER, "New list · 1")
+            rule.onNodeWithTag(row).performClick()
+            rule.waitUntil(5_000) { runBlocking { graph.channelsInUserGroup(playlist, list.id) }.isEmpty() }
+            rule.onNodeWithTag(row).performClick()
+            rule.waitUntil(5_000) { runBlocking { graph.channelsInUserGroup(playlist, list.id) }.size == 1 }
+
+            press(KeyEvent.KEYCODE_BACK)
+            awaitExists(LuzPromptTags.CLEAR)
+            rule.onNodeWithTag(LuzPromptTags.CLEAR).performClick()
+            awaitGone(ListMakerTags.SCREEN)
+            assertEquals(null, CompanionHub.addingTo.value)
+            awaitFocus(LiveTags.group(list.id))
+        } finally {
+            runBlocking { graph.userGroups(playlist).forEach { graph.deleteGroup(playlist, it.id) } }
         }
     }
 

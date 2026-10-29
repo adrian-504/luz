@@ -59,6 +59,7 @@ import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.library.ArtworkImage
+import app.iptvplayer.tv.ui.library.ListMaker
 import app.iptvplayer.tv.ui.library.rememberArtworkResolver
 import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.shortTime
@@ -112,6 +113,7 @@ sealed interface ChannelScope {
 
 object LiveTags {
     const val GROUP_ALL = "live-group-all"
+    const val NEW_LIST = "live-new-list"
     const val GROUP_FAVORITES = "live-group-favorites"
     const val SWITCH_SOURCE = "live-switch-source"
 
@@ -155,6 +157,8 @@ fun LiveTvSection(
     var renaming by remember { mutableStateOf<GroupRow?>(null) }
     var myGroupMenuFor by remember { mutableStateOf<GroupRow?>(null) }
     var renamingMine by remember { mutableStateOf<GroupRow?>(null) }
+    // Design 2.9: making a list here (null id) or adding more to one; the outer null means the maker is closed.
+    var making by remember { mutableStateOf<Making?>(null) }
     var addingToGroup by remember { mutableStateOf<ChannelRow?>(null) }
     var newGroupFor by remember { mutableStateOf<ChannelRow?>(null) }
 
@@ -253,6 +257,14 @@ fun LiveTvSection(
                                 handOverFocus = true
                             }
                         }
+                        item(key = "new-list") {
+                            GroupItem(
+                                stringResource(R.string.list_new_menu),
+                                null,
+                                false,
+                                Modifier.rememberedFocus(focus, LiveTags.NEW_LIST),
+                            ) { making = Making(null) }
+                        }
                         items(groups.size, key = { groups[it].id }) { index ->
                             val group = groups[index]
                             GroupItem(
@@ -347,10 +359,18 @@ fun LiveTvSection(
                 },
             )
         }
+        making?.let { make ->
+            ListMaker(current, make.listId) { made ->
+                making = null
+                if (made != null) scopeKey = ChannelScope.Mine(made).key()
+                coroutines.launch { returnFocusTo(focus, if (made != null) LiveTags.group(made) else LiveTags.NEW_LIST) }
+            }
+        }
         myGroupMenuFor?.let { group ->
             LuzMenu(
                 title = group.title,
                 items = listOf(
+                    LuzMenuItem("add-more", stringResource(R.string.list_add_more)) { making = Making(group.id) },
                     LuzMenuItem("rename", stringResource(R.string.menu_rename_list)) { renamingMine = group },
                     LuzMenuItem("delete", stringResource(R.string.menu_delete_list)) {
                         coroutines.launch {
@@ -440,6 +460,9 @@ private fun SourceSwitcher(name: String, modifier: Modifier, onSwitch: () -> Uni
         }
     }
 }
+
+/** The list maker on Live TV: a new list, or more for [listId]. */
+private data class Making(val listId: String?)
 
 @Composable
 private fun GroupItem(

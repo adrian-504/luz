@@ -56,6 +56,10 @@ fun LuzPrompt(
     onDismiss: () -> Unit,
     label: String? = null,
     message: String? = null,
+    /** The white button's words, "Save" unless given ("Start adding", Design 2.9). */
+    confirmLabel: String? = null,
+    /** The second button's words, "Use the original name" unless given ("Name it later", "Later"). */
+    clearLabel: String? = null,
 ) {
     var text by remember { mutableStateOf(initial) }
     BackHandler(enabled = true, onBack = onDismiss)
@@ -93,7 +97,7 @@ fun LuzPrompt(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space4)) {
                 ActionButton(
-                    stringResource(R.string.prompt_save),
+                    confirmLabel ?: stringResource(R.string.prompt_save),
                     {
                         onDismiss()
                         onConfirm(text)
@@ -103,7 +107,7 @@ fun LuzPrompt(
                 )
                 if (onClear != null) {
                     ActionButton(
-                        stringResource(R.string.prompt_use_original),
+                        clearLabel ?: stringResource(R.string.prompt_use_original),
                         {
                             onDismiss()
                             onClear()

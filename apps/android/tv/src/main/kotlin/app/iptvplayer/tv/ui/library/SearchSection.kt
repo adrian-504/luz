@@ -248,7 +248,7 @@ fun SearchSection(
  * grey. Space and delete sit at the ends, and 123 swaps the letters for digits.
  */
 @Composable
-private fun LetterStrip(focus: FocusMemory, onType: (String) -> Unit, onDelete: () -> Unit) {
+internal fun LetterStrip(focus: FocusMemory, onType: (String) -> Unit, onDelete: () -> Unit) {
     var digits by rememberSaveable { mutableStateOf(false) }
     val keys = if (digits) DIGITS else LETTERS
     LazyRow(
