@@ -245,6 +245,20 @@ object LuzIcons {
         close()
     }
 
+    /** A bell: a match with a reminder (4.16). */
+    val Bell = icon("bell") {
+        moveTo(6f, 16.5f)
+        lineTo(6f, 11f)
+        curveTo(6f, 7.4f, 8.6f, 5f, 12f, 5f)
+        curveTo(15.4f, 5f, 18f, 7.4f, 18f, 11f)
+        lineTo(18f, 16.5f)
+        lineTo(19.5f, 18f)
+        lineTo(4.5f, 18f)
+        close()
+        moveTo(10f, 20.5f)
+        lineTo(14f, 20.5f)
+    }
+
     /** A pin: a category kept at the top of its list. */
     val Pin = icon("pin") {
         moveTo(9f, 3.5f)

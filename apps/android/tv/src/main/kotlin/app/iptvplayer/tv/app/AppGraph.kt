@@ -45,6 +45,7 @@ import app.iptvplayer.storage.ContinueItem
 import app.iptvplayer.storage.DetailCoverage
 import app.iptvplayer.storage.EpgStore
 import app.iptvplayer.storage.EpisodeRow
+import app.iptvplayer.storage.Fixture
 import app.iptvplayer.storage.FollowKind
 import app.iptvplayer.storage.Followed
 import app.iptvplayer.storage.GroupRow
@@ -81,6 +82,7 @@ import kotlinx.coroutines.withContext
 import java.net.InetAddress
 import java.net.URI
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
@@ -93,6 +95,9 @@ data class SearchResults(
     val series: List<SeriesRow>,
     val people: List<PersonHit> = emptyList(),
 )
+
+/** A match as a card shows it (4.16): the match, its teams' crests and short names when known, and whether it has a reminder. */
+data class MatchCard(val fixture: Fixture, val home: SportTeam?, val away: SportTeam?, val reminder: Boolean)
 
 /** "Because you watched …": the film it started from and what shares its director, cast or genres. */
 data class Recommendation(val seed: MovieRow, val movies: List<MovieRow>)
@@ -729,6 +734,41 @@ class AppGraph(context: Context) {
         sportStore.followable(sportStore.teamsMatching(query)) to sportStore.competitionsMatching(query)
     }
 
+    /**
+     * Matches for a search (4.16): of the teams that can be followed whose names hold [query], the stored matches from
+     * those under way (kick-off in the last [MATCH_LENGTH]) to two weeks ahead, soonest first. Teams whose matches were not
+     * read lately are read in the background ([lookUpTeams]), and [sportRevision] moves when they arrive.
+     */
+    suspend fun searchMatches(query: String): List<MatchCard> = io {
+        val teams = sportStore.followable(sportStore.teamsMatching(query)).map { it.ref }
+        val now = SystemClock.now()
+        val reminded = sportStore.reminders().map { it.id }.toSet()
+        sportStore.fixturesFor(teams, now - MATCH_LENGTH, now + MATCH_DAYS.days).take(MAX_SEARCH_MATCHES).map {
+            MatchCard(it, sportStore.team(it.homeRef), sportStore.team(it.awayRef), it.id in reminded)
+        }
+    }
+
+    /** Reads the matches of up to three searched teams not read lately, one after another, without following them. */
+    fun lookUpTeams(query: String) {
+        scope.launch(Dispatchers.IO) {
+            val teams = sportStore.followable(sportStore.teamsMatching(query)).take(MAX_LOOKUPS)
+            // Moves the revision only when something was read, so a search showing it does not ask again in a loop.
+            val read = teams.count { team -> runCatching { sport.teamFixtures(team.ref) }.getOrDefault(false) }
+            if (read > 0) mutableSportRevision.update { it + 1 }
+        }
+    }
+
+    suspend fun fixture(id: String): Fixture? = io { sportStore.fixture(id) }
+
+    suspend fun team(ref: String): SportTeam? = io { sportStore.team(ref) }
+
+    suspend fun hasReminder(fixtureId: String): Boolean = io { sportStore.reminders().any { it.id == fixtureId } }
+
+    suspend fun remind(fixtureId: String, on: Boolean) {
+        io { sportStore.remind(fixtureId, on) }
+        mutableSportRevision.update { it + 1 }
+    }
+
     /** The competitions [teamRef] plays in that can be followed. */
     suspend fun competitionsOf(teamRef: String): List<SportCompetition> = io { sportStore.competitionsOf(teamRef) }
 
@@ -1346,6 +1386,11 @@ class AppGraph(context: Context) {
     private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) { block() }
 
     private companion object {
+        /** How long a match counts as under way after kick-off: 90 minutes, half-time, stoppage and extra time. */
+        val MATCH_LENGTH = 135.minutes
+        const val MATCH_DAYS = 14
+        const val MAX_SEARCH_MATCHES = 12
+        const val MAX_LOOKUPS = 3
         const val LOG_TAG = "IptvImport"
 
         /** Channels compared when measuring a guide's time shift (ADR-0056), the short-guide limit. */

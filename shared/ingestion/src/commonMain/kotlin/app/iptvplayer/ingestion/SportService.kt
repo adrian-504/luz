@@ -129,6 +129,25 @@ public class SportService(
         return refreshOne(token, kind, ref, name, today())
     }
 
+    /**
+     * Reads one team's matches without following it, for a team the viewer searched for (4.16), when they were last read
+     * in an earlier six-hour slot. Nothing without a token or while something plays. True when matches were read; an
+     * error is returned as false, with what was stored kept.
+     */
+    public suspend fun teamFixtures(ref: String): Boolean {
+        val token = token() ?: return false
+        val id = ref.toLongOrNull() ?: return false
+        val fetched = sport.fetchedAt("$TEAM$ref")
+        if (fetched != null && slot(fetched) == slot(clock.now())) return false
+        if (playing()) return false
+        val day = today()
+        val (matches, error) = spaced { football.teamMatches(token, id, day.from, day.to) }
+        if (error != null) return false
+        saveMatches(matches)
+        sport.setFetched("$TEAM$ref")
+        return true
+    }
+
     public fun unfollow(kind: FollowKind, ref: String) {
         sport.unfollow(kind, ref)
     }

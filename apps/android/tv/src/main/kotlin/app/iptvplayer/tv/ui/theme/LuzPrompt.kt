@@ -60,6 +60,8 @@ fun LuzPrompt(
     confirmLabel: String? = null,
     /** The second button's words, "Use the original name" unless given ("Name it later", "Later"). */
     clearLabel: String? = null,
+    /** Under the field: "Or type on your phone", for a long key that is painful on the remote (Design, round 4). */
+    belowField: (@Composable () -> Unit)? = null,
 ) {
     var text by remember { mutableStateOf(initial) }
     BackHandler(enabled = true, onBack = onDismiss)
@@ -95,6 +97,7 @@ fun LuzPrompt(
                 imeAction = ImeAction.Done,
                 modifier = Modifier.fillMaxWidth().testTag(LuzPromptTags.FIELD),
             )
+            belowField?.invoke()
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space4)) {
                 ActionButton(
                     confirmLabel ?: stringResource(R.string.prompt_save),

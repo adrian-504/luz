@@ -46,12 +46,15 @@ import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.LocalAppGraph
+import app.iptvplayer.tv.app.MatchCard
 import app.iptvplayer.tv.app.SearchResults
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.TvTextField
 import app.iptvplayer.tv.ui.live.ChannelScope
 import app.iptvplayer.tv.ui.live.EmptyState
 import app.iptvplayer.tv.ui.rememberedFocus
+import app.iptvplayer.tv.ui.sport.MatchCardView
+import app.iptvplayer.tv.ui.sport.MatchMenu
 import app.iptvplayer.tv.ui.theme.CalmScrolling
 import app.iptvplayer.tv.ui.theme.CardShape
 import app.iptvplayer.tv.ui.theme.LuzCard
@@ -99,6 +102,9 @@ fun SearchSection(
     var loaded by remember { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var results by remember { mutableStateOf<SearchResults?>(null) }
+    val sportRevision by graph.sportRevision.collectAsState()
+    var matches by remember { mutableStateOf<List<MatchCard>>(emptyList()) }
+    var menuFor by remember { mutableStateOf<MatchCard?>(null) }
 
     LaunchedEffect(revision) {
         playlist = graph.currentSource()?.playlistId
@@ -112,6 +118,16 @@ fun SearchSection(
         }
         delay(150)
         results = graph.search(current, query)
+    }
+    // A team's next matches (4.16), first from what is stored; a team not read lately is read in the background, once per
+    // query, and the shelf fills when it arrives.
+    LaunchedEffect(query, sportRevision) {
+        matches = if (query.trim().length < MIN_MATCH_QUERY) emptyList() else graph.searchMatches(query.trim())
+    }
+    LaunchedEffect(query) {
+        if (query.trim().length < MIN_MATCH_QUERY) return@LaunchedEffect
+        delay(LOOKUP_DELAY_MS)
+        graph.lookUpTeams(query.trim())
     }
     if (!loaded) return
     if (current == null) {
@@ -173,12 +189,29 @@ fun SearchSection(
                     }
                 }
                 found == null -> item(key = "loading") { LuzSkeletonShelf(CardShape.POSTER, count = 5) }
-                found.channels.isEmpty() && found.movies.isEmpty() && found.series.isEmpty() && found.people.isEmpty() -> item(
+                found.channels.isEmpty() && found.movies.isEmpty() && found.series.isEmpty() && found.people.isEmpty() &&
+                    matches.isEmpty() -> item(
                     key = "status",
                 ) {
                     StatusLine(stringResource(R.string.search_nothing, query.trim()))
                 }
                 else -> {
+                    // Matches first when the query is a team (Design 4.1): someone typing "real m" wants the next match.
+                    if (matches.isNotEmpty()) {
+                        item(key = "matches") {
+                            LuzShelf(stringResource(R.string.search_matches)) {
+                                items(matches.size, key = { matches[it].fixture.id }) { index ->
+                                    val match = matches[index]
+                                    MatchCardView(
+                                        match,
+                                        Modifier.rememberedFocus(focus, SearchTags.result("match", match.fixture.id)),
+                                        onClick = { menuFor = match },
+                                        onLongClick = { menuFor = match },
+                                    )
+                                }
+                            }
+                        }
+                    }
                     if (found.channels.isNotEmpty()) {
                         item(key = "channels") {
                             LuzShelf(stringResource(R.string.search_channels)) {
@@ -249,7 +282,11 @@ fun SearchSection(
             }
         }
     }
+    menuFor?.let { match -> MatchMenu(match) { menuFor = null } }
 }
+
+private const val MIN_MATCH_QUERY = 3
+private const val LOOKUP_DELAY_MS = 600L
 
 /** Which letters the strip shows (Design 4.2): Latin, Arabic (right to left) or digits. */
 internal enum class Keys { LATIN, ARABIC, DIGITS }
@@ -326,13 +363,13 @@ internal fun LetterStrip(focus: FocusMemory, onType: (String) -> Unit, onDelete:
                 }
             }
         }
-        PhoneLine()
+        PhoneLine(Modifier.padding(start = Tokens.space4))
     }
 }
 
 /** "Or type on your phone" under the strip while the companion is on, pointing to its code until a phone is paired. */
 @Composable
-private fun PhoneLine() {
+internal fun PhoneLine(modifier: Modifier = Modifier) {
     val companion = LocalAppGraph.current.companion
     val status by companion.status.collectAsState()
     val phones by companion.pairing.phones.collectAsState()
@@ -341,7 +378,7 @@ private fun PhoneLine() {
         stringResource(if (phones.isEmpty()) R.string.search_phone_unpaired else R.string.search_phone),
         style = NoteText,
         color = Tokens.textTertiary,
-        modifier = Modifier.padding(start = Tokens.space4),
+        modifier = modifier,
     )
 }
 

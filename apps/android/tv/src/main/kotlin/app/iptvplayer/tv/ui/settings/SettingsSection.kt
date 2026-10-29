@@ -62,6 +62,7 @@ import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.library.HOME_ROW_TITLES
+import app.iptvplayer.tv.ui.library.PhoneLine
 import app.iptvplayer.tv.ui.library.withNewRows
 import app.iptvplayer.tv.ui.player.LIVE_BAR_SECONDS
 import app.iptvplayer.tv.ui.player.OPEN_LAST_CHANNEL
@@ -500,6 +501,7 @@ private fun SportPane(focus: FocusMemory, onFindTeam: () -> Unit) {
             initial = "",
             label = stringResource(R.string.sport_key_label),
             message = stringResource(R.string.sport_key_message),
+            belowField = { PhoneLine() },
             onConfirm = { key ->
                 checking = true
                 refused = null
