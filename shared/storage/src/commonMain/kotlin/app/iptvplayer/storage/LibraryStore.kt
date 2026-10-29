@@ -475,8 +475,8 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
         }
     }
 
-    /** The work the film [movieId] is a version of; a film the library no longer lists is its own. */
-    private fun workOf(playlistId: PlaylistId, movieId: String): String = active(playlistId, ImportUnit.MOVIES)
+    /** The work the film [movieId] is a version of (ADR-0042); a film the library no longer lists is its own. */
+    public fun workOf(playlistId: PlaylistId, movieId: String): String = active(playlistId, ImportUnit.MOVIES)
         ?.let { queries.workOfMovie(playlistId.value, it, movieId).executeAsOneOrNull()?.work_key }
         ?: "id:$movieId"
 

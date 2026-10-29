@@ -2,6 +2,7 @@ package app.iptvplayer.domain.library
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 
 class ChannelNamesTest {
     private fun check(raw: String, name: String, quality: String? = null) =
@@ -35,5 +36,17 @@ class ChannelNamesTest {
         check("ES |", "ES")
         check("[NF]", "[NF]")
         check("|AR| HD", "HD")
+    }
+
+    @Test
+    fun familyKeyKeepsTheLanguagePrefix() {
+        assertNotEquals(ChannelNames.familyKey("AR| beIN Sports 1"), ChannelNames.familyKey("FR| beIN Sports 1"))
+        assertEquals(ChannelNames.familyKey("LEB | MTV HD"), ChannelNames.familyKey("LEB| MTV SD"))
+    }
+
+    @Test
+    fun familyKeyDropsQualityWords() {
+        assertEquals(ChannelNames.familyKey("beIN Sports 1 FHD"), ChannelNames.familyKey("beIN SPORTS 1 HD HEVC"))
+        assertEquals("hd", ChannelNames.familyKey("HD"))
     }
 }

@@ -8,6 +8,7 @@ import androidx.core.content.edit
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.library.ExternalList
+import app.iptvplayer.domain.live.ViewingSession
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.CustomisationTarget
 import app.iptvplayer.domain.model.ImportStatus
@@ -41,6 +42,7 @@ import app.iptvplayer.storage.EpisodeRow
 import app.iptvplayer.storage.GroupRow
 import app.iptvplayer.storage.GuideProgramme
 import app.iptvplayer.storage.LibraryGroupRow
+import app.iptvplayer.storage.LiveStore
 import app.iptvplayer.storage.MovieRow
 import app.iptvplayer.storage.MovieVersionRow
 import app.iptvplayer.storage.NowNextRow
@@ -139,6 +141,10 @@ class AppGraph(context: Context) {
     }
     private val secrets by lazy { KeystoreSecretStore(appContext) }
     private val content by lazy { ContentStore(driver, SystemClock) }
+    private val liveStore by lazy { LiveStore(content, SystemClock) }
+
+    /** One channel from many copies, with Luz's own numbers (ADR-0052). */
+    private val liveChannels by lazy { LiveChannels(content, liveStore) { SystemClock.now().toEpochMilliseconds() } }
     private val library get() = service.library
     private val epg by lazy { EpgStore(driver) }
     private val service by lazy {
@@ -237,7 +243,62 @@ class AppGraph(context: Context) {
 
     suspend fun groups(playlistId: PlaylistId): List<GroupRow> = io { content.groups(playlistId) }
 
-    suspend fun channels(playlistId: PlaylistId, groupId: String?): List<ChannelRow> = io { content.channels(playlistId, groupId) }
+    suspend fun channels(playlistId: PlaylistId, groupId: String?): List<ChannelRow> =
+        io { liveChannels.collapse(playlistId, content.channels(playlistId, groupId)) }
+
+    /** The copies of a channel, best first (ADR-0052): the player tries the next when one does not start. */
+    suspend fun channelCopies(playlistId: PlaylistId, channelId: ChannelId): List<ChannelId> =
+        io { liveChannels.copies(playlistId, channelId) }
+
+    /** Categories the provider added after setup, still waiting in Settings (x6). */
+    suspend fun newGroups(playlistId: PlaylistId): Set<String> = io { liveStore.newGroups(playlistId) }
+
+    suspend fun clearNewGroups(playlistId: PlaylistId) = io { liveStore.clearNewGroups(playlistId) }
+
+    suspend fun seenGroup(playlistId: PlaylistId, groupId: String) = io { liveStore.seenGroup(playlistId, groupId) }
+
+    /** A copy started (with how long its first picture took) or failed for good; the order of copies follows (3.12). */
+    suspend fun recordPlayback(playlistId: PlaylistId, channelId: ChannelId, ok: Boolean, firstFrameMs: Long? = null) {
+        io {
+            if (ok) liveStore.playedOk(playlistId, channelId.value, firstFrameMs) else liveStore.playedFail(playlistId, channelId.value)
+            liveChannels.forget(playlistId)
+        }
+    }
+
+    /** The viewer chose this copy of the channel (x9): it plays first until they choose another. */
+    suspend fun chooseCopy(playlistId: PlaylistId, channelId: ChannelId) {
+        io {
+            liveStore.choose(playlistId, channelId.value, liveChannels.copies(playlistId, channelId).map { it.value })
+            liveChannels.forget(playlistId)
+        }
+        changed()
+    }
+
+    /** The channel watched last, if it is still in the source's channels (3.9). */
+    suspend fun lastChannel(playlistId: PlaylistId): ChannelId? = io {
+        val id = liveStore.lastPlayedChannel(playlistId) ?: return@io null
+        content.channelsByIds(playlistId, listOf(id)).firstOrNull()?.id
+    }
+
+    /** The film a version belongs to (ADR-0042), for the viewing log. */
+    suspend fun movieWork(playlistId: PlaylistId, movieId: String): String = io { library.workOf(playlistId, movieId) }
+
+    /** The shortest session the viewing log keeps; device tests lower it, the app never does. */
+    @Volatile
+    var sessionMinSeconds: Long = ViewingSession.MIN_SECONDS
+
+    /** One viewing session for the log (round 3, for round 8): ids only, never a name or an address. */
+    suspend fun recordSession(playlistId: PlaylistId, kind: ContentType, contentId: String, work: String?, startedAt: Long, seconds: Long) =
+        io { liveStore.addSession(playlistId, kind.name, contentId, work, startedAt, seconds) }
+
+    suspend fun sessionCount(playlistId: PlaylistId): Long = io { liveStore.sessionCount(playlistId) }
+
+    /** After a channel import: numbers for new channels, and new categories set aside (ADR-0052). Off the main thread. */
+    private fun afterLiveImport(playlistId: PlaylistId) {
+        liveChannels.assignNumbers(playlistId)
+        liveStore.noteGroups(playlistId, content.groupsToArrange(playlistId).map { it.id })
+        liveStore.pruneSessions()
+    }
 
     suspend fun channelLabel(playlistId: PlaylistId, channelId: ChannelId): String? =
         io { content.channelsByIds(playlistId, listOf(channelId.value)).firstOrNull()?.label }
@@ -248,7 +309,8 @@ class AppGraph(context: Context) {
     suspend fun channelLogo(playlistId: PlaylistId, channelId: ChannelId): UrlTemplate? =
         io { content.channelsByIds(playlistId, listOf(channelId.value)).firstOrNull()?.logo }
 
-    suspend fun favoriteChannels(playlistId: PlaylistId): List<ChannelRow> = io { content.favoriteChannels(playlistId) }
+    suspend fun favoriteChannels(playlistId: PlaylistId): List<ChannelRow> =
+        io { liveChannels.collapse(playlistId, content.favoriteChannels(playlistId)) }
 
     /**
      * Stored now/next for a whole channel list, read and assembled off the main thread (PERFORMANCE.md §5). A category of
@@ -288,7 +350,12 @@ class AppGraph(context: Context) {
     }
 
     suspend fun setFavorite(channelId: ChannelId, favorite: Boolean) {
-        io { content.setFavorite(channelId, favorite) }
+        val playlist = currentSource()?.playlistId
+        io {
+            // A channel is a favourite if any of its copies is (ADR-0052), so taking it out clears them all.
+            val copies = if (favorite || playlist == null) listOf(channelId) else liveChannels.copies(playlist, channelId)
+            copies.forEach { content.setFavorite(it, favorite) }
+        }
         changed()
     }
 
@@ -386,7 +453,7 @@ class AppGraph(context: Context) {
         io { content.groupsHolding(playlistId, type, id) }
 
     suspend fun channelsInUserGroup(playlistId: PlaylistId, groupId: String): List<ChannelRow> =
-        io { content.channelsInUserGroup(playlistId, groupId) }
+        io { liveChannels.collapse(playlistId, content.channelsInUserGroup(playlistId, groupId)) }
 
     suspend fun channelNames(playlistId: PlaylistId, ids: List<String>): Map<String, String> = io { content.channelNames(playlistId, ids) }
 
@@ -450,6 +517,7 @@ class AppGraph(context: Context) {
             when (result) {
                 is AddSourceResult.Added -> {
                     logImport("live", result.live, started)
+                    io { afterLiveImport(result.playlistId) }
                     changed()
                     refreshGuideAndLibrary(result.playlistId)
                 }
@@ -466,6 +534,7 @@ class AppGraph(context: Context) {
             try {
                 val started = android.os.SystemClock.elapsedRealtime()
                 logImport("live", io { service.refreshLive(playlistId) }, started)
+                io { afterLiveImport(playlistId) }
             } finally {
                 track(playlistId) { it.copy(liveRunning = false) }
                 changed()
@@ -898,8 +967,8 @@ class AppGraph(context: Context) {
     /** Channels the viewer watches most, falling back to favourites when they have not watched any yet. */
     suspend fun mostWatchedChannels(playlistId: PlaylistId, limit: Int): List<ChannelRow> = io {
         val ids = library.mostWatchedChannelIds(playlistId, limit)
-        if (ids.isEmpty()) return@io content.favoriteChannels(playlistId).take(limit)
-        content.channelsByIds(playlistId, ids)
+        if (ids.isEmpty()) return@io liveChannels.collapse(playlistId, content.favoriteChannels(playlistId)).take(limit)
+        liveChannels.collapse(playlistId, content.channelsByIds(playlistId, ids))
     }
 
     /** "Continue watching" cards with titles and artwork, most recent first (FR-HOME-001). */
@@ -986,7 +1055,7 @@ class AppGraph(context: Context) {
     suspend fun search(playlistId: PlaylistId, query: String, limit: Int = 30): SearchResults = io {
         SearchResults(
             query = query,
-            channels = content.searchChannels(playlistId, query, limit),
+            channels = liveChannels.collapse(playlistId, content.searchChannels(playlistId, query, limit)),
             movies = library.searchMovies(playlistId, query, limit),
             series = library.searchSeries(playlistId, query, limit),
             people = library.searchPeople(playlistId, query, PEOPLE_LIMIT),

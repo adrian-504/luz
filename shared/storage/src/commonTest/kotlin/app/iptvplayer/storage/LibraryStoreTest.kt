@@ -276,6 +276,7 @@ class LibraryStoreTest {
             "series_detail_state", "watch_state", "title_search", "user_hidden", "user_label", "user_group",
             "user_group_member", "app_setting", "title_detail", "title_genre", "person", "title_person", "person_name", "channel_watch",
             "tmdb_title", "tmdb_art", "tmdb_person", "tmdb_episode", "tmdb_season", "user_pinned",
+            "channel_number", "known_group", "channel_playback", "user_epg_link", "watch_session",
         )) {
             driver.execute(null, "DROP TABLE $table", 0)
         }
@@ -289,7 +290,7 @@ class LibraryStoreTest {
         content = ContentStore(driver, clock)
         library = LibraryStore(content, clock)
         assertEquals(
-            15L,
+            16L,
             driver.executeQuery(null, "PRAGMA user_version", {
                 it.next()
                 app.cash.sqldelight.db.QueryResult.Value(it.getLong(0))
@@ -304,6 +305,38 @@ class LibraryStoreTest {
         )
         importMovies(movie("mv_1", "Alpha", listOf("mg_action"), 1))
         assertEquals("Alpha", library.movies(playlist).single().title, "the new tables work after the upgrade")
+    }
+
+    private fun userVersion(): Long = driver.executeQuery(null, "PRAGMA user_version", {
+        it.next()
+        app.cash.sqldelight.db.QueryResult.Value(it.getLong(0)!!)
+    }, 0).value
+
+    private fun rows(table: String): Long = driver.executeQuery(null, "SELECT COUNT(*) FROM $table", {
+        it.next()
+        app.cash.sqldelight.db.QueryResult.Value(it.getLong(0)!!)
+    }, 0).value
+
+    @Test
+    fun upgradeFrom15KeepsEverythingAndAddsTheLiveTables() {
+        addSource()
+        importLiveChannel()
+        content.setFavorite(ChannelId("ch_1"), true)
+        // A schema-15 install: everything but Live TV's own memory (ADR-0052).
+        for (table in listOf("channel_number", "known_group", "channel_playback", "user_epg_link", "watch_session")) {
+            driver.execute(null, "DROP TABLE $table", 0)
+        }
+        driver.execute(null, "PRAGMA user_version=15", 0)
+        driver.close()
+
+        driver = openIptvDatabase(file.path)
+        content = ContentStore(driver, clock)
+        library = LibraryStore(content, clock)
+        assertEquals(16L, userVersion())
+        assertTrue(content.channels(playlist).single().isFavorite, "channels and favourites survive the upgrade")
+        for (table in listOf("channel_number", "known_group", "channel_playback", "user_epg_link", "watch_session")) {
+            assertEquals(0L, rows(table), "$table exists and is empty")
+        }
     }
 
     private fun importSeries(episodes: Int) {
@@ -464,6 +497,10 @@ class LibraryStoreTest {
         for ((order, id) in listOf("mv_1b", "mv_1").withIndex()) {
             val kept = "INSERT INTO favorite(content_type, content_id, sort_order, created_at) VALUES ('MOVIE', '$id', $order, $order)"
             driver.execute(null, kept, 0)
+        }
+        // Live TV's own memory came later (schema 16).
+        for (table in listOf("channel_number", "known_group", "channel_playback", "user_epg_link", "watch_session")) {
+            driver.execute(null, "DROP TABLE $table", 0)
         }
         driver.execute(null, "PRAGMA user_version=14", 0)
         driver.close()

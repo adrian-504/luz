@@ -1,0 +1,122 @@
+-- Live TV's own memory (round 3, ADR-0052): what the viewer and their TV learned about channels, kept apart from the
+-- imported rows so an import never touches it, and removed with the source. Must match 15.sqm.
+
+-- Luz's channel numbers, one per family of copies (FHD/HD/SD of one channel), so a reshuffle by the provider never
+-- moves them. A vanished family's number is held for 90 days (assigned_at), then freed.
+CREATE TABLE channel_number (
+    playlist_id TEXT NOT NULL,
+    family_key TEXT NOT NULL,
+    number INTEGER NOT NULL,
+    assigned_at INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, family_key),
+    UNIQUE (playlist_id, number)
+);
+
+-- The provider's channel categories as Luz first saw them: ones added later wait in Settings, marked new (x6).
+CREATE TABLE known_group (
+    playlist_id TEXT NOT NULL,
+    group_id TEXT NOT NULL,
+    first_seen_at INTEGER NOT NULL,
+    is_new INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, group_id)
+);
+
+-- How each copy of a channel played on this TV: the copy that started last time comes first, one that failed in the
+-- last week last; one the viewer chose by hand wins over both (3.12, x9).
+CREATE TABLE channel_playback (
+    playlist_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    ok_count INTEGER NOT NULL DEFAULT 0,
+    fail_count INTEGER NOT NULL DEFAULT 0,
+    last_ok_at INTEGER,
+    last_fail_at INTEGER,
+    last_first_frame_ms INTEGER,
+    chosen INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (playlist_id, channel_id)
+);
+
+-- The viewer's own "this channel's guide is that one" (x9 part 2), used by the guide in batch C.
+CREATE TABLE user_epg_link (
+    playlist_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    epg_source_id TEXT NOT NULL,
+    epg_channel_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, channel_id)
+);
+
+-- The viewing log for "Year in Luz" (round 8): one row per session of at least a minute's playing; ids only, kept 400 days.
+CREATE TABLE watch_session (
+    playlist_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    work TEXT,
+    started_at INTEGER NOT NULL,
+    seconds INTEGER NOT NULL
+);
+
+CREATE INDEX watch_session_started ON watch_session(started_at);
+
+channelNumbers:
+SELECT family_key, number, assigned_at FROM channel_number WHERE playlist_id = ?;
+
+setChannelNumber:
+INSERT OR REPLACE INTO channel_number(playlist_id, family_key, number, assigned_at) VALUES (?, ?, ?, ?);
+
+clearChannelNumbers:
+DELETE FROM channel_number WHERE playlist_id = ?;
+
+knownGroups:
+SELECT group_id, is_new FROM known_group WHERE playlist_id = ?;
+
+addKnownGroup:
+INSERT OR IGNORE INTO known_group(playlist_id, group_id, first_seen_at, is_new) VALUES (?, ?, ?, ?);
+
+clearNewGroups:
+UPDATE known_group SET is_new = 0 WHERE playlist_id = ?;
+
+seenGroup:
+UPDATE known_group SET is_new = 0 WHERE playlist_id = ? AND group_id = ?;
+
+channelPlayback:
+SELECT channel_id, ok_count, fail_count, last_ok_at, last_fail_at, last_first_frame_ms, chosen
+FROM channel_playback WHERE playlist_id = ?;
+
+playedOk:
+INSERT INTO channel_playback(playlist_id, channel_id, ok_count, last_ok_at, last_first_frame_ms) VALUES (:playlistId, :channelId, 1, :now, :firstFrameMs)
+ON CONFLICT(playlist_id, channel_id) DO UPDATE SET ok_count = ok_count + 1, last_ok_at = excluded.last_ok_at,
+    last_first_frame_ms = excluded.last_first_frame_ms;
+
+playedFail:
+INSERT INTO channel_playback(playlist_id, channel_id, fail_count, last_fail_at) VALUES (:playlistId, :channelId, 1, :now)
+ON CONFLICT(playlist_id, channel_id) DO UPDATE SET fail_count = fail_count + 1, last_fail_at = excluded.last_fail_at;
+
+clearChosen:
+UPDATE channel_playback SET chosen = 0 WHERE playlist_id = :playlistId AND channel_id IN :members;
+
+choose:
+INSERT INTO channel_playback(playlist_id, channel_id, chosen) VALUES (:playlistId, :channelId, 1)
+ON CONFLICT(playlist_id, channel_id) DO UPDATE SET chosen = 1;
+
+-- The channel watched last, for opening Luz on it (3.9).
+lastPlayedChannel:
+SELECT channel_id FROM channel_watch WHERE playlist_id = ? ORDER BY last_played_at DESC LIMIT 1;
+
+addSession:
+INSERT INTO watch_session(playlist_id, kind, content_id, work, started_at, seconds) VALUES (?, ?, ?, ?, ?, ?);
+
+pruneSessions:
+DELETE FROM watch_session WHERE started_at < ?;
+
+sessionCount:
+SELECT COUNT(*) FROM watch_session WHERE playlist_id = ?;
+
+deleteLive {
+    DELETE FROM channel_number WHERE playlist_id = :playlistId;
+    DELETE FROM known_group WHERE playlist_id = :playlistId;
+    DELETE FROM channel_playback WHERE playlist_id = :playlistId;
+    DELETE FROM user_epg_link WHERE playlist_id = :playlistId;
+    DELETE FROM watch_session WHERE playlist_id = :playlistId;
+    -- Which channels were watched used to stay behind when a source was removed.
+    DELETE FROM channel_watch WHERE playlist_id = :playlistId;
+}

@@ -66,6 +66,7 @@ import app.iptvplayer.tv.ui.library.rememberArtworkResolver
 import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.shortTime
 import app.iptvplayer.tv.ui.theme.ButtonKind
+import app.iptvplayer.tv.ui.theme.LuzBadge
 import app.iptvplayer.tv.ui.theme.LuzButton
 import app.iptvplayer.tv.ui.theme.LuzEmptyState
 import app.iptvplayer.tv.ui.theme.LuzIcons
@@ -801,6 +802,8 @@ private fun ChannelItem(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
+                // 4K, FHD or HD, the copy that will play (3.11); never SD, which says nothing worth a badge.
+                channel.quality?.takeIf { it != "SD" }?.let { LuzBadge(it) }
                 if (channel.isFavorite) {
                     Icon(
                         LuzIcons.Favorites,

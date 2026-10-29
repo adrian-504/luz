@@ -82,11 +82,17 @@ public data class ChannelRow(
     public val tvgId: String?,
     public val isFavorite: Boolean,
 ) {
+    // Worked out once per row, not on every read: these are read in scroll paths, and the rules are regular expressions.
+    private val display by lazy(LazyThreadSafetyMode.PUBLICATION) { ChannelNames.display(name) }
+
     /** The name as a viewer reads it, without the provider's country prefix or quality words. */
-    public val label: String get() = ChannelNames.display(name).name
+    public val label: String get() = display.name
 
     /** "HD", "4K" and the like, taken out of the name, for a badge. */
-    public val quality: String? get() = ChannelNames.display(name).quality
+    public val quality: String? get() = display.quality
+
+    /** What this copy shares with the other copies of the same channel (ADR-0052). */
+    public val familyKey: String by lazy(LazyThreadSafetyMode.PUBLICATION) { ChannelNames.familyKey(name) }
 }
 
 /**
@@ -94,7 +100,7 @@ public data class ChannelRow(
  * through [LiveSnapshotWriter]; readers only ever see the published one.
  */
 public class ContentStore(private val driver: SqlDriver, private val clock: Clock) {
-    private val database = IptvDatabase(driver)
+    internal val database = IptvDatabase(driver)
     internal val queries = database.contentQueries
     internal val libraryQueries = database.libraryQueries
     internal val searchQueries = database.searchQueries
@@ -102,6 +108,7 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
     internal val browseQueries = database.browseQueries
     internal val tmdbQueries = database.tmdbQueries
     private val customisationQueries = database.customisationQueries
+    internal val liveQueries = database.liveQueries
 
     /** Marks [snapshot] as the published content of [unit] (library units; live channels use their writer). */
     internal fun publishUnit(playlistId: PlaylistId, unit: ImportUnit, snapshot: Long, itemCount: Long) {
@@ -207,6 +214,7 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
             libraryQueries.deleteLibrary(playlistId.value)
             searchQueries.deleteTitlesOfPlaylist(playlistId.value)
             customisationQueries.deleteCustomisation(playlistId.value)
+            liveQueries.deleteLive(playlistId.value)
             queries.deletePlaylistRow(playlistId.value)
             queries.deleteProviderRow(providerId)
         }

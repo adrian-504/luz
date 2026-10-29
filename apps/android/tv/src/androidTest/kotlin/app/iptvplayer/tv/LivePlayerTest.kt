@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.iptvplayer.domain.live.ViewingSession
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.testing.TestPanel
 import app.iptvplayer.tv.app.IptvApplication
@@ -23,6 +24,8 @@ import app.iptvplayer.tv.ui.COMPANION_NOTE_TAG
 import app.iptvplayer.tv.ui.library.ListMakerTags
 import app.iptvplayer.tv.ui.library.SearchTags
 import app.iptvplayer.tv.ui.live.LiveTags
+import app.iptvplayer.tv.ui.player.LAST_CHANNEL_SCOPE
+import app.iptvplayer.tv.ui.player.LIVE_BAR_SECONDS
 import app.iptvplayer.tv.ui.player.PlayerTags
 import app.iptvplayer.tv.ui.theme.LuzPromptTags
 import kotlinx.coroutines.runBlocking
@@ -326,6 +329,94 @@ class LivePlayerTest {
             all.filter { c -> c.id != first.id && runBlocking { graph.channels(playlist, sports.id) }.none { it.id == c.id } }
                 .none { rule.onAllNodes(hasTestTag(LiveTags.channel(it.id))).fetchSemanticsNodes().isNotEmpty() },
         )
+    }
+
+    private fun playChannel(index: Int) {
+        focusChannel(index)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(PlayerTags.PLAY_PAUSE, timeout = 20_000)
+    }
+
+    /**
+     * One channel from three copies (ADR-0052): "Test Copies" is one row, its FHD copy is offline, so Luz quietly plays
+     * the HD one, and remembers: next time HD comes first and FHD last.
+     */
+    @Test
+    fun aFailingCopyFallsBackToTheNextOne() {
+        val all = runBlocking { graph.channels(playlist, null) }
+        val copies = all.filter { it.label == "Test Copies" }
+        assertEquals("three copies, one row", 1, copies.size)
+        assertEquals("the best copy is the one shown", "FHD", copies.single().quality)
+        playChannel(all.indexOf(copies.single()))
+        rule.waitUntil(30_000) {
+            runBlocking { graph.channelCopies(playlist, copies.single().id) }.first().value == "402"
+        }
+        assertEquals("401", runBlocking { graph.channelCopies(playlist, copies.single().id) }.last().value)
+        assertTrue(
+            "no error while another copy plays",
+            rule.onAllNodes(hasTestTag(PlayerTags.ERROR_MESSAGE)).fetchSemanticsNodes().isEmpty(),
+        )
+    }
+
+    /** The viewing log (round 3): one session for a channel watched past the (lowered) threshold, none before it. */
+    @Test
+    fun watchingLogsOneSession() {
+        graph.sessionMinSeconds = 2
+        try {
+            playChannel(0)
+            Thread.sleep(4_000)
+            press(KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_BACK)
+            rule.waitUntil(10_000) { runBlocking { graph.sessionCount(playlist) } == 1L }
+        } finally {
+            graph.sessionMinSeconds = ViewingSession.MIN_SECONDS
+        }
+    }
+
+    /** "Channel bar stays" (x7): the live bar after a channel change stays for the chosen time. */
+    @Test
+    fun theChannelBarStaysForTheChosenTime() {
+        runBlocking { graph.setPreference(LIVE_BAR_SECONDS, "8") }
+        try {
+            playChannel(0)
+            // The controls give way to the picture; a channel change then shows the bar alone.
+            press(KeyEvent.KEYCODE_BACK)
+            rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(PlayerTags.PLAY_PAUSE)).fetchSemanticsNodes().isEmpty() }
+            press(KeyEvent.KEYCODE_CHANNEL_UP)
+            awaitExists(PlayerTags.BANNER)
+            Thread.sleep(5_500)
+            assertTrue("still there after 5 s", rule.onAllNodes(hasTestTag(PlayerTags.BANNER)).fetchSemanticsNodes().isNotEmpty())
+            awaitGone(PlayerTags.BANNER)
+        } finally {
+            runBlocking { graph.setPreference(LIVE_BAR_SECONDS, null) }
+        }
+    }
+
+    /**
+     * Opening on the last channel (3.9): the channel played is the one Luz finds to open on, in the list it came from.
+     * The cold start itself (a new process) is checked on the TV: TESTING.md §4.5.
+     */
+    @Test
+    fun theLastChannelIsRememberedForTheNextStart() {
+        val channels = runBlocking { graph.channels(playlist, null) }
+        playChannel(2)
+        rule.waitUntil(10_000) { runBlocking { graph.lastChannel(playlist) } == channels[2].id }
+        assertEquals("all", runBlocking { graph.preference(LAST_CHANNEL_SCOPE) })
+    }
+
+    /** A category the provider adds after setup waits in Settings, marked new, instead of appearing in Live TV (x6). */
+    @Test
+    fun aGroupAddedLaterWaitsInSettings() {
+        awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
+        assertTrue("the first import shows every category", runBlocking { graph.newGroups(playlist) }.isEmpty())
+        TestPanel.lateCategory = true
+        try {
+            refreshChannels()
+            assertEquals(1, runBlocking { graph.newGroups(playlist) }.size)
+            assertTrue(runBlocking { graph.groups(playlist) }.none { it.title == TestPanel.LATE_CATEGORY })
+            assertTrue(runBlocking { graph.groupsToArrange(playlist) }.any { it.title == TestPanel.LATE_CATEGORY && it.hidden })
+        } finally {
+            TestPanel.lateCategory = false
+        }
     }
 
     /** Nothing opens out of sight (ADR-0050, step 3): while Luz is not on the TV's screen, the phone is told so. */

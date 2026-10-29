@@ -42,6 +42,8 @@ import app.iptvplayer.tv.ui.onboarding.SourceTypeScreen
 import app.iptvplayer.tv.ui.onboarding.WelcomeScreen
 import app.iptvplayer.tv.ui.onboarding.XtreamFormScreen
 import app.iptvplayer.tv.ui.player.ChannelPlayerRoute
+import app.iptvplayer.tv.ui.player.LAST_CHANNEL_SCOPE
+import app.iptvplayer.tv.ui.player.OPEN_LAST_CHANNEL
 import app.iptvplayer.tv.ui.player.PlayerScreen
 import app.iptvplayer.tv.ui.shell.MainShell
 import app.iptvplayer.tv.ui.shell.Section
@@ -124,7 +126,15 @@ fun AppNavHost() {
                 }
                 // TMDB lists, when the viewer gave a key: read again when more than a day old (ADR-0038).
                 graph.refreshTmdb()
+                // Opening Luz plays the channel watched last, with Live TV behind it for Back (3.9). Only here, on a cold
+                // start: coming back to Luz from the background resumes where the viewer was.
+                val source = graph.currentSource()
+                val last = source?.takeIf { graph.preference(OPEN_LAST_CHANNEL) != "false" }?.let { graph.lastChannel(it.playlistId) }
                 navController.navigate(target) { popUpTo(Routes.START) { inclusive = true } }
+                if (source != null && last != null) {
+                    val scope = ChannelScope.of(graph.preference(LAST_CHANNEL_SCOPE) ?: ChannelScope.All.key())
+                    navController.navigate(Routes.channel(source.playlistId, scope, last))
+                }
             }
         }
         composable(Routes.WELCOME) {

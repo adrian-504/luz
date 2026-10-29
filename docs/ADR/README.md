@@ -72,3 +72,4 @@ line. Product-scope decisions still go to the owner.
 | [0049](0049-a-shrunk-release-and-a-robot-outside-the-app.md) | A shrunk release build, and a robot that drives Luz from outside | Accepted |
 | [0050](0050-the-phone-companion.md) | The phone companion, a page Luz serves on the home network | Accepted |
 | [0051](0051-last-known-screens-and-lighter-pictures.md) | Last known screens, and pictures decoded at the size they are drawn | Accepted |
+| [0052](0052-one-channel-from-many-copies.md) | One channel from many copies, numbers that stay, new groups that wait, and opening on the last channel | Accepted |

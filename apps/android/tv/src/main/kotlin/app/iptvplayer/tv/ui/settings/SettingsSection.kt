@@ -22,9 +22,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +63,8 @@ import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.library.HOME_ROW_TITLES
 import app.iptvplayer.tv.ui.library.withNewRows
+import app.iptvplayer.tv.ui.player.LIVE_BAR_SECONDS
+import app.iptvplayer.tv.ui.player.OPEN_LAST_CHANNEL
 import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.shortTime
 import app.iptvplayer.tv.ui.sources.SourcesList
@@ -79,6 +83,9 @@ object SettingsTags {
     const val HOME = "settings-home"
     const val HIDDEN = "settings-hidden"
     const val CATEGORIES = "settings-categories"
+    const val LIVE = "settings-live"
+    const val OPEN_LAST = "settings-open-last"
+    const val BAR_TIME = "settings-bar-time"
 
     fun category(id: String) = "settings-category-$id"
     const val DETAILS = "settings-details"
@@ -112,6 +119,8 @@ private data class SettingsEntry(
     val summary: Int,
     val icon: ImageVector,
     val plural: Boolean = false,
+    /** A small amber pill after the title, such as "2 new" (x6). */
+    val badge: String? = null,
 )
 
 /**
@@ -136,11 +145,15 @@ fun SettingsSection(
     // "Hidden items" appears only once something is hidden — which is exactly when a way back is needed.
     var playlist by remember { mutableStateOf<PlaylistId?>(null) }
     var hiddenCount by remember { mutableLongStateOf(0L) }
+    // Categories the provider added after setup, waiting here (x6).
+    var newCategories by remember { mutableIntStateOf(0) }
     LaunchedEffect(revision) {
         playlist = graph.currentSource()?.playlistId
         hiddenCount = playlist?.let { graph.hiddenCount(it) } ?: 0
+        newCategories = playlist?.let { graph.newGroups(it).size } ?: 0
     }
-    val entries = remember(hasDeveloperStreams, hiddenCount, playlist) {
+    val newBadge = if (newCategories > 0) pluralStringResource(R.plurals.settings_categories_new, newCategories, newCategories) else null
+    val entries = remember(hasDeveloperStreams, hiddenCount, playlist, newBadge) {
         buildList {
             add(
                 SettingsEntry(
@@ -152,12 +165,14 @@ fun SettingsSection(
             )
             add(SettingsEntry(SettingsTags.HOME, R.string.settings_home, R.string.settings_home_summary, LuzIcons.Home))
             if (playlist != null) {
+                add(SettingsEntry(SettingsTags.LIVE, R.string.settings_live_title, R.string.settings_live_summary, LuzIcons.LiveTv))
                 add(
                     SettingsEntry(
                         SettingsTags.CATEGORIES,
                         R.string.settings_categories,
                         R.string.settings_categories_summary,
                         LuzIcons.LiveTv,
+                        badge = newBadge,
                     ),
                 )
             }
@@ -232,13 +247,20 @@ fun SettingsSection(
                             )
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(
-                                stringResource(entry.title),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = if (selected == entry.key) Tokens.textPrimary else Tokens.textSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(Tokens.space2),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    stringResource(entry.title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = if (selected == entry.key) Tokens.textPrimary else Tokens.textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                )
+                                entry.badge?.let { NewPill(it) }
+                            }
                             Text(
                                 if (entry.plural) {
                                     pluralStringResource(entry.summary, hiddenCount.toInt(), hiddenCount.toInt())
@@ -270,6 +292,7 @@ fun SettingsSection(
                 verticalArrangement = Arrangement.spacedBy(Tokens.space4),
             ) {
                 when (selected) {
+                    SettingsTags.LIVE -> LiveTvPane(focus)
                     SettingsTags.HOME -> HomeRows(focus)
                     SettingsTags.HIDDEN -> playlist?.let { HiddenItems(focus, it) }
                     SettingsTags.ABOUT -> About()
@@ -505,6 +528,69 @@ private fun DeveloperStreamsPane(focus: FocusMemory, onPlay: (String) -> Unit, o
     }
 }
 
+/** "2 new", "New": a small amber word on a pill (x6; Design 3.8). */
+@Composable
+private fun NewPill(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = Tokens.onAccent,
+        maxLines = 1,
+        modifier = Modifier.background(Tokens.accent, RoundedCornerShape(Tokens.radiusPill)).padding(horizontal = Tokens.space2),
+    )
+}
+
+/**
+ * Settings → Live TV (Design 3.8): opening on the last channel (3.9, on by default) and how long the channel bar stays
+ * after a change (x7). OK changes each; the value is on the right.
+ */
+@Composable
+private fun LiveTvPane(focus: FocusMemory) {
+    val graph = LocalAppGraph.current
+    val scope = rememberCoroutineScope()
+    var openLast by remember { mutableStateOf(true) }
+    var barSeconds by remember { mutableIntStateOf(BAR_CHOICES.first()) }
+    LaunchedEffect(Unit) {
+        openLast = graph.preference(OPEN_LAST_CHANNEL) != "false"
+        barSeconds = graph.preference(LIVE_BAR_SECONDS)?.toIntOrNull()?.takeIf { it in BAR_CHOICES } ?: BAR_CHOICES.first()
+    }
+    PaneHeading(stringResource(R.string.settings_live_title))
+    SettingLine(
+        stringResource(R.string.settings_open_last),
+        stringResource(if (openLast) R.string.settings_on else R.string.settings_off),
+        stringResource(R.string.settings_open_last_help),
+        Modifier.rememberedFocus(focus, SettingsTags.OPEN_LAST),
+    ) {
+        openLast = !openLast
+        scope.launch { graph.setPreference(OPEN_LAST_CHANNEL, openLast.toString()) }
+    }
+    SettingLine(
+        stringResource(R.string.settings_bar_time),
+        pluralStringResource(R.plurals.settings_bar_time_value, barSeconds, barSeconds),
+        stringResource(R.string.settings_bar_time_help),
+        Modifier.rememberedFocus(focus, SettingsTags.BAR_TIME),
+    ) {
+        barSeconds = BAR_CHOICES[(BAR_CHOICES.indexOf(barSeconds) + 1) % BAR_CHOICES.size]
+        scope.launch { graph.setPreference(LIVE_BAR_SECONDS, barSeconds.toString()) }
+    }
+}
+
+@Composable
+private fun SettingLine(title: String, value: String, help: String, modifier: Modifier, onClick: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(Tokens.space1)) {
+        LuzRow(onClick = onClick, modifier = modifier) {
+            Text(title, style = MaterialTheme.typography.titleSmall, color = Tokens.textPrimary, modifier = Modifier.weight(1f))
+            Text(value, style = MaterialTheme.typography.titleSmall, color = Tokens.textSecondary)
+        }
+        Text(
+            help,
+            style = MaterialTheme.typography.bodySmall,
+            color = Tokens.textTertiary,
+            modifier = Modifier.padding(horizontal = Tokens.space4),
+        )
+    }
+}
+
 /** Every Live TV category, to pin to the top or hide; pinned ones first, hidden ones marked and shown again from here. */
 @Composable
 private fun CategoriesPane(focus: FocusMemory, playlist: PlaylistId) {
@@ -513,7 +599,13 @@ private fun CategoriesPane(focus: FocusMemory, playlist: PlaylistId) {
     val scope = rememberCoroutineScope()
     var groups by remember { mutableStateOf<List<ArrangedGroup>?>(null) }
     var menuFor by remember { mutableStateOf<ArrangedGroup?>(null) }
-    LaunchedEffect(playlist, revision) { groups = graph.groupsToArrange(playlist) }
+    var fresh by remember { mutableStateOf<Set<String>>(emptySet()) }
+    LaunchedEffect(playlist, revision) {
+        groups = graph.groupsToArrange(playlist)
+        fresh = graph.newGroups(playlist)
+    }
+    // Seen once the viewer has looked at the page (x6): the "New" captions go when they leave it.
+    DisposableEffect(playlist) { onDispose { graph.scope.launch { graph.clearNewGroups(playlist) } } }
     val shown = groups ?: return
     LazyColumn(
         modifier = Modifier.padding(start = Tokens.space8).fillMaxHeight(),
@@ -524,6 +616,13 @@ private fun CategoriesPane(focus: FocusMemory, playlist: PlaylistId) {
             Column(verticalArrangement = Arrangement.spacedBy(Tokens.space3), modifier = Modifier.padding(bottom = Tokens.space3)) {
                 PaneHeading(stringResource(R.string.settings_categories))
                 Text(stringResource(R.string.categories_help), style = MaterialTheme.typography.bodyMedium, color = Tokens.textSecondary)
+                if (fresh.isNotEmpty()) {
+                    Text(
+                        stringResource(R.string.categories_intro),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Tokens.textSecondary,
+                    )
+                }
             }
         }
         items(shown.size, key = { shown[it].id }) { index ->
@@ -537,6 +636,7 @@ private fun CategoriesPane(focus: FocusMemory, playlist: PlaylistId) {
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                if (group.id in fresh) NewPill(stringResource(R.string.categories_new))
                 when {
                     group.pinned -> Icon(
                         LuzIcons.Pin,
@@ -565,6 +665,7 @@ private fun CategoriesPane(focus: FocusMemory, playlist: PlaylistId) {
                     scope.launch {
                         if (group.hidden) {
                             graph.unhide(playlist, CustomisationTarget.CHANNEL_GROUP, group.id)
+                            graph.seenGroup(playlist, group.id)
                         } else {
                             graph.hide(playlist, CustomisationTarget.CHANNEL_GROUP, group.id)
                         }
@@ -735,3 +836,6 @@ private fun HomeRows(focus: FocusMemory) {
         )
     }
 }
+
+/** x7: the channel bar's choices, in seconds; the first is the default. */
+private val BAR_CHOICES = listOf(3, 5, 8, 15)

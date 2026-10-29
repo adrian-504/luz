@@ -14,7 +14,7 @@ not yet implemented; each control lists the test that will verify it.
 |---|---|---|---|
 | **S1 Secret** | Xtream password, username*, M3U URLs with embedded credentials or tokens, `xmltv.php` URL, `Authorization`/`Cookie` header values, DRM license tokens | Keychain / Keystore-backed secret store **only** | Never |
 | **S2 Sensitive-derived** | Resolved stream URLs (contain S1), final redirect URLs | Memory only, for the lifetime of the request/playback | Never (redacted shape only) |
-| **S3 Personal** | Watch history, favorites, content titles, provider host names, search history | App-sandbox SQLite (OS encryption at rest) | Not in logs by default; host pseudonymized; titles only with explicit user consent in exports |
+| **S3 Personal** | Watch history, the viewing log (`watch_session`, ids and seconds only, 400 days, ADR-0052), favorites, content titles, provider host names, search history | App-sandbox SQLite (OS encryption at rest) | Not in logs by default; host pseudonymized; titles only with explicit user consent in exports |
 | **S4 Operational** | Error codes, timings, device model, OS/app version, counts | SQLite / ring buffer | Yes |
 
 \* Username is treated as secret: it appears in Xtream URL paths and can identify the account.

@@ -1,5 +1,7 @@
 package app.iptvplayer.domain.library
 
+import app.iptvplayer.domain.text.TextNormalization
+
 /**
  * A channel's name as a viewer should read it. Providers pack a country or group into the name ("LEB | LBC International
  * HD", "ES: LA SEXTA HEVC", "[NF] Netflix Action") and the picture quality after it; the viewer wants "LBC International".
@@ -17,6 +19,24 @@ public object ChannelNames {
             val match = PREFIX.find(text) ?: return@repeat
             if (match.range.last + 1 < text.length) text = text.substring(match.range.last + 1).trim()
         }
+        val (rest, quality) = withoutQuality(text)
+        val name = rest.replace(SPACES, " ").trim(*SEPARATORS).ifBlank { raw.trim() }
+        return Display(name, quality)
+    }
+
+    /**
+     * What makes copies of one channel one channel (ADR-0052): the name without its trailing quality words, but with its
+     * prefix kept, since "AR| beIN Sports 1" and "FR| beIN Sports 1" are different channels in different languages.
+     * Normalised, so "LEB | MTV HD" and "LEB| MTV SD" give the same key.
+     */
+    public fun familyKey(raw: String): String {
+        val rest = withoutQuality(raw.trim()).first.ifBlank { raw.trim() }
+        return TextNormalization.normKey(rest.map { if (it in SEPARATORS || it == '[' || it == ']') ' ' else it }.joinToString(""))
+    }
+
+    /** The text without the quality words at its end, and the first of them as a badge. */
+    private fun withoutQuality(start: String): Pair<String, String?> {
+        var text = start
         var quality: String? = null
         while (true) {
             val words = text.split(' ')
@@ -26,8 +46,7 @@ public object ChannelNames {
             quality = quality ?: found.takeIf { it.isNotEmpty() }
             text = words.dropLast(1).joinToString(" ").trimEnd(*SEPARATORS)
         }
-        val name = text.replace(SPACES, " ").trim(*SEPARATORS).ifBlank { raw.trim() }
-        return Display(name, quality)
+        return text to quality
     }
 
     private const val MAX_PREFIXES = 2

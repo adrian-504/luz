@@ -394,3 +394,12 @@ They are deliberately not columns on the imported rows. An import replaces every
 brings in; a choice stored beside that data would be lost with it. Storing them separately also keeps the provider's own
 names and lists intact and recoverable: hiding is a filter applied on the way out, and a rename is a label read in place
 of the title, so clearing it brings the provider's own name back.
+
+## Live TV's own memory (ADR-0052)
+
+Five tables, user state like the ones above, never touched by an import and removed with the source:
+`channel_number` (Luz's number per family of copies, held 90 days after a family vanishes), `known_group` (categories
+seen, and which are new), `channel_playback` (per copy: starts, failures, time to first picture, chosen by the viewer),
+`user_epg_link` (the viewer's own guide link per channel, used by the guide in round 3 batch C) and `watch_session` (the
+viewing log: kind, content id, the film's work or the episode's series, start and playing seconds; 400 days). A
+*family* is not stored: it is worked out from the channels' names after each import (`ChannelFamilies`).

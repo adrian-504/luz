@@ -59,7 +59,17 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
 /** The channel on screen, for the live bar and the information panel. */
-data class LiveInfo(val number: Int?, val name: String, val logo: UrlTemplate?, val now: GuideProgramme?, val next: GuideProgramme?)
+data class LiveInfo(
+    val number: Int?,
+    val name: String,
+    val logo: UrlTemplate?,
+    val now: GuideProgramme?,
+    val next: GuideProgramme?,
+    /** The category or list Ch +/− moves through (x4), in tertiary grey; null for "All channels". */
+    val group: String? = null,
+    /** A line for the moment, such as why another copy is playing (ADR-0052). */
+    val note: String? = null,
+)
 
 /** One row of the channel list shown over the picture. */
 data class ChannelChoice(val id: String, val number: Int?, val name: String, val logo: UrlTemplate?, val programme: String?)
@@ -327,6 +337,15 @@ fun LiveBar(info: LiveInfo, resolver: ((UrlTemplate) -> String?)?, badges: List<
                 )
                 LiveBadge()
                 badges.forEach { LuzBadge(it) }
+                info.group?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Tokens.textTertiary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             val now = info.now
             if (now != null) {
@@ -347,6 +366,15 @@ fun LiveBar(info: LiveInfo, resolver: ((UrlTemplate) -> String?)?, badges: List<
                     color = Tokens.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+            info.note?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Tokens.textSecondary,
+                    maxLines = 2,
+                    modifier = Modifier.testTag(PlayerTags.BANNER_NOTE),
                 )
             }
         }

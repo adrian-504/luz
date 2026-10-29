@@ -99,6 +99,7 @@ object PlayerTags {
     const val RETRY = "player-retry"
     const val PAUSE_CARD = "player-pause-card"
     const val BANNER = "player-banner"
+    const val BANNER_NOTE = "player-banner-note"
     const val TITLE = "player-title"
 
     /** What is on the channel, under the overlay title; it appears once a zap has settled on the channel. */
@@ -183,6 +184,12 @@ fun PlayerScreen(
     currentChannelId: String? = null,
     onChooseChannel: ((String) -> Unit)? = null,
     resolver: ((UrlTemplate) -> String?)? = null,
+    /** The playing state as it changes, with the time to the first picture once known (live: ADR-0052, the viewing log). */
+    onState: ((PlaybackState, firstFrameMs: Long?) -> Unit)? = null,
+    /** A stream failed for good; true when the caller tries another copy instead, so no error shows (ADR-0052). */
+    onFailed: (() -> Boolean)? = null,
+    /** How long the live bar stays after a channel change (x7). */
+    bannerMs: Long = BANNER_TIMEOUT_MS,
 ) {
     val context = LocalContext.current
     val controller = remember { Media3PlaybackController(context.applicationContext) }
@@ -244,7 +251,15 @@ fun PlayerScreen(
     val retryFocus = remember { FocusRequester() }
     val nextFocus = remember { FocusRequester() }
     val openerFocus = remember { mutableStateOf<FocusRequester?>(null) }
-    val isError = snapshot.state == PlaybackState.ERROR || unavailable
+    val currentOnState by rememberUpdatedState(onState)
+    val currentOnFailed by rememberUpdatedState(onFailed)
+    // Set while the caller moves to another copy of the channel: the error is not shown, the next copy is starting.
+    var fallingBack by remember(request) { mutableStateOf(false) }
+    LaunchedEffect(snapshot.state) {
+        currentOnState?.invoke(snapshot.state, diagnostics.timeToFirstFrameMs)
+        if (snapshot.state == PlaybackState.ERROR && currentOnFailed?.invoke() == true) fallingBack = true
+    }
+    val isError = (snapshot.state == PlaybackState.ERROR && !fallingBack) || unavailable
     val isVod = request?.mode == PlaybackMode.VOD
     val isLive = onZap != null
     // The phone companion's "now playing" card (ADR-0050): words, times, the tracks by the names the panel shows, and a
@@ -304,10 +319,11 @@ fun PlayerScreen(
             seekShownAt = 0L
         }
     }
-    LaunchedEffect(title) {
+    // Again when a note arrives (another copy is playing), so the viewer reads why.
+    LaunchedEffect(title, live?.note) {
         if (isLive) {
             bannerShownAt = System.nanoTime()
-            delay(BANNER_TIMEOUT_MS)
+            delay(bannerMs)
             bannerShownAt = 0L
         }
     }

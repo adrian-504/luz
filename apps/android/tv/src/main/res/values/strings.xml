@@ -317,7 +317,7 @@
     <string name="info_next">Next: %1$s</string>
     <string name="info_close">Close</string>
     <string name="settings_providers">Providers</string>
-    <string name="settings_providers_summary">Your playlists and logins</string>
+    <string name="settings_providers_summary">Your providers and logins</string>
     <string name="settings_details">Film &amp; show details</string>
     <string name="settings_details_summary">What your provider sends</string>
     <string name="details_help">Luz asks your provider for each film\'s page slowly in the background, and pauses while you watch. This shows what the pages fetched so far contain.</string>
@@ -485,4 +485,24 @@
     <!-- Design 1.1 (Words - rounds 1 and 4) -->
     <string name="live_updating_guide">Updating guide…</string>
     <string name="live_updating_channels">Updating channels…</string>
+    <!-- Round 3 batch A (Words - rounds 2 and 3) -->
+    <string name="bar_copy_fallback">The %1$s copy didn\'t start, so Luz is playing the %2$s one.</string>
+    <string name="settings_live_title">Live TV</string>
+    <string name="settings_live_summary">Where Luz opens, and the channel bar</string>
+    <string name="settings_open_last">Open on the last channel</string>
+    <string name="settings_open_last_help">Luz opens on the channel you watched last. Back takes you to Live TV.</string>
+    <string name="settings_on">On</string>
+    <string name="settings_off">Off</string>
+    <string name="settings_bar_time">Channel bar stays</string>
+    <plurals name="settings_bar_time_value">
+        <item quantity="one">%1$d second</item>
+        <item quantity="other">%1$d seconds</item>
+    </plurals>
+    <string name="settings_bar_time_help">How long the channel\'s name and programme stay on screen after you change channel.</string>
+    <plurals name="settings_categories_new">
+        <item quantity="one">%1$d new</item>
+        <item quantity="other">%1$d new</item>
+    </plurals>
+    <string name="categories_intro">New categories from your provider wait here until you choose to show them.</string>
+    <string name="categories_new">New</string>
 </resources>

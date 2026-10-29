@@ -1,5 +1,6 @@
 package app.iptvplayer.tv.ui.library
 
+import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -9,10 +10,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.library.NextEpisode
 import app.iptvplayer.domain.library.TitleCleaner
+import app.iptvplayer.domain.live.ViewingSession
 import app.iptvplayer.domain.model.ContentType
+import app.iptvplayer.domain.playback.PlaybackState
 import app.iptvplayer.platform.playback.PlaybackRequest
 import app.iptvplayer.storage.EpisodeRow
 import app.iptvplayer.tv.R
@@ -45,6 +51,23 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
     var badges by remember { mutableStateOf<List<String>>(emptyList()) }
     var companionArt by remember { mutableStateOf<String?>(null) }
     var newSession by remember { mutableStateOf(true) }
+    // The viewing log (round 3, for round 8): a film or an episode watched for a minute or more, with its film or series.
+    val viewing = remember { mutableStateOf<Triple<String, String?, ViewingSession>?>(null) }
+    fun endViewing() {
+        val (content, work, current) = viewing.value ?: return
+        viewing.value = null
+        val seconds = current.end(SystemClock.elapsedRealtime()) ?: return
+        graph.scope.launch { graph.recordSession(playlistId, type, content, work, current.startedAt, seconds) }
+    }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) endViewing() }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            endViewing()
+        }
+    }
 
     LaunchedEffect(id) {
         request = null
@@ -89,6 +112,10 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
         val resolved = graph.contentPlaybackRequest(playlistId, type, id, startFromBeginning)
         unavailable = resolved == null
         request = resolved
+        // The next episode starting ends the last one's session.
+        endViewing()
+        val work = if (type == ContentType.MOVIE) graph.movieWork(playlistId, id) else episode?.seriesId
+        viewing.value = Triple(id, work, ViewingSession(System.currentTimeMillis(), graph.sessionMinSeconds))
     }
 
     val following = next
@@ -104,6 +131,10 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
             graph.scope.launch {
                 graph.saveProgress(playlistId, type, id, episode?.seriesId, position, duration, ended, first)
             }
+        },
+        onState = { state, _ ->
+            val now = SystemClock.elapsedRealtime()
+            viewing.value?.third?.let { if (state == PlaybackState.PLAYING) it.play(now) else it.hold(now) }
         },
         description = description,
         companionArt = companionArt,

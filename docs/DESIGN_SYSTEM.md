@@ -227,7 +227,8 @@ plate, number, name, programme, thin progress and a small heart for favourites. 
 menu. **Logos** (ADR-0040) are cleaned once — the box around them cut away, margins trimmed — and sit on a plate that
 follows them (light behind a dark logo, a faint glow of the logo's colour otherwise); a channel without one shows a
 monogram on a colour of its own. Holding OK on a **category** offers Pin to the top, Rename and Hide; pinned categories
-come first with a small pin, and Settings → Live TV categories arranges them all. Live TV opens on the category used
+come first with a small pin, and Settings → Live TV categories arranges them all. Copies of one channel (FHD, HD, SD) are one row, with a small outlined badge for the copy that
+will play (4K, FHD or HD; never SD) (ADR-0052). Live TV opens on the category used
 last with that source. While a refresh runs longer than a second, *Updating channels…* or *Updating guide…* sits
 beside the title in caption grey, and fades out when done (ADR-0051).
 
@@ -272,7 +273,8 @@ failure shows the same sentence on the TV and the phone (ADR-0050 step 4).
 A screen title; a short list of sections that do something (Providers, Home, Film & show details once there is a
 provider — how many pages have been fetched and what share of them has each kind of detail — Hidden items when something
 is hidden, TMDB — the viewer's key, when the lists were read, Update now, Remove and the *Title artwork and photos* switch — About,
-Phone companion (ADR-0050) — on/off, a QR code with the address and a code to type, the TV's name as the phone will
+Live TV (ADR-0052) — *Open on the last channel* (on/off) and *Channel bar stays* (3, 5, 8 or 15 seconds) — Live TV
+categories, with an amber "2 new" when the provider added some, each marked *New* on the page — Phone companion (ADR-0050) — on/off, a QR code with the address and a code to type, the TV's name as the phone will
 show it, the phones that can connect with Forget — Developer in debug builds), each with its symbol on a round plate; the chosen one on the right under its own heading. The directive's other sections —
 playback, subtitles, appearance, parental controls, storage, privacy, account, devices — arrive with the features they
 configure, never as empty pages. A **provider** is a glass card: a status dot (green working, yellow failing, grey

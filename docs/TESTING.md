@@ -136,8 +136,18 @@ Audio and subtitle changes from the phone have no device test: they need a film 
 
 `TestArtwork.slow` and `TestArtwork.missing` make one picture of the test panel late (one second) or missing, and
 `TestPanel.dropped` leaves channels out of the next refresh. What the emulator cannot show is checked on the owner's TV:
-a true cold start on the remembered category, the fade's cost while scrolling a shelf, and the before/after memory and
+a true cold start on the remembered category and onto the last channel (ADR-0052), the fade's cost while scrolling a shelf, and the before/after memory and
 frame numbers.
+
+### 4.6 Copies, numbers and the viewing log (ADR-0052)
+
+The test panel sends "Test Copies" three times (FHD offline, HD, SD) in a "Copies" category, two channels in "World
+News", and with `TestPanel.lateCategory` one more category on the next refresh. `AppGraph.sessionMinSeconds` lowers the
+viewing log's one-minute threshold for a device test; the app never changes it.
+
+Round 3 batch A's full check (2026-10-29) ran with the Apple targets left out (`iptv.appleTargets=false`) and one
+Gradle worker, because the Mac was short of memory; the Apple simulator tests of the shared modules were not run for
+it. The next full check with memory to spare runs them again.
 
 ## 5. Device matrix (initial proposal, finalized per platform phase)
 

@@ -8,9 +8,10 @@ import java.time.temporal.ChronoUnit
 import java.util.Base64
 
 /**
- * A synthetic Xtream Codes panel for device tests and debug builds: six test channels in three categories, a guide
- * generated around the current time, and an M3U export. Only [USERNAME] / [PASSWORD] (canary values) are accepted.
- * Channel 999 is listed but its stream does not exist, for error handling.
+ * A synthetic Xtream Codes panel for device tests and debug builds: eleven test channels in five categories (three are
+ * copies of one channel), a guide generated around the current time, and an M3U export. Only [USERNAME] / [PASSWORD] (canary values) are accepted.
+ * Channels 999 and 401 (the FHD copy of "Test Copies") are listed but their streams do not exist, for error handling
+ * and for falling back to another copy.
  */
 object TestPanel {
     const val USERNAME = "canary-user"
@@ -20,7 +21,9 @@ object TestPanel {
 
     private data class TestChannel(val id: Int, val name: String, val category: String, val epgId: String?)
 
-    private val categories = listOf("1" to "News", "2" to "Sports", "3" to "Documentaries & Kids")
+    private val offline = setOf(999, 401)
+
+    private val categories = listOf("1" to "News", "2" to "Sports", "3" to "Documentaries & Kids", "4" to "Copies", "5" to "World News")
 
     // Library: synthetic titles only. Movies and episodes play the 30 s HLS test video.
     private val vodCategories = listOf("11" to "Test Films", "12" to "Test Shorts")
@@ -36,6 +39,12 @@ object TestPanel {
     @Volatile
     var dropped: Set<Int> = emptySet()
 
+    /** When on, the panel sends one more category and channel, as a provider adding a category after setup does. */
+    @Volatile
+    var lateCategory: Boolean = false
+
+    const val LATE_CATEGORY = "Late Arrivals"
+
     private val channels = listOf(
         TestChannel(101, "Test News HD", "1", "news.test"),
         TestChannel(102, "Test News 2", "1", null),
@@ -44,6 +53,12 @@ object TestPanel {
         TestChannel(301, "Test Documentaries", "3", "docs.test"),
         TestChannel(302, "Test Kids", "3", null),
         TestChannel(999, "Test Offline Channel", "3", null),
+        // One channel sent three times, as providers do (ADR-0052): the best copy is offline, so Luz falls back to HD.
+        TestChannel(401, "Test Copies FHD", "4", null),
+        TestChannel(402, "Test Copies HD", "4", null),
+        TestChannel(403, "Test Copies SD", "4", null),
+        TestChannel(501, "Test News Arabic", "5", null),
+        TestChannel(502, "FR| Test Info", "5", null),
     )
 
     private fun params(query: String): Map<String, String> = query.split('&').filter { '=' in it }.associate {
@@ -59,12 +74,12 @@ object TestPanel {
                 365,
                 ChronoUnit.DAYS,
             ).epochSecond}","is_trial":"0","active_cons":"0","max_connections":"1","allowed_output_formats":["m3u8","ts"]},"server_info":{"url":"127.0.0.1","port":"80","server_protocol":"http","timezone":"UTC"}}"""
-            "get_live_categories" -> categories.joinToString(
+            "get_live_categories" -> liveCategories().joinToString(
                 ",",
                 "[",
                 "]",
             ) { (id, name) -> """{"category_id":"$id","category_name":"$name","parent_id":0}""" }
-            "get_live_streams" -> channels.filter { it.id !in dropped }.withIndex().joinToString(",", "[", "]") { (index, c) ->
+            "get_live_streams" -> liveChannels().filter { it.id !in dropped }.withIndex().joinToString(",", "[", "]") { (index, c) ->
                 """{"num":${index + 1},"name":"${c.name}","stream_type":"live","stream_id":${c.id},"stream_icon":"${base}art/${c.name.replace(
                     " ",
                     "%20",
@@ -86,6 +101,10 @@ object TestPanel {
             else -> "[]"
         }
     }
+
+    private fun liveCategories() = if (lateCategory) categories + ("6" to LATE_CATEGORY) else categories
+
+    private fun liveChannels() = if (lateCategory) channels + TestChannel(601, "Test Late", "6", null) else channels
 
     private fun categoryJson(list: List<Pair<String, String>>) =
         list.joinToString(",", "[", "]") { (id, name) -> """{"category_id":"$id","category_name":"$name","parent_id":0}""" }
@@ -238,7 +257,7 @@ object TestPanel {
         val parts = route.removePrefix("/live/").split('/')
         if (parts.size != 3 || parts[0] != USERNAME || URLDecoder.decode(parts[1], "UTF-8") != PASSWORD) return null
         val id = parts[2].substringBefore('.').toIntOrNull() ?: return null
-        if (id == 999 || channels.none { it.id == id }) return null
+        if (id in offline || channels.none { it.id == id }) return null
         return when (parts[2].substringAfter('.')) {
             "ts" -> Target.TS
             "m3u8" -> Target.HLS

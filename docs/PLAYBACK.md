@@ -124,6 +124,13 @@ Every switch records: `intent_ts` (key event time), `prepare_called`, `request_s
 first-audio are measured separately (§7.4). Slow-source attribution: TTFB and manifest/segment download times
 are recorded so a slow provider is not mistaken for an app regression. Definitions: [PERFORMANCE.md](PERFORMANCE.md).
 
+### Copies of one channel (ADR-0052)
+
+A channel the provider sends several times (FHD, HD, SD) plays its best copy: chosen by the viewer, then one not failed in
+the last week, then one that started well, then by quality. When a copy fails for good, the next one is tried at once
+without an error screen, and the live bar says which copy is playing instead; only when every copy has failed does the
+error appear. Each start and final failure is kept per copy (`channel_playback`) and orders the copies next time.
+
 ## 5. Error taxonomy
 
 Stable codes shared across platforms (`shared:domain`), each mapped to a user message key, a hint and a
