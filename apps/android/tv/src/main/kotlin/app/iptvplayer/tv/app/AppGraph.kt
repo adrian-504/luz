@@ -24,6 +24,7 @@ import app.iptvplayer.ingestion.EpisodeArt
 import app.iptvplayer.ingestion.PersonArt
 import app.iptvplayer.ingestion.ShortGuideReport
 import app.iptvplayer.ingestion.SourceService
+import app.iptvplayer.ingestion.SportService
 import app.iptvplayer.ingestion.TitleArt
 import app.iptvplayer.ingestion.TmdbService
 import app.iptvplayer.ingestion.UnitOutcome
@@ -32,8 +33,10 @@ import app.iptvplayer.platform.SystemClock
 import app.iptvplayer.platform.net.OkHttpTransport
 import app.iptvplayer.platform.playback.PlaybackRequest
 import app.iptvplayer.platform.secrets.KeystoreSecretStore
+import app.iptvplayer.protocols.football.FootballDataClient
 import app.iptvplayer.protocols.media.ResolveResult
 import app.iptvplayer.protocols.tmdb.TmdbClient
+import app.iptvplayer.protocols.wikidata.WikidataClient
 import app.iptvplayer.storage.ArrangedGroup
 import app.iptvplayer.storage.BundledSqliteDriver
 import app.iptvplayer.storage.ChannelRow
@@ -42,6 +45,8 @@ import app.iptvplayer.storage.ContinueItem
 import app.iptvplayer.storage.DetailCoverage
 import app.iptvplayer.storage.EpgStore
 import app.iptvplayer.storage.EpisodeRow
+import app.iptvplayer.storage.FollowKind
+import app.iptvplayer.storage.Followed
 import app.iptvplayer.storage.GroupRow
 import app.iptvplayer.storage.GuideProgramme
 import app.iptvplayer.storage.LibraryGroupRow
@@ -53,6 +58,9 @@ import app.iptvplayer.storage.PersonHit
 import app.iptvplayer.storage.SeasonRow
 import app.iptvplayer.storage.SeriesRow
 import app.iptvplayer.storage.SourceRecord
+import app.iptvplayer.storage.SportCompetition
+import app.iptvplayer.storage.SportStore
+import app.iptvplayer.storage.SportTeam
 import app.iptvplayer.storage.TitleDetailRow
 import app.iptvplayer.storage.UnitStateRecord
 import app.iptvplayer.storage.db.IptvDatabase
@@ -172,6 +180,27 @@ class AppGraph(context: Context) {
             DeveloperStreams.tmdbBase(appContext) ?: TmdbClient.BASE_URL
         }
     }
+
+    private val sportStore by lazy { SportStore(content, SystemClock) }
+
+    /** Sport with the viewer's own football-data.org token (ADR-0057); never while a player is open. */
+    private val sport by lazy {
+        SportService(
+            OkHttpTransport(::networkAvailable),
+            secrets,
+            sportStore,
+            SystemClock,
+            utcOffset = { java.util.TimeZone.getDefault().getOffset(it.toEpochMilliseconds()).toLong().milliseconds },
+            playing = { playing },
+            footballBase = { DeveloperStreams.footballBase(appContext) ?: FootballDataClient.BASE_URL },
+            wikidataBase = { DeveloperStreams.wikidataBase(appContext) ?: WikidataClient.BASE_URL },
+        )
+    }
+
+    private val mutableSportRevision = MutableStateFlow(0)
+
+    /** Increments when what is followed, or what was read for it, changes, so sport rows and pages reload. */
+    val sportRevision: StateFlow<Int> = mutableSportRevision.asStateFlow()
 
     private val mutableListRevision = MutableStateFlow(0)
 
@@ -639,6 +668,70 @@ class AppGraph(context: Context) {
      * every [ENRICHMENT_PAUSE], waiting while something plays, and stopping at the first refusal. Only one runs at a time;
      * calling it again while one runs does nothing.
      */
+    // --- Sport (ADR-0057) ---
+
+    data class SportStatus(val hasToken: Boolean, val follows: List<Followed>, val error: String?)
+
+    private val mutableSportError = MutableStateFlow<String?>(null)
+
+    suspend fun sportStatus(): SportStatus = io { SportStatus(sport.hasToken(), sportStore.follows(), mutableSportError.value) }
+
+    /** Checks and keeps the viewer's token, then reads what can be followed. Returns the error code when it was refused. */
+    suspend fun setSportToken(raw: String): String? {
+        val error = io { sport.setToken(raw) }
+        if (error != null) {
+            Log.i(LOG_TAG, "sport: token not accepted (${error.code})")
+            return error.code
+        }
+        refreshSport(force = true)
+        return null
+    }
+
+    suspend fun removeSportToken() {
+        io { sport.removeToken() }
+        mutableSportError.value = null
+        mutableSportRevision.update { it + 1 }
+    }
+
+    /** Reads the catalogue (weekly) and what is followed (once per six-hour slot; [force]: now), in the background. */
+    fun refreshSport(force: Boolean = false) {
+        scope.launch(Dispatchers.IO) {
+            val error = runCatching { sport.catalogue(force) ?: sport.refresh(force) }.getOrElse { e ->
+                Log.i(LOG_TAG, "sport: exception ${e::class.simpleName}")
+                null
+            }
+            mutableSportError.value = error?.code
+            if (error != null) Log.i(LOG_TAG, "sport: refresh stopped (${error.code})")
+            mutableSportRevision.update { it + 1 }
+        }
+    }
+
+    suspend fun follows(): List<Followed> = io { sportStore.follows() }
+
+    suspend fun isFollowed(kind: FollowKind, ref: String): Boolean = io { sportStore.isFollowed(kind, ref) }
+
+    /** One press (x12): follows and reads its matches at once, in the background. */
+    fun follow(kind: FollowKind, ref: String, name: String) {
+        scope.launch(Dispatchers.IO) {
+            runCatching { sport.follow(kind, ref, name) }.onFailure { Log.i(LOG_TAG, "sport: exception ${it::class.simpleName}") }
+            mutableSportRevision.update { it + 1 }
+        }
+        mutableSportRevision.update { it + 1 }
+    }
+
+    suspend fun unfollow(kind: FollowKind, ref: String) {
+        io { sport.unfollow(kind, ref) }
+        mutableSportRevision.update { it + 1 }
+    }
+
+    /** Teams and competitions that can be followed whose names hold [query] (Arabic or Latin letters). */
+    suspend fun followable(query: String): Pair<List<SportTeam>, List<SportCompetition>> = io {
+        sportStore.followable(sportStore.teamsMatching(query)) to sportStore.competitionsMatching(query)
+    }
+
+    /** The competitions [teamRef] plays in that can be followed. */
+    suspend fun competitionsOf(teamRef: String): List<SportCompetition> = io { sportStore.competitionsOf(teamRef) }
+
     // --- TMDB (ADR-0038) ---
 
     data class TmdbStatus(val hasKey: Boolean, val fetchedAt: Instant?, val titles: Long, val error: String?)

@@ -74,7 +74,7 @@ class FootballDataClientTest {
         val (refused, _) = client { FakeTransport.status(401, """{"message":"Your API token is invalid."}""") }
         assertEquals(DomainError.Auth(AuthFailure.INVALID_CREDENTIALS), refused.check(token))
         val (forbidden, _) = client { FakeTransport.status(403, """{"message":"The resource you are looking for is restricted."}""") }
-        assertIs<DomainError.Auth>(forbidden.competitions(token).second)
+        assertEquals(FootballDataClient.RESTRICTED, forbidden.competitions(token).second, "outside the plan, not a bad token")
         val (busy, transport) = client { FakeTransport.status(429, """{"message":"You reached your request limit."}""") }
         assertEquals(FootballDataClient.RATE_LIMITED, busy.check(token))
         assertTrue(FootballDataClient.RATE_LIMITED.retryable)

@@ -180,7 +180,14 @@ fun MainShell(
                         onOpenPerson = onOpenPerson,
                         onAddSource = onAddSource,
                     )
-                    Section.SETTINGS -> SettingsSection(focus, onAddSource, onEditGuideLink, onPlayDeveloperStream, onSourceAdded)
+                    Section.SETTINGS -> SettingsSection(
+                        focus,
+                        onAddSource,
+                        onEditGuideLink,
+                        onPlayDeveloperStream,
+                        onSourceAdded,
+                        onFindTeam = { selected = Section.SEARCH },
+                    )
                     Section.MOVIES -> LibrarySection(
                         focus,
                         ImportUnit.MOVIES,

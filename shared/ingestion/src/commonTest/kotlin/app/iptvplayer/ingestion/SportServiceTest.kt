@@ -73,7 +73,11 @@ class SportServiceTest {
                 path.startsWith("w/") -> 200 to wikidata(url)
                 token != GOOD_TOKEN -> 403 to """{"message":"The resource you are looking for is restricted."}"""
                 rateLimited -> 429 to """{"message":"You reached your request limit."}"""
-                path == "v4/competitions" -> 200 to """{"competitions":[{"id":1,"code":"EXL","name":"Example League"}]}"""
+                path == "v4/competitions" ->
+                    200 to """{"competitions":[{"id":1,"code":"EXL","name":"Example League"},{"id":2,"code":"XCL","name":"Example Cup"}]}"""
+                path == "v4/competitions/EXL/teams" -> 200 to """{"teams":[$CITY]}"""
+                // Outside the free plan.
+                path == "v4/competitions/XCL/teams" -> 403 to """{"message":"The resource you are looking for is restricted."}"""
                 path == "v4/competitions/EXL/matches" -> 200 to """{"matches":[${match(1, "2026-11-01T20:00:00Z")}]}"""
                 path == "v4/competitions/EXL/standings" ->
                     200 to """{"standings":[{"type":"TOTAL","table":[{"position":1,"team":$CITY,""" +
@@ -199,6 +203,18 @@ class SportServiceTest {
         assertFalse(service.hasToken())
         assertTrue(sport.fixtures(now, now + 14.days).isEmpty())
         assertTrue(sport.isFollowed(FollowKind.COMPETITION, "EXL"))
+    }
+
+    @Test
+    fun theCatalogueListsWhatCanBeFollowedAndSkipsWhatThePlanRefuses() = runTest {
+        withToken()
+        assertNull(service.catalogue())
+        assertEquals(listOf("v4/competitions", "v4/competitions/EXL/teams", "v4/competitions/XCL/teams"), web.paths)
+        assertEquals(listOf("XCL", "EXL"), sport.competitions().map { it.code }, "by name")
+        assertEquals(listOf("65"), sport.followable(sport.teamsMatching("example city")).map { it.ref })
+        web.paths.clear()
+        assertNull(service.catalogue())
+        assertTrue(web.paths.isEmpty(), "kept a week")
     }
 
     private companion object {

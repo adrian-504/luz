@@ -147,6 +147,52 @@ object TestPanel {
             """"episodes":{"1":[${episode(8101, 1, 1)},${episode(8102, 1, 2)},${episode(8103, 1, 3)}],"2":[${episode(8201, 2, 1)}]}}"""
     }
 
+    /** The football-data.org token the fake accepts (ADR-0057); a canary, never a real token. */
+    const val FOOTBALL_TOKEN = "football-canary-5e2b8d714c9a03f6"
+
+    private const val CITY = """{"id":9065,"name":"Example City FC","shortName":"Example City","tla":"EXC"}"""
+    private const val UNITED = """{"id":9066,"name":"Sample United","shortName":"Sample Utd","tla":"SAM"}"""
+    private const val ROVERS = """{"id":9067,"name":"Test Rovers","shortName":"Rovers","tla":"TRV"}"""
+
+    /**
+     * football-data.org as far as the device tests need it (ADR-0057): one league ("Example League", EXL) with three
+     * teams, a cup outside the free plan, and matches from tonight onwards, so there is always one to come. The token
+     * must arrive as the X-Auth-Token header.
+     */
+    fun football(route: String, token: String?): Pair<Int, String> {
+        if (token != FOOTBALL_TOKEN) return 400 to """{"message":"Your API token is invalid.","errorCode":400}"""
+        val tonight = Instant.now().truncatedTo(ChronoUnit.HOURS).plus(3, ChronoUnit.HOURS)
+        fun match(id: Int, home: String, away: String, hoursAhead: Long) =
+            """{"id":$id,"utcDate":"${tonight.plus(hoursAhead, ChronoUnit.HOURS)}","status":"TIMED",""" +
+                """"competition":{"code":"EXL","name":"Example League"},"homeTeam":$home,"awayTeam":$away}"""
+        val matches = listOf(match(70001, CITY, UNITED, 0), match(70002, ROVERS, CITY, 72), match(70003, UNITED, ROVERS, 96))
+            .joinToString(",", """{"matches":[""", "]}")
+        return when (route.removePrefix("/football/v4/")) {
+            "competitions" ->
+                200 to """{"competitions":[{"id":901,"code":"EXL","name":"Example League","area":{"name":"Example Land"}},""" +
+                    """{"id":902,"code":"XCP","name":"Example Cup","area":{"name":"Example Land"}}]}"""
+            "competitions/EXL/teams" -> 200 to """{"teams":[$CITY,$UNITED,$ROVERS]}"""
+            "competitions/EXL/matches", "teams/9065/matches", "teams/9066/matches", "teams/9067/matches" -> 200 to matches
+            "competitions/EXL/standings" ->
+                200 to """{"standings":[{"type":"TOTAL","table":[""" +
+                    """{"position":1,"team":$CITY,"playedGames":10,"points":25,"goalDifference":12},""" +
+                    """{"position":2,"team":$UNITED,"playedGames":10,"points":20,"goalDifference":5},""" +
+                    """{"position":3,"team":$ROVERS,"playedGames":10,"points":11,"goalDifference":-7}]}]}"""
+            else -> 403 to """{"message":"The resource you are looking for is restricted."}"""
+        }
+    }
+
+    /** Wikidata as far as the device tests need it: Example City FC's names in Arabic and French. */
+    fun wikidata(query: String): Pair<Int, String> = when (params(query)["action"]) {
+        "wbsearchentities" -> 200 to """{"search":[{"id":"Q900001","label":"Example City FC","description":"association football club"}]}"""
+        // "Mithal Siti" in Arabic letters, written as JSON escapes so this file stays plain text.
+        "wbgetentities" ->
+            200 to """{"entities":{"Q900001":{"labels":{"ar":{"language":"ar",""" +
+                """"value":"\u0645\u062b\u0627\u0644 \u0633\u064a\u062a\u064a"},""" +
+                """"fr":{"language":"fr","value":"Example City FC"}}}}}"""
+        else -> 400 to "{}"
+    }
+
     /** The only key the fake TMDB accepts (a canary: it must never appear in logs). */
     const val TMDB_KEY = "tmdb-canary-3b7d91e4c2a8f605"
 

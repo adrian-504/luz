@@ -306,7 +306,7 @@ class LibraryStoreTest {
         content = ContentStore(driver, clock)
         library = LibraryStore(content, clock)
         assertEquals(
-            17L,
+            18L,
             driver.executeQuery(null, "PRAGMA user_version", {
                 it.next()
                 app.cash.sqldelight.db.QueryResult.Value(it.getLong(0))
@@ -323,7 +323,7 @@ class LibraryStoreTest {
         assertEquals("Alpha", library.movies(playlist).single().title, "the new tables work after the upgrade")
     }
 
-    /** What a database had before round 4 (schema 17): no guide shift, no sport tables, no link index. */
+    /** What a database had before round 4 (schema 16): no guide shift, no sport tables or catalogue, no link index. */
     private fun undoRound4() {
         driver.execute(null, "DROP INDEX channel_epg_link_epg", 0)
         driver.execute(null, "ALTER TABLE channel_epg_link DROP COLUMN shift_minutes", 0)
@@ -335,6 +335,8 @@ class LibraryStoreTest {
             "sport_standing",
             "sport_reminder",
             "sport_fetch",
+            "sport_competition",
+            "sport_team_competition",
         )) {
             driver.execute(null, "DROP TABLE $table", 0)
         }
@@ -365,11 +367,26 @@ class LibraryStoreTest {
         driver = openIptvDatabase(file.path)
         content = ContentStore(driver, clock)
         library = LibraryStore(content, clock)
-        assertEquals(17L, userVersion())
+        assertEquals(18L, userVersion())
         assertEquals(listOf("News"), content.searchChannels(playlist, "news", 10).map { it.name }, "found before folding")
         assertEquals(1, content.backfillFolded())
         assertEquals(0, content.backfillFolded(), "folding runs once")
         assertEquals(listOf("News"), content.searchChannels(playlist, "news", 10).map { it.name }, "found after folding")
+    }
+
+    @Test
+    fun upgradeFrom17AddsTheSportCatalogue() {
+        driver.execute(null, "DROP TABLE sport_competition", 0)
+        driver.execute(null, "DROP TABLE sport_team_competition", 0)
+        driver.execute(null, "PRAGMA user_version=17", 0)
+        driver.close()
+
+        driver = openIptvDatabase(file.path)
+        content = ContentStore(driver, clock)
+        assertEquals(18L, userVersion())
+        val sport = SportStore(content, clock)
+        sport.saveCompetitions(listOf(SportCompetition("EXL", "Example League", "Example Land", null)))
+        assertEquals(listOf("EXL"), sport.competitions().map { it.code })
     }
 
     private fun userVersion(): Long = driver.executeQuery(null, "PRAGMA user_version", {
@@ -398,7 +415,7 @@ class LibraryStoreTest {
         driver = openIptvDatabase(file.path)
         content = ContentStore(driver, clock)
         library = LibraryStore(content, clock)
-        assertEquals(17L, userVersion())
+        assertEquals(18L, userVersion())
         assertTrue(content.channels(playlist).single().isFavorite, "channels and favourites survive the upgrade")
         for (table in listOf("channel_number", "known_group", "channel_playback", "user_epg_link", "watch_session")) {
             assertEquals(0L, rows(table), "$table exists and is empty")

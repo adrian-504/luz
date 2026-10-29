@@ -110,4 +110,17 @@ class SportStoreTest {
         assertEquals(null, sport.fetchedAt("competition:EL"))
         assertTrue(sport.isFollowed(FollowKind.TEAM, city.ref))
     }
+
+    @Test
+    fun theCatalogueOffersOnlyTeamsInACompetitionLuzCanRead() {
+        sport.saveCompetitions(listOf(SportCompetition("EL", "Example League", "Example Land", null)))
+        sport.saveTeam(city)
+        sport.saveTeam(united)
+        sport.saveMemberships("EL", listOf(city.ref))
+        assertEquals(listOf(city.ref), sport.followable(listOf(city.ref, united.ref)).map { it.ref })
+        assertEquals(listOf("EL"), sport.competitionsOf(city.ref).map { it.code })
+        assertEquals(listOf("EL"), sport.competitionsMatching("example lea").map { it.code })
+        sport.clearFetched()
+        assertTrue(sport.competitions().isEmpty(), "read with the token: forgotten with it")
+    }
 }

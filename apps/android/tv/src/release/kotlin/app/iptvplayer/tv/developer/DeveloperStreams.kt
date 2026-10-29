@@ -15,4 +15,10 @@ object DeveloperStreams {
 
     @Suppress("UNUSED_PARAMETER")
     fun tmdbBase(context: Context): String? = null
+
+    @Suppress("UNUSED_PARAMETER")
+    fun footballBase(context: Context): String? = null
+
+    @Suppress("UNUSED_PARAMETER")
+    fun wikidataBase(context: Context): String? = null
 }

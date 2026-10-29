@@ -105,6 +105,12 @@ class TestMediaServer(private val assets: AssetManager, port: Int = 0) : AutoClo
                 route.startsWith("/tmdb/3/") -> TestPanel.tmdb(route, query).let { (status, body) ->
                     respond(out, status, "application/json", body.toByteArray())
                 }
+                route.startsWith("/football/v4/") -> TestPanel.football(route, headers["x-auth-token"]).let { (status, body) ->
+                    respond(out, status, "application/json", body.toByteArray())
+                }
+                route == "/wikidata/w/api.php" -> TestPanel.wikidata(query).let { (status, body) ->
+                    respond(out, status, "application/json", body.toByteArray())
+                }
                 route == "/xmltv.php" -> TestPanel.xmltv(query)?.let { respond(out, 200, "application/xml", it.toByteArray()) }
                     ?: respond(out, 401, "text/plain", "unauthorized".toByteArray())
                 route.startsWith("/live/") -> when (TestPanel.liveTarget(route)) {

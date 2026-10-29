@@ -38,6 +38,13 @@ object DeveloperStreams {
     /** Where TMDB is read from: the test server's fake when [useTestTmdb], otherwise null (TMDB itself). */
     fun tmdbBase(context: Context): String? = if (useTestTmdb) server(context).url("/tmdb/3") else null
 
+    /** Device tests point sport at the test server's fake football-data.org and Wikidata (ADR-0057). */
+    var useTestSport: Boolean = false
+
+    fun footballBase(context: Context): String? = if (useTestSport) server(context).url("/football/v4") else null
+
+    fun wikidataBase(context: Context): String? = if (useTestSport) server(context).url("/wikidata/w/api.php") else null
+
     /** Server address and the canary login of the in-process test Xtream panel. */
     fun testProvider(context: Context): Triple<String, String, String>? =
         Triple(server(context).url(""), TestPanel.USERNAME, TestPanel.PASSWORD)

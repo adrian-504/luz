@@ -37,7 +37,11 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
     // The background fetch of film pages waits while anything plays, so it never competes with the stream.
     DisposableEffect(Unit) {
         graph.playing = true
-        onDispose { graph.playing = false }
+        onDispose {
+            graph.playing = false
+            // Sport is never read while something plays (ADR-0057): a reading that waited for this happens now.
+            graph.refreshSport()
+        }
     }
     var id by rememberSaveable { mutableStateOf(startId) }
     var startFromBeginning by rememberSaveable { mutableStateOf(fromStart) }

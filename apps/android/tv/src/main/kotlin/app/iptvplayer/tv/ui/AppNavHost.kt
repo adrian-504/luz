@@ -126,6 +126,8 @@ fun AppNavHost() {
                 }
                 // TMDB lists, when the viewer gave a key: read again when more than a day old (ADR-0038).
                 graph.refreshTmdb()
+                // Sport, when the viewer gave a token: what can be followed weekly, what is followed once per six hours (ADR-0057).
+                graph.refreshSport()
                 // Titles from before Arabic search, folded once in the background (ADR-0055).
                 graph.foldTitles()
                 // Opening Luz plays the channel watched last, with Live TV behind it for Back (3.9). Only here, on a cold

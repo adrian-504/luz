@@ -93,6 +93,12 @@ object SettingsTags {
     const val DETAILS = "settings-details"
     const val DETAILS_FETCH = "settings-details-fetch"
     const val TMDB = "settings-tmdb"
+    const val SPORT = "settings-sport"
+    const val SPORT_KEY = "settings-sport-key"
+    const val SPORT_REMOVE = "settings-sport-remove"
+    const val SPORT_FIND = "settings-sport-find"
+
+    fun followed(ref: String) = "settings-sport-followed-$ref"
     const val TMDB_KEY = "settings-tmdb-key"
     const val TMDB_REFRESH = "settings-tmdb-refresh"
     const val TMDB_REMOVE = "settings-tmdb-remove"
@@ -139,6 +145,7 @@ fun SettingsSection(
     onEditGuideLink: (PlaylistId) -> Unit,
     onPlayDeveloperStream: (String) -> Unit,
     onSourceAdded: () -> Unit,
+    onFindTeam: () -> Unit,
 ) {
     val context = LocalContext.current
     val graph = LocalAppGraph.current
@@ -195,6 +202,7 @@ fun SettingsSection(
             ) {
                 add(SettingsEntry(SettingsTags.DETAILS, R.string.settings_details, R.string.settings_details_summary, LuzIcons.Movies))
             }
+            add(SettingsEntry(SettingsTags.SPORT, R.string.settings_sport, R.string.settings_sport_summary, LuzIcons.Star))
             add(SettingsEntry(SettingsTags.TMDB, R.string.settings_tmdb, R.string.settings_tmdb_summary, LuzIcons.Star))
             add(SettingsEntry(SettingsTags.COMPANION, R.string.settings_companion, R.string.settings_companion_summary, LuzIcons.Phone))
             add(SettingsEntry(SettingsTags.ABOUT, R.string.settings_about, R.string.settings_about_summary, LuzIcons.Info))
@@ -300,6 +308,7 @@ fun SettingsSection(
                     SettingsTags.ABOUT -> About()
                     SettingsTags.DETAILS -> playlist?.let { DetailCoveragePane(focus, it) }
                     SettingsTags.TMDB -> TmdbPane(focus)
+                    SettingsTags.SPORT -> SportPane(focus, onFindTeam)
                     SettingsTags.COMPANION -> CompanionPane(focus)
                     SettingsTags.DEVELOPER -> DeveloperStreamsPane(focus, onPlayDeveloperStream, onSourceAdded)
                     else -> {
@@ -406,6 +415,106 @@ private fun DetailCoveragePane(focus: FocusMemory, playlist: PlaylistId) {
         }
     }
 }
+
+/**
+ * Sport (ADR-0057, Design 4.8): the viewer's football-data.org key, then what they follow, each with the star and OK to
+ * unfollow (asks nothing: following again is one press); with nothing followed, an invitation to Search. One honest line
+ * about the leagues the fixtures source does not cover. The key itself is never shown.
+ */
+@Composable
+private fun SportPane(focus: FocusMemory, onFindTeam: () -> Unit) {
+    val graph = LocalAppGraph.current
+    val scope = rememberCoroutineScope()
+    val revision by graph.sportRevision.collectAsState()
+    var status by remember { mutableStateOf<AppGraph.SportStatus?>(null) }
+    var entering by remember { mutableStateOf(false) }
+    var checking by remember { mutableStateOf(false) }
+    var refused by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(revision, checking) { status = graph.sportStatus() }
+    PaneHeading(stringResource(R.string.settings_sport))
+    Text(stringResource(R.string.settings_sport_intro), style = MaterialTheme.typography.bodyMedium, color = Tokens.textSecondary)
+    val current = status ?: return
+    val line = when {
+        checking -> stringResource(R.string.sport_key_checking)
+        refused != null -> stringResource(R.string.sport_key_refused)
+        !current.hasToken -> stringResource(R.string.sport_key_none)
+        current.error != null -> stringResource(R.string.sport_key_failed)
+        else -> stringResource(R.string.sport_key_ok)
+    }
+    Text(line, style = MaterialTheme.typography.titleSmall, color = Tokens.textPrimary, modifier = Modifier.testTag(SettingsTags.SPORT))
+    Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3)) {
+        ActionButton(
+            stringResource(if (current.hasToken) R.string.sport_key_replace else R.string.sport_key_enter),
+            { entering = true },
+            Modifier.rememberedFocus(focus, SettingsTags.SPORT_KEY),
+            primary = !current.hasToken,
+        )
+        if (current.hasToken) {
+            ActionButton(
+                stringResource(R.string.sport_key_remove),
+                { scope.launch { graph.removeSportToken() } },
+                Modifier.rememberedFocus(focus, SettingsTags.SPORT_REMOVE),
+            )
+        }
+    }
+    if (current.follows.isEmpty()) {
+        Text(stringResource(R.string.sport_empty_title), style = MaterialTheme.typography.titleMedium, color = Tokens.textPrimary)
+        Text(stringResource(R.string.sport_empty_body), style = MaterialTheme.typography.bodyMedium, color = Tokens.textSecondary)
+        ActionButton(
+            stringResource(R.string.sport_empty_button),
+            onFindTeam,
+            Modifier.rememberedFocus(focus, SettingsTags.SPORT_FIND),
+            primary = current.hasToken,
+        )
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(Tokens.space1)) {
+            current.follows.forEach { followed ->
+                LuzRow(
+                    onClick = { scope.launch { graph.unfollow(followed.kind, followed.ref) } },
+                    modifier = Modifier.rememberedFocus(focus, SettingsTags.followed(followed.ref)),
+                ) {
+                    Text(
+                        followed.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Tokens.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    // The favourite's mark: one sign for "I keep this", everywhere (Design 4.8).
+                    Icon(
+                        LuzIcons.Star,
+                        contentDescription = null,
+                        tint = Tokens.accent,
+                        modifier = Modifier.padding(start = Tokens.space2).size(FOLLOW_MARK),
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(stringResource(R.string.unfollow), style = MaterialTheme.typography.labelMedium, color = Tokens.textSecondary)
+                }
+            }
+        }
+    }
+    Text(stringResource(R.string.settings_sport_coverage), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary)
+    if (entering) {
+        LuzPrompt(
+            title = stringResource(R.string.sport_key_enter),
+            initial = "",
+            label = stringResource(R.string.sport_key_label),
+            message = stringResource(R.string.sport_key_message),
+            onConfirm = { key ->
+                checking = true
+                refused = null
+                scope.launch {
+                    refused = graph.setSportToken(key)
+                    checking = false
+                }
+            },
+            onClear = null,
+            onDismiss = { entering = false },
+        )
+    }
+}
+
+private val FOLLOW_MARK = 14.dp
 
 /**
  * TMDB (ADR-0038): what it adds, whether a key is kept and when the lists were last read, and the three things the

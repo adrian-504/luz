@@ -40,6 +40,21 @@ CREATE TABLE sport_fixture (
 
 CREATE INDEX sport_fixture_kickoff ON sport_fixture(kickoff_utc);
 
+-- The catalogue (schema 18, 17.sqm): what can be followed.
+CREATE TABLE sport_competition (
+    code TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    area TEXT,
+    emblem_url TEXT,
+    fetched_at INTEGER NOT NULL
+);
+
+CREATE TABLE sport_team_competition (
+    team_ref TEXT NOT NULL,
+    competition TEXT NOT NULL,
+    PRIMARY KEY (team_ref, competition)
+);
+
 CREATE TABLE sport_standing (
     competition TEXT NOT NULL,
     position INTEGER NOT NULL,
@@ -143,3 +158,25 @@ DELETE FROM sport_fixture;
 
 clearStandings:
 DELETE FROM sport_standing;
+
+saveCompetition:
+INSERT OR REPLACE INTO sport_competition(code, name, area, emblem_url, fetched_at) VALUES (?, ?, ?, ?, ?);
+
+competitions:
+SELECT * FROM sport_competition ORDER BY name;
+
+addMembership:
+INSERT OR IGNORE INTO sport_team_competition(team_ref, competition) VALUES (?, ?);
+
+competitionsOf:
+SELECT c.* FROM sport_team_competition m JOIN sport_competition c ON c.code = m.competition WHERE m.team_ref = ? ORDER BY c.name;
+
+-- Teams in the catalogue, for following: in a competition Luz can read.
+catalogueTeams:
+SELECT DISTINCT t.* FROM sport_team t JOIN sport_team_competition m ON m.team_ref = t.ref WHERE t.ref IN :refs ORDER BY t.name;
+
+clearCatalogue:
+DELETE FROM sport_competition;
+
+clearMemberships:
+DELETE FROM sport_team_competition;

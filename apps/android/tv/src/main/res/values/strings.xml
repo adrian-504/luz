@@ -337,6 +337,25 @@
     </plurals>
     <string name="settings_tmdb">TMDB</string>
     <string name="settings_tmdb_summary">Trending and ratings, with your own key</string>
+    <string name="settings_sport">Sport</string>
+    <string name="settings_sport_summary">Teams and leagues you follow</string>
+    <string name="settings_sport_intro">Teams and leagues you follow: their matches, reminders and Sport now.</string>
+    <string name="settings_sport_coverage">Saudi, Lebanese and Gulf leagues have no fixtures here. Search finds their matches in your guide.</string>
+    <string name="sport_empty_title">Follow your teams</string>
+    <string name="sport_empty_body">Search for a team or a league and hold OK on it, then choose Follow. Their matches, reminders and Sport now appear here and on Home.</string>
+    <string name="sport_empty_button">Find a team</string>
+    <string name="unfollow">Unfollow</string>
+    <!-- The viewer's own football-data.org key (ADR-0057); words modelled on TMDB's, to be confirmed by Design. -->
+    <string name="sport_key_none">No key yet: a free key from football-data.org brings your teams\' fixtures.</string>
+    <string name="sport_key_checking">Checking your key with football-data.org…</string>
+    <string name="sport_key_refused">football-data.org did not accept that key. Check it and try again.</string>
+    <string name="sport_key_failed">football-data.org could not be reached last time. Luz will try again later.</string>
+    <string name="sport_key_ok">Key accepted. Fixtures are read four times a day.</string>
+    <string name="sport_key_enter">Enter your football-data.org key</string>
+    <string name="sport_key_replace">Replace the key</string>
+    <string name="sport_key_remove">Remove the key</string>
+    <string name="sport_key_label">API token</string>
+    <string name="sport_key_message">Type or paste the token football-data.org emailed you when you registered. It is kept encrypted on this TV.</string>
     <string name="tmdb_help">With a free key from The Movie Database (themoviedb.org → Settings → API), Luz adds what is trending this week and uses TMDB\'s popularity and ratings for the Popular and Highest rated rows. Luz reads TMDB\'s public lists about once a day.</string>
     <string name="tmdb_artwork_on">Title artwork and photos: On</string>
     <string name="tmdb_artwork_off">Title artwork and photos: Off</string>

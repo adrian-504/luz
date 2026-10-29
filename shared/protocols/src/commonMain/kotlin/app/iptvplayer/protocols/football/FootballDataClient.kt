@@ -58,12 +58,13 @@ public data class FootballStanding(
 
 /**
  * football-data.org's v4 API, for the viewer who gives Luz their own token. The token travels only as the `X-Auth-Token`
- * request header, a sensitive one the transport never logs: never in the URL, so it is never part of anything a URL prints, and never in an error. A response is
- * read through the same content checks and size limits as TMDB's.
+ * request header, a sensitive one the transport never logs: never in the URL, and never in an error. A response is read
+ * through the same content checks and size limits as TMDB's.
  *
- * A refused token (401, 403) is a [DomainError.Auth]. The free plan allows ten requests a minute; when football-data.org
- * says so (429) the error is [RATE_LIMITED], a [DomainError.Http] that is already retryable, so a caller can tell "wait and
- * try again" from every other failure by comparing with that constant.
+ * A refused token (400, 401) is a [DomainError.Auth]; something outside the viewer's plan (403) is [RESTRICTED]. Which
+ * status a refused token gets is NOT YET VERIFIED against the live service, so a token check treats any error as refusal.
+ * The free plan allows ten requests a minute; when football-data.org says so (429) the error is [RATE_LIMITED], a
+ * [DomainError.Http] that is already retryable, so a caller can tell "wait and try again" from every other failure.
  */
 public class FootballDataClient(
     private val fetcher: HttpFetcher,
@@ -180,7 +181,8 @@ public class FootballDataClient(
         val response = when (fetched) {
             is FetchResult.Failure -> return Body.Error(
                 when (fetched.status) {
-                    401, 403 -> DomainError.Auth(AuthFailure.INVALID_CREDENTIALS)
+                    400, 401 -> DomainError.Auth(AuthFailure.INVALID_CREDENTIALS)
+                    403 -> RESTRICTED
                     429 -> RATE_LIMITED
                     else -> fetched.error
                 },
@@ -219,6 +221,9 @@ public class FootballDataClient(
 
         /** What a call returns when football-data.org answers 429: too many requests for the viewer's plan. */
         public val RATE_LIMITED: DomainError = DomainError.Http(429)
+
+        /** What a call returns for something outside the viewer's plan (403): a competition the free plan does not cover. */
+        public val RESTRICTED: DomainError = DomainError.Http(403)
         internal const val PARSE_NOT_JSON = "FOOTBALL_NOT_JSON"
         internal const val PARSE_BAD_DATE = "FOOTBALL_BAD_DATE"
         internal const val TOKEN_HEADER = "X-Auth-Token"

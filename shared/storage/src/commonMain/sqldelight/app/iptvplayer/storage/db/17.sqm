@@ -1,0 +1,16 @@
+-- Schema 18: the sport catalogue (ADR-0057): the competitions the viewer's token can read, and which teams play in them,
+-- so Search can offer a team or a league to follow and a team's match can offer its league. Must match Sport.sq.
+
+CREATE TABLE sport_competition (
+    code TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    area TEXT,
+    emblem_url TEXT,
+    fetched_at INTEGER NOT NULL
+);
+
+CREATE TABLE sport_team_competition (
+    team_ref TEXT NOT NULL,
+    competition TEXT NOT NULL,
+    PRIMARY KEY (team_ref, competition)
+);

@@ -16,6 +16,7 @@ import app.iptvplayer.protocols.net.HttpFetcher
 import app.iptvplayer.protocols.wikidata.WikidataClient
 import app.iptvplayer.storage.Fixture
 import app.iptvplayer.storage.FollowKind
+import app.iptvplayer.storage.SportCompetition
 import app.iptvplayer.storage.SportStore
 import app.iptvplayer.storage.SportTeam
 import app.iptvplayer.storage.StandingRow
@@ -64,7 +65,10 @@ public class SportService(
             return DomainError.Auth(AuthFailure.INVALID_CREDENTIALS)
         }
         val token = Secret(trimmed)
-        spaced { football.check(token) }?.let { return it }
+        // Any refusal of the very first request is the token's: a rate limit is the only other answer worth passing on.
+        spaced { football.check(token) }?.let {
+            return if (it == FootballDataClient.RATE_LIMITED) it else DomainError.Auth(AuthFailure.INVALID_CREDENTIALS)
+        }
         secrets.put(TOKEN, SecretBundle(password = token))
         return null
     }
@@ -89,6 +93,33 @@ public class SportService(
         val kept = teams.map { it.toTeam() }
         kept.forEach { sport.saveTeam(it) }
         return kept to null
+    }
+
+    /**
+     * Reads what can be followed (the competitions the token can read and their teams) when the stored catalogue is older
+     * than [CATALOGUE_KEEP], or when [force]d: one request for the competitions and one per competition. A competition the
+     * plan refuses is skipped; a refused token or a rate limit stops it. Never while something plays.
+     */
+    public suspend fun catalogue(force: Boolean = false): DomainError? {
+        val token = token() ?: return null
+        val fetched = sport.fetchedAt(CATALOGUE)
+        if (!force && fetched != null && clock.now() - fetched < CATALOGUE_KEEP) return null
+        if (playing()) return null
+        val (competitions, error) = spaced { football.competitions(token) }
+        if (error != null) return error
+        sport.saveCompetitions(competitions.map { SportCompetition(it.code, it.name, it.area, it.emblem) })
+        for (competition in competitions) {
+            if (playing()) return null
+            val (teams, teamsError) = spaced { football.competitionTeams(token, competition.code) }
+            if (teamsError != null) {
+                if (stops(teamsError)) return teamsError
+                continue
+            }
+            teams.forEach { team -> if (sport.team(team.id.toString()) == null) sport.saveTeam(team.toTeam()) }
+            sport.saveMemberships(competition.code, teams.map { it.id.toString() })
+        }
+        sport.setFetched(CATALOGUE)
+        return null
     }
 
     /** One press (x12): follows [ref] and reads its matches (and, for a team, its names in Arabic and French) at once. */
@@ -245,6 +276,8 @@ public class SportService(
         private val AHEAD = 14.days
         private val KEEP_PAST = 1.days
         private val NAMES_KEEP = 90.days
+        private val CATALOGUE_KEEP = 7.days
+        private const val CATALOGUE = "catalogue"
 
         /** Eight requests a minute at most: the free plan allows ten. */
         public val REQUEST_SPACING: Duration = 7_500.milliseconds

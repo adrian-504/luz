@@ -30,7 +30,10 @@ lists.
 - **No channel claims:** nothing stores, guesses or shows which channel carries a match. A match opens a search of the
   viewer's own guide for its two teams (4.16); the guide's rows are shown as the guide writes them, only reordered.
 - **Storage:** the round's migration (`16.sqm`, schema 17) holds `sport_follow`, `sport_team`, `sport_alias`,
-  `sport_fixture`, `sport_standing`, `sport_reminder`, `sport_fetch`; not per source. `SportStore` in `shared/storage`,
+  `sport_fixture`, `sport_standing`, `sport_reminder`, `sport_fetch`; not per source. A second migration (`17.sqm`,
+  schema 18) adds the catalogue, `sport_competition` and `sport_team_competition`: the competitions the token can read
+  and their teams, read once a week (one request per competition; one the plan refuses, a 403, is skipped), so Search
+  offers only what can be followed. `SportStore` in `shared/storage`,
   `SportService` in `shared/ingestion`, `FootballDataClient` and `WikidataClient` in `shared/protocols`. No new library.
 
 ## Alternatives considered
