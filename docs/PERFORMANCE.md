@@ -109,7 +109,8 @@ Same tools in warm mode (process alive, activity/scene recreated or resumed). En
 
 - Main thread: no disk, no network, no parsing, no JSON decoding, no date formatting in scroll paths.
 - Virtualize everything list-like; stable keys for lazy lists; precomputed read models.
-- Images: downsample to display size; placeholder colors; no decoding on main thread.
+- Images: decoded at the size they are drawn, read from the layout at the screen's density (ADR-0051); a plain
+  ground while loading; no decoding on main thread; memory given back on `onTrimMemory`.
 - Imports: bounded parallelism, batched transactions, back-pressure, background priority, cancellation.
 - Startup: lazy initialization; no eager provider refresh; Baseline Profiles (Android).
 - Playback: one player instance reused across zaps where the engine allows; bounded preparation window.

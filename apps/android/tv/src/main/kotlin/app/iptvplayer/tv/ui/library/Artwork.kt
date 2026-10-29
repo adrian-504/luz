@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -30,7 +31,13 @@ import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.theme.Tokens
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import coil3.request.crossfade
 import coil3.request.transformations
+
+object ArtworkTags {
+    /** The title written on a card whose picture is not coming. */
+    const val STAND_IN = "artwork-stand-in"
+}
 
 /** Turns stored artwork templates into loadable URLs for one source (see AppGraph.artworkResolver). */
 @Composable
@@ -43,9 +50,13 @@ fun rememberArtworkResolver(playlistId: PlaylistId?): ((UrlTemplate) -> String?)
 }
 
 /**
- * Artwork with a designed fallback (DOMAIN_MODEL.md Artwork): the title on a neutral card, covered by the image once it
- * loads. Pass a null [fallbackTitle] where the name is already written beside the image — a channel card on Home, for
- * instance — so the same words are not printed twice.
+ * Artwork on a plain ground (DOMAIN_MODEL.md Artwork; ADR-0051): while a picture loads its place is the room's surface
+ * colour and nothing else; the title written on the card ([fallbackTitle]) or a logo's monogram ([name]) appears only
+ * when there is no picture or it fails. Pass a null [fallbackTitle] where the name is already written beside the image.
+ *
+ * Pictures are decoded at the size they are drawn (Coil reads it from the layout), not at a fixed pixel size, and fade in
+ * over 240 ms, except from memory, so scrolling back never flickers. A copy already in memory at a smaller size shows at
+ * once while a bigger one decodes (a backdrop opening on its title page).
  *
  * Cache keys are the stored template, so no URL carrying a login is ever used as a cache key.
  */
@@ -55,8 +66,6 @@ fun ArtworkImage(
     resolver: ((UrlTemplate) -> String?)?,
     fallbackTitle: String?,
     modifier: Modifier = Modifier,
-    widthPx: Int = 300,
-    heightPx: Int = 450,
     fit: Boolean = false,
     /** How far a fitted logo sits in from its plate's edges; small plates need a small inset or the logo vanishes. */
     inset: Dp = LOGO_INSET,
@@ -65,15 +74,16 @@ fun ArtworkImage(
 ) {
     val context = LocalContext.current
     val url = remember(template, resolver) { template?.let { resolver?.invoke(it) } }
-    // The name stands in only until the picture arrives: a logo with a transparent background let it show through.
     var loaded by remember(url) { mutableStateOf(false) }
+    // Words stand in only for a picture that is not coming: none stored, or it failed (Design 1.3).
+    var failed by remember(url) { mutableStateOf(false) }
     // A logo is cleaned once (ADR-0040) and its plate follows it: light behind a dark logo, a trace of its colour
     // otherwise; a picture fills the plate instead of sitting on it.
     val look = if (fit && loaded && template != null) LogoLooks.of(template.template) else null
     // A picture needs no plate, only a dark ground to load onto.
     val ground = if (fit) Modifier.background(logoPlate(look)) else Modifier.background(Tokens.bgSurface2)
     Box(modifier = modifier.then(ground)) {
-        if (!loaded) {
+        if (template == null || failed || (resolver != null && url == null)) {
             when {
                 fit && (name ?: fallbackTitle) != null -> ChannelMonogram(name ?: fallbackTitle!!)
                 fallbackTitle != null -> Text(
@@ -83,7 +93,7 @@ fun ArtworkImage(
                     textAlign = TextAlign.Center,
                     maxLines = 4,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.align(Alignment.Center).padding(Tokens.space3),
+                    modifier = Modifier.align(Alignment.Center).padding(Tokens.space3).testTag(ArtworkTags.STAND_IN),
                 )
             }
         }
@@ -94,7 +104,8 @@ fun ArtworkImage(
                     // Cleaned logos are cached apart from the file as sent.
                     .memoryCacheKey(if (fit) "${template.template}#logo" else template.template)
                     .diskCacheKey(template.template)
-                    .size(widthPx, heightPx)
+                    .placeholderMemoryCacheKey(if (fit) "${template.template}#logo" else template.template)
+                    .crossfade(FADE_MS)
                     .apply { if (fit) transformations(LogoCleanup(template.template)) }
                     .build()
             }
@@ -105,6 +116,7 @@ fun ArtworkImage(
                 contentDescription = null,
                 contentScale = if (fit && !picture) ContentScale.Fit else ContentScale.Crop,
                 onSuccess = { loaded = true },
+                onError = { failed = true },
                 modifier = Modifier.fillMaxSize().then(if (fit && !picture) Modifier.padding(inset) else Modifier),
             )
         }
@@ -120,8 +132,7 @@ fun WatchedBar(fraction: Float?, modifier: Modifier = Modifier) {
     }
 }
 
-/** The pixel size a full-screen backdrop is decoded at: the television's own resolution, never a poster's. */
-const val BACKDROP_WIDTH_PX = 1920
-const val BACKDROP_HEIGHT_PX = 1080
-
 private val LOGO_INSET = 18.dp
+
+// Design 1.3: a decoded picture fades in over 240 ms.
+private const val FADE_MS = 240

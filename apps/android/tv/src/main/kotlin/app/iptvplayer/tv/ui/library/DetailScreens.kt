@@ -563,7 +563,7 @@ private fun DetailRoom(
 
 @Composable
 private fun Backdrop(art: UrlTemplate?, resolver: ((UrlTemplate) -> String?)?, modifier: Modifier) {
-    ArtworkImage(art, resolver, null, modifier, BACKDROP_WIDTH_PX, BACKDROP_HEIGHT_PX)
+    ArtworkImage(art, resolver, null, modifier)
 }
 
 @Composable
@@ -644,7 +644,7 @@ private fun EpisodeCard(
         onClick = onPlay,
     ) { modifier ->
         Box(modifier) {
-            ArtworkImage(still, resolver, null, Modifier.fillMaxSize(), 640, 360)
+            ArtworkImage(still, resolver, null, Modifier.fillMaxSize())
             // A word, not a tick: a tick already means "in My List" on the buttons above.
             if (episode.progress?.completed == true) {
                 Text(

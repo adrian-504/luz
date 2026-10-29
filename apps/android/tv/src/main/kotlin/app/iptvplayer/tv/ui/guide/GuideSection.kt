@@ -73,6 +73,7 @@ import app.iptvplayer.storage.GuideProgramme
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.FocusMemory
+import app.iptvplayer.tv.ui.UpdatingNote
 import app.iptvplayer.tv.ui.library.ArtworkImage
 import app.iptvplayer.tv.ui.library.rememberArtworkResolver
 import app.iptvplayer.tv.ui.live.ChannelScope
@@ -348,9 +349,7 @@ fun GuideSection(
             )
         }
         TimeHeader(window.start, now)
-        if (activity[current]?.guideRunning == true) {
-            Text(stringResource(R.string.guide_loading), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary)
-        }
+        UpdatingNote(if (activity[current]?.guideRunning == true) stringResource(R.string.live_updating_guide) else null)
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 state = listState,
@@ -562,8 +561,6 @@ private fun GuideRow(
                 resolver,
                 null,
                 Modifier.width(LOGO_WIDTH).height(LOGO_HEIGHT).clip(RoundedCornerShape(Tokens.radiusSmall)).background(Tokens.raised),
-                LOGO_PX_WIDTH,
-                LOGO_PX_HEIGHT,
                 fit = true,
                 inset = Tokens.space1,
                 name = channel.label,
@@ -643,8 +640,6 @@ private const val NOW_LINE_ALPHA = 0.85f
 private val AIRING_FILL = Color.White.copy(alpha = 0.10f)
 private val LOGO_WIDTH = 44.dp
 private val LOGO_HEIGHT = 27.dp
-private const val LOGO_PX_WIDTH = 132
-private const val LOGO_PX_HEIGHT = 81
 
 private fun halfHourFloor(instant: Instant): Instant = Instant.fromEpochSeconds(instant.epochSeconds - instant.epochSeconds % (30 * 60))
 

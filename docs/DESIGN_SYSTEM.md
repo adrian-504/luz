@@ -123,7 +123,9 @@ information, next). No amber fills.
 The artwork is the card: 2:3 poster or 16:9 landscape, 8 dp corners, no border or plate at rest. Focused: lift, soft
 shadow, faint white edge. Name in white below, one grey line under it. Optional thin progress bar. The caller's modifier
 goes on the artwork — the node that takes focus — so tags and focus requesters sit where focus is. Channel logos are
-shown whole (`fit`) on a plate lit from its top corner.
+shown whole (`fit`) on a plate lit from its top corner. While a picture loads, its place is a plain shape in the
+surface colour; the title is written there only if the picture fails or there is none. A new picture fades in over
+240 ms; one from memory appears at once (ADR-0051).
 
 ### 5.4 Rows — `LuzRow`
 A list row is nothing at rest; the row under the remote gets glass and a hairline. Focus is **drawn, not recomposed**,
@@ -136,7 +138,9 @@ focused on it.
 ### 5.6 Navigation rail — `NavigationRail` (§2)
 
 ### 5.7 Loading — `LuzSkeletonShelf`, `LuzSkeletonRows`
-The shapes of what is coming, breathing slowly. The screen keeps its layout from the first frame. No spinners.
+The shapes of what is coming, breathing slowly, only the first time a list is ever shown: a list shown before comes
+back from memory at once, and a refresh replaces rows in place (ADR-0051). The screen keeps its layout from the first
+frame. No spinners.
 
 ### 5.8 Empty — `LuzEmptyState`
 What will be here, why it isn't, and the one thing to do about it. No "no data", no counts of zero.
@@ -223,7 +227,9 @@ plate, number, name, programme, thin progress and a small heart for favourites. 
 menu. **Logos** (ADR-0040) are cleaned once — the box around them cut away, margins trimmed — and sit on a plate that
 follows them (light behind a dark logo, a faint glow of the logo's colour otherwise); a channel without one shows a
 monogram on a colour of its own. Holding OK on a **category** offers Pin to the top, Rename and Hide; pinned categories
-come first with a small pin, and Settings → Live TV categories arranges them all.
+come first with a small pin, and Settings → Live TV categories arranges them all. Live TV opens on the category used
+last with that source. While a refresh runs longer than a second, *Updating channels…* or *Updating guide…* sits
+beside the title in caption grey, and fades out when done (ADR-0051).
 
 ## 12. Guide (ADR-0037)
 A screen title with the focused programme large, its channel, times and "On now" beneath, and two lines of its

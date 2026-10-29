@@ -409,8 +409,16 @@ fun HomeSection(
     )
     // What the stage says about the card the remote is on; written from focus and read only by the stage (ADR-0043).
     val onCard = remember { mutableStateOf<StageInfo?>(null) }
+    // Which card that is, so a rebuild of the rows refreshes the stage's words without touching focus (ADR-0051).
+    val onCardKey = remember { mutableStateOf<String?>(null) }
     LaunchedEffect(shown) {
-        if (onCard.value == null) shown.first().let { row -> row.cards.firstOrNull()?.let { onCard.value = stageOf(row, it) } }
+        val kept = onCardKey.value?.let { key ->
+            shown.firstNotNullOfOrNull { row -> row.cards.firstOrNull { it.key == key }?.let { row to it } }
+        }
+        when {
+            kept != null -> onCard.value = stageOf(kept.first, kept.second)
+            onCard.value == null -> shown.first().let { row -> row.cards.firstOrNull()?.let { onCard.value = stageOf(row, it) } }
+        }
     }
 
     Column(Modifier.fillMaxSize().background(Tokens.bgBase)) {
@@ -435,7 +443,12 @@ fun HomeSection(
                                     progress = card.fraction,
                                     modifier = Modifier
                                         .rememberedFocus(focus, HomeTags.item(row.id, card.key))
-                                        .onFocusChanged { if (it.isFocused) onCard.value = stageOf(row, card) },
+                                        .onFocusChanged {
+                                            if (it.isFocused) {
+                                                onCard.value = stageOf(row, card)
+                                                onCardKey.value = card.key
+                                            }
+                                        },
                                     onLongClick = if (hasMenu(card)) ({ menuFor = row.id to card }) else null,
                                     onClick = card.open,
                                 ) { modifier ->
@@ -445,7 +458,7 @@ fun HomeSection(
                                         // A wide card shows the wide picture: a film's backdrop in Continue watching, not its
                                         // poster cropped to a strip.
                                         val art = if (row.landscape) card.backdrop ?: card.poster else card.poster
-                                        ArtworkImage(art, resolver, card.title, modifier, LANDSCAPE_PX_WIDTH, LANDSCAPE_PX_HEIGHT)
+                                        ArtworkImage(art, resolver, card.title, modifier)
                                     }
                                 }
                             }
@@ -542,8 +555,6 @@ private fun startsText(resources: android.content.res.Resources, start: kotlin.t
 
 private const val MENU_RETURN_ATTEMPTS = 10
 private const val MENU_RETURN_INTERVAL_MS = 50L
-private const val LANDSCAPE_PX_WIDTH = 480
-private const val LANDSCAPE_PX_HEIGHT = 270
 
 /** Whether a long press on the card opens a menu: films and series do (and Continue watching), channels do not. */
 private fun hasMenu(card: HomeCard): Boolean = card.continuing != null || card.type != null

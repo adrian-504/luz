@@ -132,6 +132,13 @@ both sides; that the password never appears in the phone's events or in logcat; 
 login. It uses the debug build's own test panel (`DeveloperStreams.testProvider`, served inside the app, synthetic login).
 Audio and subtitle changes from the phone have no device test: they need a film with several tracks.
 
+### 4.5 Last known screens and pictures (ADR-0051)
+
+`TestArtwork.slow` and `TestArtwork.missing` make one picture of the test panel late (one second) or missing, and
+`TestPanel.dropped` leaves channels out of the next refresh. What the emulator cannot show is checked on the owner's TV:
+a true cold start on the remembered category, the fade's cost while scrolling a shelf, and the before/after memory and
+frame numbers.
+
 ## 5. Device matrix (initial proposal, finalized per platform phase)
 
 **Devices used so far:** Google TV emulator API 34 (arm64, on the development Mac); owner's **Bbox TV** (Technicolor

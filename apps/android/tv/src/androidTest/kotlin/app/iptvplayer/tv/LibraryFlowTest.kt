@@ -3,6 +3,7 @@ package app.iptvplayer.tv
 import android.view.KeyEvent
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isFocused
@@ -16,9 +17,11 @@ import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.ingestion.AddSourceResult
+import app.iptvplayer.testing.TestArtwork
 import app.iptvplayer.tv.app.IptvApplication
 import app.iptvplayer.tv.companion.CompanionHub
 import app.iptvplayer.tv.developer.DeveloperStreams
+import app.iptvplayer.tv.ui.library.ArtworkTags
 import app.iptvplayer.tv.ui.library.Browse
 import app.iptvplayer.tv.ui.library.DetailTags
 import app.iptvplayer.tv.ui.library.HomeTags
@@ -29,6 +32,7 @@ import app.iptvplayer.tv.ui.player.PlayerTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
 import app.iptvplayer.tv.ui.theme.LuzMenuTags
+import coil3.SingletonImageLoader
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -219,6 +223,53 @@ class LibraryFlowTest {
         awaitFocus(SearchTags.result("movie", two.id))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(DetailTags.PLAY)
+    }
+
+    /** Whether the card for [movieId] in the search results shows its title on the picture's place (the stand-in). */
+    private fun standInShown(movieId: String): Boolean = rule.onAllNodes(
+        hasTestTag(ArtworkTags.STAND_IN).and(hasAnyAncestor(hasTestTag(SearchTags.result("movie", movieId)))),
+        useUnmergedTree = true,
+    ).fetchSemanticsNodes().isNotEmpty()
+
+    private fun searchForMovie(title: String): String {
+        val movie = runBlocking { graph.movies(playlist, null, 10, 0) }.single { it.title == title }
+        // Nothing from an earlier test may already hold this poster, or it would not load at all.
+        SingletonImageLoader.get(rule.activity).run {
+            memoryCache?.clear()
+            diskCache?.clear()
+        }
+        openSection(Section.SEARCH, SearchTags.FIELD)
+        rule.onNodeWithTag(SearchTags.FIELD).performTextInput(title.lowercase())
+        rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(SearchTags.result("movie", movie.id))).fetchSemanticsNodes().isNotEmpty() }
+        return movie.id
+    }
+
+    /** A poster loads on a plain shape (ADR-0051, Design 1.3): the title is under the card already, not on the picture. */
+    @Test
+    fun posterShowsNoTitleWhileItsPictureLoads() {
+        TestArtwork.slow = setOf("Test Movie Two")
+        try {
+            val id = searchForMovie("Test Movie Two")
+            // The server holds the picture back a second; during it, the card shows no words where the picture goes.
+            repeat(5) {
+                assertFalse(standInShown(id))
+                Thread.sleep(150)
+            }
+        } finally {
+            TestArtwork.slow = emptySet()
+        }
+    }
+
+    /** A picture that fails leaves the title on the card's place, so the card is never an empty shape. */
+    @Test
+    fun aPictureThatFailsShowsTheTitle() {
+        TestArtwork.missing = setOf("Test Movie Two")
+        try {
+            val id = searchForMovie("Test Movie Two")
+            rule.waitUntil(10_000) { standInShown(id) }
+        } finally {
+            TestArtwork.missing = emptySet()
+        }
     }
 
     @Test

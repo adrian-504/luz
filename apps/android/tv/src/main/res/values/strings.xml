@@ -149,7 +149,6 @@
     <string name="live_on_now">On now</string>
     <string name="channel_unavailable">This channel has no playable stream.</string>
 
-    <string name="guide_loading">Downloading the guide…</string>
     <string name="guide_empty_title">No guide yet</string>
     <string name="guide_empty_message">Your provider sends no programme guide. If you have a guide link (XMLTV), add it and every channel fills in with what is on and what is next.</string>
     <string name="guide_empty_action">Add a guide link</string>
@@ -483,4 +482,7 @@
     <string name="note_list_new">New list: %1$s</string>
     <string name="note_list_renamed">%1$s renamed to %2$s</string>
     <string name="note_list_deleted">%1$s deleted</string>
+    <!-- Design 1.1 (Words - rounds 1 and 4) -->
+    <string name="live_updating_guide">Updating guide…</string>
+    <string name="live_updating_channels">Updating channels…</string>
 </resources>

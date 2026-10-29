@@ -15,6 +15,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.iptvplayer.ingestion.AddSourceResult
+import app.iptvplayer.testing.TestPanel
 import app.iptvplayer.tv.app.IptvApplication
 import app.iptvplayer.tv.companion.CompanionHub
 import app.iptvplayer.tv.developer.DeveloperStreams
@@ -256,6 +257,75 @@ class LivePlayerTest {
         } finally {
             runBlocking { graph.userGroups(playlist).forEach { graph.deleteGroup(playlist, it.id) } }
         }
+    }
+
+    /** Puts the remote on the channel at [index] of "All channels" and returns its tag. */
+    private fun focusChannel(index: Int): String {
+        awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        val tag = LiveTags.channel(runBlocking { graph.channels(playlist, null) }[index].id)
+        repeat(index + 1) { if (focusedTag() != tag) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitFocus(tag)
+        return tag
+    }
+
+    private fun refreshChannels() {
+        graph.refresh(playlist)
+        rule.waitUntil(5_000) { graph.activity.value[playlist]?.liveRunning == true }
+        rule.waitUntil(30_000) { graph.activity.value[playlist]?.liveRunning != true }
+        rule.waitForIdle()
+    }
+
+    /** A refresh replaces the rows in place (ADR-0051, Design 1.2): the remote stays on the channel it was on. */
+    @Test
+    fun refreshingTheChannelsKeepsTheRemoteOnTheSameChannel() {
+        val tag = focusChannel(3)
+        refreshChannels()
+        Thread.sleep(500)
+        assertEquals(tag, focusedTag())
+    }
+
+    /** If the channel under the remote vanishes in a refresh, the remote takes the one now in its place. */
+    @Test
+    fun aChannelThatDisappearsHandsTheRemoteToTheOneInItsPlace() {
+        val channels = runBlocking { graph.channels(playlist, null) }
+        val index = channels.indexOfFirst { it.name == "Test Sports Extra" }
+        focusChannel(index)
+        TestPanel.dropped = setOf(202)
+        try {
+            refreshChannels()
+            val after = runBlocking { graph.channels(playlist, null) }
+            assertTrue(after.none { it.name == "Test Sports Extra" })
+            awaitFocus(LiveTags.channel(after[index.coerceAtMost(after.lastIndex)].id))
+        } finally {
+            TestPanel.dropped = emptySet()
+        }
+    }
+
+    /** Luz opens on the category used last with this source (ADR-0051), and remembers it apart for each source. */
+    @Test
+    fun luzOpensOnTheLastCategoryWithItsChannels() {
+        awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
+        val sports = runBlocking { graph.groups(playlist) }.first { group ->
+            runBlocking { graph.channels(playlist, group.id) }.any { it.name == "Test Sports" }
+        }
+        val tag = LiveTags.group(sports.id)
+        repeat(8) { if (focusedTag() != tag) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        awaitFocus(tag)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        val first = runBlocking { graph.channels(playlist, sports.id) }.first()
+        awaitFocus(LiveTags.channel(first.id))
+        rule.waitUntil(5_000) { runBlocking { graph.preference(graph.liveScopeKey(playlist)) } == "g:${sports.id}" }
+
+        // A recreated screen shows the category and its channels, not "All channels". (Recreating keeps the screen's own
+        // saved state; a real cold start, read from the saved setting above, is checked on the TV: TESTING.md §4.5.)
+        rule.activityRule.scenario.recreate()
+        awaitExists(LiveTags.channel(first.id))
+        val all = runBlocking { graph.channels(playlist, null) }
+        assertTrue(
+            all.filter { c -> c.id != first.id && runBlocking { graph.channels(playlist, sports.id) }.none { it.id == c.id } }
+                .none { rule.onAllNodes(hasTestTag(LiveTags.channel(it.id))).fetchSemanticsNodes().isNotEmpty() },
+        )
     }
 
     /** Nothing opens out of sight (ADR-0050, step 3): while Luz is not on the TV's screen, the phone is told so. */

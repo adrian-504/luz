@@ -45,6 +45,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.library.StableLists
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.model.CustomisationTarget
 import app.iptvplayer.domain.security.UrlTemplate
@@ -58,6 +59,7 @@ import app.iptvplayer.tv.app.AppGraph
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
+import app.iptvplayer.tv.ui.UpdatingNote
 import app.iptvplayer.tv.ui.library.ArtworkImage
 import app.iptvplayer.tv.ui.library.ListMaker
 import app.iptvplayer.tv.ui.library.rememberArtworkResolver
@@ -185,6 +187,27 @@ fun LiveTvSection(
         return
     }
     val importing = activity[current]?.liveRunning == true
+    // Luz opens on the category used last with this source (ADR-0051): opening on a category reads a few dozen rows,
+    // "All channels" thousands. Read once per source before anything is written back; a category that is gone falls
+    // back to All.
+    var scopeRestored by rememberSaveable(current.value) { mutableStateOf(favoritesOnly) }
+    LaunchedEffect(current, scopeRestored) {
+        val key = graph.liveScopeKey(current)
+        if (!scopeRestored) {
+            val saved = graph.preference(key)?.let(ChannelScope::of)
+            val exists = when (saved) {
+                is ChannelScope.Group -> groups.any { it.id == saved.id }
+                is ChannelScope.Mine -> myGroups.any { it.id == saved.id }
+                ChannelScope.Favorites -> true
+                else -> false
+            }
+            if (saved != null && exists && scope == ChannelScope.All) scopeKey = saved.key()
+            scopeRestored = true
+        }
+    }
+    LaunchedEffect(current, scopeKey, scopeRestored) {
+        if (scopeRestored && !favoritesOnly) graph.setPreference(graph.liveScopeKey(current), scopeKey)
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -195,12 +218,23 @@ fun LiveTvSection(
             ),
             verticalArrangement = Arrangement.spacedBy(Tokens.space4),
         ) {
-            Text(
-                stringResource(if (favoritesOnly) R.string.favorites_title else R.string.live_title),
-                style = MaterialTheme.typography.displaySmall,
-                color = Tokens.textPrimary,
-                modifier = Modifier.padding(start = Tokens.space4),
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space4), verticalAlignment = Alignment.Bottom) {
+                Text(
+                    stringResource(if (favoritesOnly) R.string.favorites_title else R.string.live_title),
+                    style = MaterialTheme.typography.displaySmall,
+                    color = Tokens.textPrimary,
+                    modifier = Modifier.padding(start = Tokens.space4),
+                )
+                // Design 1.1: the only sign of a refresh, beside the title.
+                UpdatingNote(
+                    when {
+                        importing -> stringResource(R.string.live_updating_channels)
+                        activity[current]?.guideRunning == true -> stringResource(R.string.live_updating_guide)
+                        else -> null
+                    },
+                    Modifier.padding(bottom = Tokens.space2),
+                )
+            }
             Row(modifier = Modifier.fillMaxSize()) {
                 if (!favoritesOnly) {
                     LazyColumn(
@@ -281,19 +315,22 @@ fun LiveTvSection(
                         }
                     }
                 }
-                ChannelList(
-                    focus,
-                    current,
-                    scope,
-                    revision,
-                    importing,
-                    favoritesOnly,
-                    onPlay,
-                    handOverFocus,
-                    { handOverFocus = false },
-                    { channel, guide -> menuFor = channel to guide },
-                    Modifier.padding(start = if (favoritesOnly) 0.dp else Tokens.space8).weight(1f),
-                )
+                // Not before the last category is known: reading "All channels" first and then the category costs twice.
+                if (scopeRestored) {
+                    ChannelList(
+                        focus,
+                        current,
+                        scope,
+                        revision,
+                        importing,
+                        favoritesOnly,
+                        onPlay,
+                        handOverFocus,
+                        { handOverFocus = false },
+                        { channel, guide -> menuFor = channel to guide },
+                        Modifier.padding(start = if (favoritesOnly) 0.dp else Tokens.space8).weight(1f),
+                    )
+                }
             }
         }
 
@@ -525,7 +562,8 @@ private fun ChannelList(
     val graph = LocalAppGraph.current
     val coroutines = rememberCoroutineScope()
     val resolver = rememberArtworkResolver(playlist)
-    var channels by remember(scope) { mutableStateOf<List<ChannelRow>?>(null) }
+    // A list shown before comes back at once from memory; placeholder rows only for one never shown (ADR-0051).
+    var channels by remember(scope) { mutableStateOf(graph.screens.channels(playlist, scope.key())) }
     // The channel under the remote, for the panel above the list. Only the panel reads it, so moving down the list
     // repaints the panel and two rows — never the list (PERFORMANCE.md §6.2).
     val underRemote = remember(scope) { mutableStateOf<ChannelRow?>(null) }
@@ -543,7 +581,13 @@ private fun ChannelList(
             is ChannelScope.Group -> graph.channels(playlist, scope.id)
             is ChannelScope.Mine -> graph.channelsInUserGroup(playlist, scope.id)
         }
-        channels = rows
+        val before = channels
+        // Replaced in place, and only when something changed: the rows keep their keys, so the remote stays on its channel.
+        if (rows != before) {
+            channels = rows
+            graph.screens.keepChannels(playlist, scope.key(), rows)
+            if (before != null) keepRemoteNear(focus, before, rows)
+        }
         while (true) {
             now = Clock.System.now()
             val stored = graph.storedNowNext(playlist, rows, now)
@@ -629,6 +673,17 @@ private fun ChannelList(
 }
 
 /**
+ * If the channel under the remote vanished in a refresh, the remote takes the channel now in its place (Design 1.2). The
+ * only time data moves the remote, and only to fill a place that is gone; anywhere else on screen, nothing happens.
+ */
+private suspend fun keepRemoteNear(focus: FocusMemory, before: List<ChannelRow>, after: List<ChannelRow>) {
+    val lost = before.firstOrNull { LiveTags.channel(it.id) == focus.lastFocusedKey } ?: return
+    if (after.any { it.id == lost.id }) return
+    val target = StableLists.keepNear(before.map { it.id }, after.map { it.id }, lost.id) ?: return
+    returnFocusTo(focus, LiveTags.channel(target))
+}
+
+/**
  * What is on the channel under the remote, above the list: the channel's logo on a plate, the programme large with its
  * time and how far through it is, what comes next and the first line of what it is about. With no guide for the channel
  * its name stands large instead, so the panel is never an empty space. It is the list's context: it changes as the
@@ -656,8 +711,6 @@ private fun OnNowPanel(
                 resolver,
                 channel.label,
                 Modifier.width(ON_NOW_LOGO_WIDTH).height(ON_NOW_HEIGHT).clip(RoundedCornerShape(Tokens.radiusMedium)),
-                ON_NOW_LOGO_PX_WIDTH,
-                ON_NOW_LOGO_PX_HEIGHT,
                 fit = true,
                 inset = Tokens.space3,
             )
@@ -727,8 +780,6 @@ private fun ChannelItem(
             resolver,
             null,
             Modifier.width(LOGO_WIDTH).height(LOGO_HEIGHT).clip(RoundedCornerShape(Tokens.radiusSmall)),
-            LOGO_PX_WIDTH,
-            LOGO_PX_HEIGHT,
             fit = true,
             inset = Tokens.space1,
             name = channel.label,
@@ -790,14 +841,10 @@ fun EmptyState(message: String, action: String, focus: FocusMemory, actionKey: S
 private val CATEGORY_WIDTH = 220.dp
 private val ON_NOW_HEIGHT = 84.dp
 private val ON_NOW_LOGO_WIDTH = 150.dp
-private const val ON_NOW_LOGO_PX_WIDTH = 450
-private const val ON_NOW_LOGO_PX_HEIGHT = 252
 private val ON_NOW_BAR = 120.dp
 private val ROW_BAR = 72.dp
 private val LOGO_WIDTH = 56.dp
 private val LOGO_HEIGHT = 34.dp
-private const val LOGO_PX_WIDTH = 168
-private const val LOGO_PX_HEIGHT = 102
 private val NUMBER_WIDTH = 28.dp
 private val FAVORITE_MARK = 12.dp
 

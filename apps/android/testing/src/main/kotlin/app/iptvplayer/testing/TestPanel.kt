@@ -31,6 +31,11 @@ object TestPanel {
     )
     private val seriesCategories = listOf("21" to "Test Shows")
     private const val SERIES_ID = 7001
+
+    /** Channel ids the panel leaves out of its channel list, so a test can see a channel vanish in a refresh. */
+    @Volatile
+    var dropped: Set<Int> = emptySet()
+
     private val channels = listOf(
         TestChannel(101, "Test News HD", "1", "news.test"),
         TestChannel(102, "Test News 2", "1", null),
@@ -59,7 +64,7 @@ object TestPanel {
                 "[",
                 "]",
             ) { (id, name) -> """{"category_id":"$id","category_name":"$name","parent_id":0}""" }
-            "get_live_streams" -> channels.withIndex().joinToString(",", "[", "]") { (index, c) ->
+            "get_live_streams" -> channels.filter { it.id !in dropped }.withIndex().joinToString(",", "[", "]") { (index, c) ->
                 """{"num":${index + 1},"name":"${c.name}","stream_type":"live","stream_id":${c.id},"stream_icon":"${base}art/${c.name.replace(
                     " ",
                     "%20",

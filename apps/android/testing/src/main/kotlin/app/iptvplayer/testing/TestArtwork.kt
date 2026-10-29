@@ -17,6 +17,14 @@ import kotlin.math.abs
  * nothing taken from anyone. The colour comes from the name, so the same item always looks the same.
  */
 object TestArtwork {
+    /** Names whose picture is held back a second before it is sent, so a test can see a card while it loads. */
+    @Volatile
+    var slow: Set<String> = emptySet()
+
+    /** Names whose picture is missing (404), so a test can see what a card shows when its picture fails. */
+    @Volatile
+    var missing: Set<String> = emptySet()
+
     /** A poster (2:3) or a backdrop (16:9) for [name], as PNG bytes. */
     fun png(name: String, wide: Boolean): ByteArray {
         val width = if (wide) WIDE_WIDTH else POSTER_WIDTH

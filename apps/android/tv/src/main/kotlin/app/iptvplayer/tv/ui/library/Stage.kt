@@ -107,8 +107,6 @@ private fun StageScene(info: StageInfo, resolver: ((UrlTemplate) -> String?)?) {
                 resolver,
                 null,
                 Modifier.align(Alignment.TopEnd).fillMaxHeight().fillMaxWidth(ART_WIDTH),
-                BACKDROP_WIDTH_PX,
-                BACKDROP_HEIGHT_PX,
             )
             info.isChannel -> ArtworkImage(
                 info.poster,

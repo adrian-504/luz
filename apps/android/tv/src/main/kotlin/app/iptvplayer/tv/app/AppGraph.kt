@@ -215,6 +215,17 @@ class AppGraph(context: Context) {
         all.firstOrNull { it.playlistId.value == selected } ?: all.firstOrNull()
     }
 
+    /** What the screens last showed, so a list chosen again is there at once (ADR-0051). */
+    val screens = ScreenMemory()
+
+    /** A small app-wide setting kept with the content (`app_setting`), read and written off the main thread. */
+    suspend fun preference(key: String): String? = io { content.preference(key) }
+
+    suspend fun setPreference(key: String, value: String?) = io { content.setPreference(key, value) }
+
+    /** The setting that holds Live TV's last category for one source; removed with the source. */
+    fun liveScopeKey(playlistId: PlaylistId): String = "live_scope:${playlistId.value}"
+
     suspend fun selectSource(playlistId: PlaylistId) {
         io { preferences.edit(commit = true) { putString(KEY_CURRENT_SOURCE, playlistId.value) } }
         changed()
@@ -660,7 +671,11 @@ class AppGraph(context: Context) {
     }
 
     suspend fun delete(playlistId: PlaylistId) {
-        io { service.deleteSource(playlistId) }
+        io {
+            service.deleteSource(playlistId)
+            content.setPreference(liveScopeKey(playlistId), null)
+        }
+        screens.forget(playlistId)
         changed()
     }
 

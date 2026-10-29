@@ -8,6 +8,7 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
+import java.net.URLDecoder
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
@@ -121,12 +122,16 @@ class TestMediaServer(private val assets: AssetManager, port: Int = 0) : AutoClo
                         respond(out, 404, "text/plain", "not found".toByteArray())
                     }
                 // Synthetic artwork so the screens can be judged with pictures in them (TestArtwork).
-                route.startsWith("/art/") -> respond(
-                    out,
-                    200,
-                    "image/png",
-                    TestArtwork.png(route.removePrefix("/art/").removeSuffix(".png"), wide = query.contains("wide")),
-                )
+                route.startsWith("/art/") -> {
+                    val name = route.removePrefix("/art/").removeSuffix(".png")
+                    val title = URLDecoder.decode(name, "UTF-8")
+                    if (title in TestArtwork.slow) Thread.sleep(SLOW_ART_MS)
+                    if (title in TestArtwork.missing) {
+                        respond(out, 404, "text/plain", "no picture".toByteArray())
+                    } else {
+                        respond(out, 200, "image/png", TestArtwork.png(name, wide = query.contains("wide")))
+                    }
+                }
                 route == "/redirect" -> respond(out, 302, "text/plain", ByteArray(0), "Location: /vod.mp4\r\n")
                 route == "/vod.mp4" -> serveAsset(out, "vod-10s.mp4", "video/mp4", headers["range"])
                 route == "/multi-track.mp4" -> serveAsset(out, "multi-track-30s.mp4", "video/mp4", headers["range"])
@@ -240,6 +245,7 @@ class TestMediaServer(private val assets: AssetManager, port: Int = 0) : AutoClo
     }
 
     private companion object {
+        const val SLOW_ART_MS = 1_000L
         const val SEGMENTS = 15
         const val WINDOW = 4
         const val SEGMENT_MS = 2_000L

@@ -30,8 +30,23 @@ class IptvApplication :
     }
 
     /**
-     * Posters and backdrops (ADR-0028): a bounded memory cache for TVs with little RAM, a disk cache for repeat visits, and
-     * no crossfade so focus moves stay fast on slow devices. Coil logs nothing unless a logger is set.
+     * Gives pictures back when Android asks (ADR-0051): all of them once Luz is in the background or memory is critical,
+     * half once Luz has left the screen or memory runs low. The levels overlap as numbers, so the rule is written out.
+     */
+    @Suppress("DEPRECATION") // The level constants are deprecated from API 34 but still sent, and the Bbox runs API 30.
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        val cache = SingletonImageLoader.get(this).memoryCache ?: return
+        when {
+            level >= TRIM_MEMORY_BACKGROUND || level == TRIM_MEMORY_RUNNING_CRITICAL -> cache.clear()
+            level >= TRIM_MEMORY_RUNNING_LOW -> cache.trimToSize(cache.maxSize / 2)
+        }
+    }
+
+    /**
+     * Posters and backdrops (ADR-0028): a bounded memory cache for TVs with little RAM, a disk cache for repeat visits.
+     * A picture fades in only when it is first decoded (ADR-0051, set per request), never on a focus move. Coil logs
+     * nothing unless a logger is set.
      */
     override fun newImageLoader(context: PlatformContext): ImageLoader = ImageLoader.Builder(context)
         .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.15).build() }
