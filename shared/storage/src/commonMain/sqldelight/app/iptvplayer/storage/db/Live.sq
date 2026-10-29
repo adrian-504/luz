@@ -106,6 +106,12 @@ SELECT channel_id FROM channel_watch WHERE playlist_id = ? ORDER BY last_played_
 lastPlayedChannel:
 SELECT channel_id FROM channel_watch WHERE playlist_id = ? ORDER BY last_played_at DESC LIMIT 1;
 
+setUserEpgLink:
+INSERT OR REPLACE INTO user_epg_link(playlist_id, channel_id, epg_source_id, epg_channel_id, created_at) VALUES (?, ?, ?, ?, ?);
+
+clearUserEpgLink:
+DELETE FROM user_epg_link WHERE playlist_id = ? AND channel_id = ?;
+
 addSession:
 INSERT INTO watch_session(playlist_id, kind, content_id, work, started_at, seconds) VALUES (?, ?, ?, ?, ?, ?);
 

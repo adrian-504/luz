@@ -16,6 +16,7 @@ import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.domain.playback.PlaybackMode
 import app.iptvplayer.domain.security.UrlTemplate
+import app.iptvplayer.domain.text.TextNormalization
 import app.iptvplayer.ingestion.AddSourceFailure
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.ingestion.EpisodeArt
@@ -118,6 +119,9 @@ data class ComingUp(val channel: ChannelRow, val programme: GuideProgramme)
 
 /** "Because you watch …": the genre the viewer watches most, and films of it they have not seen. */
 data class GenrePick(val genre: String, val movies: List<MovieRow>)
+
+/** "Fix the guide" (x9): the guide channels to choose from, closest first, and the channel's link today (key, chosen by the viewer). */
+data class GuideChoices(val channels: List<EpgStore.GuideChannel>, val current: Pair<String, Boolean>?)
 
 /** One copy of a channel in "Choose copy" (x9). */
 data class CopyChoice(val id: ChannelId, val quality: String?, val startedWell: Boolean, val chosen: Boolean)
@@ -746,6 +750,40 @@ class AppGraph(context: Context) {
         }
         startDetailFetch(playlistId)
     }
+
+    /**
+     * "Fix the guide for this channel" (x9): every guide channel the provider's guide holds, the closest to the channel's
+     * name first, each with what it lists now; and which one the channel uses today (and whether the viewer chose it).
+     */
+    suspend fun guideChoices(playlistId: PlaylistId, channelId: ChannelId): GuideChoices = io {
+        val channel = content.channelsByIds(playlistId, listOf(channelId.value)).firstOrNull()
+        val wanted = channel?.let { words(it.label) }.orEmpty()
+        val all = epg.guideChannels(playlistId.value, SystemClock.now())
+        val ranked = all.sortedWith(
+            compareByDescending<EpgStore.GuideChannel> { closeness(wanted, words(it.key)) }.thenBy { it.key },
+        )
+        GuideChoices(ranked, epg.linkFor(playlistId.value, channelId.value))
+    }
+
+    suspend fun fixGuide(playlistId: PlaylistId, channelId: ChannelId, choice: EpgStore.GuideChannel) {
+        io { epg.fixLink(playlistId.value, channelId.value, choice, SystemClock.now()) }
+        changed()
+    }
+
+    /** Takes the viewer's fix away; the provider's own link comes back with a fresh guide. */
+    suspend fun resetGuide(playlistId: PlaylistId, channelId: ChannelId) {
+        io { epg.clearFix(playlistId.value, channelId.value) }
+        changed()
+        refreshGuide(playlistId)
+    }
+
+    private fun words(text: String): Set<String> {
+        val spaced = text.replace('.', ' ').replace('_', ' ').replace('-', ' ')
+        return TextNormalization.matchNormalize(spaced).split(' ').filter { it.isNotBlank() }.toSet()
+    }
+
+    // Shared words, the longest first: "beIN Sports 3" is closer to "beinsports3.fr" split as "bein sports 3" than to "bein max".
+    private fun closeness(a: Set<String>, b: Set<String>): Int = a.intersect(b).sumOf { it.length + 1 }
 
     fun refreshGuide(playlistId: PlaylistId) {
         scope.launch { refreshGuideNow(playlistId) }

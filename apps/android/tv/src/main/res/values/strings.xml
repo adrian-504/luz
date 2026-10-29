@@ -536,4 +536,13 @@
     <string name="menu_header_line">Channel %1$d · %2$s</string>
     <string name="menu_header_number">Channel %1$d</string>
     <string name="guide_no_listings">%1$s · no listings</string>
+    <!-- Fix the guide (x9 part 2; Words - rounds 2 and 3) -->
+    <string name="menu_fix_guide">Fix the guide for this channel</string>
+    <string name="fixguide_title">Fix the guide for %1$s</string>
+    <string name="fixguide_intro">Choose the guide listing that matches this channel.</string>
+    <string name="fixguide_closest">Closest names</string>
+    <string name="fixguide_now">Now: %1$s</string>
+    <string name="fixguide_none_now">No listings now</string>
+    <string name="fixguide_search">Search all guide listings</string>
+    <string name="fixguide_reset">Use the provider\'s guide again</string>
 </resources>

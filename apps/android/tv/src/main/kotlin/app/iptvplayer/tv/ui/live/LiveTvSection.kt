@@ -183,6 +183,8 @@ fun LiveTvSection(
     // x9: the copies of a channel, to choose which one plays.
     var copiesFor by remember { mutableStateOf<Pair<ChannelRow, List<CopyChoice>>?>(null) }
     var copyCount by remember { mutableStateOf(0) }
+    // x9 part 2: the channel whose guide link is being fixed.
+    var fixingGuide by remember { mutableStateOf<ChannelRow?>(null) }
     var newGroupFor by remember { mutableStateOf<ChannelRow?>(null) }
 
     LaunchedEffect(revision) {
@@ -352,12 +354,18 @@ fun LiveTvSection(
                         { channel, guide -> menuFor = channel to guide },
                         Modifier.padding(start = if (favoritesOnly) 0.dp else Tokens.space8).weight(1f),
                         menusClosed = menuFor == null && infoFor == null && copiesFor == null && making == null &&
-                            addingToGroup == null && newGroupFor == null,
+                            fixingGuide == null && addingToGroup == null && newGroupFor == null,
                     )
                 }
             }
         }
 
+        fixingGuide?.let { channel ->
+            GuideFixer(current, channel.id, channel.label) {
+                fixingGuide = null
+                coroutines.launch { returnFocusTo(focus, LiveTags.channel(channel.id)) }
+            }
+        }
         LaunchedEffect(menuFor) { copyCount = menuFor?.let { graph.channelCopies(current, it.first.id).size } ?: 0 }
         copiesFor?.let { (channel, copies) ->
             LuzMenu(
@@ -417,6 +425,7 @@ fun LiveTvSection(
                     LuzMenuItem("choose-copy", stringResource(R.string.menu_choose_copy), value = channel.quality) {
                         coroutines.launch { copiesFor = channel to graph.copyChoices(current, channel.id) }
                     }.takeIf { copyCount > 1 },
+                    LuzMenuItem("fix-guide", stringResource(R.string.menu_fix_guide)) { fixingGuide = channel },
                 ) + listOf(
                     LuzMenuItem("hide", stringResource(R.string.menu_hide_channel)) {
                         coroutines.launch { graph.hide(current, CustomisationTarget.CHANNEL, channel.id.value) }

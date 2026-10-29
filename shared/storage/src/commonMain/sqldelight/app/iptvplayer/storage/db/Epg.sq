@@ -73,6 +73,30 @@ DELETE FROM channel_epg_link WHERE playlist_id = ?;
 insertLink:
 INSERT OR REPLACE INTO channel_epg_link(playlist_id, channel_id, epg_source_id, epg_channel_id, method, confidence) VALUES (?, ?, ?, ?, ?, ?);
 
+-- The viewer's own links (x9, user_epg_link) win over the matcher's, every time the links are written.
+applyUserLinks:
+INSERT OR REPLACE INTO channel_epg_link(playlist_id, channel_id, epg_source_id, epg_channel_id, method, confidence)
+SELECT playlist_id, channel_id, epg_source_id, epg_channel_id, 'user', 100 FROM user_epg_link WHERE playlist_id = ?;
+
+-- Every guide channel of the sources this playlist's channels are linked to, with what it lists at :now (or null).
+guideChannels:
+SELECT k.source_id, k.channel_key,
+    (SELECT p.title FROM epg_program p
+     WHERE p.source_id = k.source_id AND p.snapshot = k.snapshot AND p.channel_key = k.channel_key
+       AND p.start_utc <= :now AND p.end_utc > :now LIMIT 1) AS now_title
+FROM (
+    SELECT DISTINCT p.source_id, p.snapshot, p.channel_key
+    FROM epg_program p
+    JOIN epg_active_snapshot a ON a.source_id = p.source_id AND a.snapshot = p.snapshot
+    WHERE p.source_id IN (SELECT DISTINCT epg_source_id FROM channel_epg_link WHERE playlist_id = :playlistId)
+) k;
+
+linkFor:
+SELECT epg_source_id, epg_channel_id, method FROM channel_epg_link WHERE playlist_id = ? AND channel_id = ?;
+
+deleteLink:
+DELETE FROM channel_epg_link WHERE playlist_id = ? AND channel_id = ?;
+
 linkCount:
 SELECT COUNT(*) FROM channel_epg_link WHERE playlist_id = ?;
 

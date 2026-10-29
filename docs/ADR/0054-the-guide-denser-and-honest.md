@@ -31,7 +31,13 @@ use them, refreshed daily; no host invented or guessed.
    Strategy's ruling, 29 Oct, under the owner's own rule "if its a half solution, i'd rather without it"): without
    Arabic and Lebanese channels, and with "testing purposes" terms, it would be half a solution. To be revisited only
    if a host appears with clear terms that allow app use and Arabic coverage.
-6. The channel menu's second line shows "Channel 2" alone under All channels and Favourites (Design's follow-up to
+6. **Fix the guide for this channel** (x9 part 2, Design 3.5), from a channel's menu: the guide channels of the
+   provider's guide, the three closest names first (shared words with the channel's name, the longest first), each
+   with what it lists now; the letter strip searches the rest. OK saves the viewer's link (`user_epg_link`) and
+   replaces the channel's link at once; every later guide import writes its own links and then the viewer's on top
+   (`applyUserLinks`), so a fix is never undone by a refresh. "Use the provider's guide again" removes the fix and reads
+   the guide again. The 2 s "Guide fixed for …" note is not shown yet (the TV's note is the phone's today).
+7. The channel menu's second line shows "Channel 2" alone under All channels and Favourites (Design's follow-up to
    ADR-0053).
 
 ## Alternatives considered
@@ -52,5 +58,6 @@ use them, refreshed daily; no host invented or guessed.
   (GuideNavigationTest; the test panel can now leave chosen channels without a short guide, `TestPanel.withoutGuide`).
 - For the TV session: the guide down 60 and forward 40 presses, three runs each, against PERFORMANCE.md §6.4 (P95
   29 ms / 32 ms), aiming at 16.7 ms; the quiet bar drawn dashed as Design drew it (today a plain block with words).
-- **Not built yet:** "Fix the guide for this channel" (x9 part 2, the viewer's own link, `user_epg_link`, already in
-  schema 16): it needs the guide import to keep the viewer's links over its own, and waits behind the owner's bug list.
+- Fix the guide: storage tests `aUserFixWinsOverEverything`, `clearingTheFixHandsTheChannelBackToTheImport` run and
+  pass; device test `fixingTheGuideLinksTheChosenGuideChannel` written, not run. Guide channels are shown by their key
+  (the guide stores no display names); whether the keys read well on the owner's provider is a TV-session check.

@@ -24,6 +24,7 @@ import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
 import app.iptvplayer.tv.ui.theme.LuzMenuTags
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -253,6 +254,19 @@ class GuideNavigationTest {
             Thread.sleep(800)
             assertTrue("zapping stayed in Sports", inSports.any { it.label == CompanionHub.playing.value?.title })
         }
+    }
+
+    /** Fix the guide (x9): choosing another guide channel links it at once, and taking the fix away unlinks it. */
+    @Test
+    fun fixingTheGuideLinksTheChosenGuideChannel() {
+        rule.waitUntil(20_000) { focusedTag()?.startsWith("live-") == true }
+        val channel = runBlocking { graph.channels(playlist, null) }.first { it.name == "Test News HD" }
+        val choices = runBlocking { graph.guideChoices(playlist, channel.id) }
+        val other = choices.channels.first { it.key != choices.current?.first }
+        runBlocking { graph.fixGuide(playlist, channel.id, other) }
+        assertEquals(other.key to true, runBlocking { graph.guideChoices(playlist, channel.id) }.current)
+        runBlocking { graph.resetGuide(playlist, channel.id) }
+        rule.waitUntil(30_000) { runBlocking { graph.guideChoices(playlist, channel.id) }.current?.second != true }
     }
 }
 

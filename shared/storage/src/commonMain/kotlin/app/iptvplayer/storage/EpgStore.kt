@@ -126,6 +126,34 @@ public class EpgStore(private val driver: SqlDriver) {
                     it.confidence.toLong(),
                 )
             }
+            queries.applyUserLinks(playlistId)
+        }
+    }
+
+    /** One guide channel to choose in "Fix the guide" (x9): where it comes from, its key, and what it lists now. */
+    public data class GuideChannel(public val sourceId: String, public val key: String, public val now: String?)
+
+    /** Every guide channel this playlist's guide sources hold, with what each lists at [now]. */
+    public fun guideChannels(playlistId: String, now: Instant): List<GuideChannel> =
+        queries.guideChannels(now.epochSeconds, playlistId).executeAsList().map { GuideChannel(it.source_id, it.channel_key, it.now_title) }
+
+    /** The guide channel [channelId] is linked to, and whether the viewer chose it ("user"). */
+    public fun linkFor(playlistId: String, channelId: String): Pair<String, Boolean>? =
+        queries.linkFor(playlistId, channelId).executeAsOneOrNull()?.let { it.epg_channel_id to (it.method == USER) }
+
+    /** The viewer's fix (x9): kept over every later import, and applied at once. */
+    public fun fixLink(playlistId: String, channelId: String, choice: GuideChannel, at: Instant) {
+        database.transaction {
+            database.liveQueries.setUserEpgLink(playlistId, channelId, choice.sourceId, choice.key, at.toEpochMilliseconds())
+            queries.insertLink(playlistId, channelId, choice.sourceId, choice.key, USER, USER_CONFIDENCE)
+        }
+    }
+
+    /** Takes the viewer's fix away; the provider's own link comes back with the next guide import. */
+    public fun clearFix(playlistId: String, channelId: String) {
+        database.transaction {
+            database.liveQueries.clearUserEpgLink(playlistId, channelId)
+            queries.deleteLink(playlistId, channelId)
         }
     }
 
@@ -270,6 +298,10 @@ public class EpgStore(private val driver: SqlDriver) {
     }
 
     internal companion object {
+        /** A link the viewer chose (x9): the method name, and the highest confidence. */
+        private const val USER = "user"
+        private const val USER_CONFIDENCE = 100L
+
         const val SEARCH_SQL_PREFIX: String = "SELECT p.title FROM epg_program_search s CROSS JOIN epg_program p ON p.row_id = s.rowid "
     }
 
