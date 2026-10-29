@@ -58,6 +58,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -458,7 +460,10 @@ fun PlayerScreen(
             }
         }
     }
-    val allBadges = (badges + streamBadges(diagnostics)).distinct()
+    // One picture badge: the playing copy's quality when the caller gives one, else the decoder's; never SD (3.11).
+    val allBadges = (badges + streamBadges(diagnostics).filterNot { it in PICTURE_BADGES && badges.any { b -> b in PICTURE_BADGES } })
+        .filterNot { it == SD_BADGE }
+        .distinct()
 
     Box(
         modifier = Modifier
@@ -1012,8 +1017,27 @@ private fun BoxScope.VideoSurface(controller: Media3PlaybackController) {
     }
 }
 
+/**
+ * The player's state in words, only where the picture does not already say it (Design, round 3): never "Playing";
+ * "Starting…" and "Loading…" only after a second, so a quick hiccup does not flash a word.
+ */
 @Composable
 private fun StateText(snapshot: PlaybackSnapshot, modifier: Modifier) {
+    val waiting = snapshot.state == PlaybackState.PREPARING || snapshot.state == PlaybackState.BUFFERING
+    var waitedLong by remember(snapshot.state) { mutableStateOf(false) }
+    if (waiting) {
+        LaunchedEffect(snapshot.state) {
+            delay(STATE_WORD_DELAY_MS)
+            waitedLong = true
+        }
+    }
+    if (snapshot.state == PlaybackState.PLAYING) {
+        // Nothing on screen; the word stays in the semantics, for screen readers and the device tests.
+        val playing = stringResource(R.string.player_state_playing)
+        Box(modifier.testTag(PlayerTags.STATE).semantics { text = AnnotatedString(playing) })
+        return
+    }
+    if (waiting && !waitedLong) return
     val text = when (snapshot.state) {
         PlaybackState.IDLE -> R.string.player_state_idle
         PlaybackState.PREPARING -> R.string.player_state_preparing
@@ -1028,7 +1052,14 @@ private fun StateText(snapshot: PlaybackSnapshot, modifier: Modifier) {
     } else {
         stringResource(text)
     }
-    Text(label, style = MaterialTheme.typography.labelLarge, color = Tokens.textSecondary, modifier = modifier.testTag(PlayerTags.STATE))
+    // While waiting, the spinner turns in this corner: the words sit to its left, on its middle line.
+    val place = if (waiting) Modifier.padding(end = SPINNER_ROOM, top = SPINNER_TEXT_DROP) else Modifier
+    Text(
+        label,
+        style = MaterialTheme.typography.labelLarge,
+        color = Tokens.textSecondary,
+        modifier = modifier.then(place).testTag(PlayerTags.STATE),
+    )
 }
 
 /**
@@ -1224,6 +1255,13 @@ private val CHANNEL_LIST_WIDTH = 420.dp
 private val ERROR_ICON = 40.dp
 
 /** A faint shade from the top, so the clock reads over bright pictures while the controls are up. */
+private const val STATE_WORD_DELAY_MS = 1_000L
+
+// The buffering spinner (36 dp, PlayerChrome) and a gap; the drop centres a label line on it.
+private val SPINNER_ROOM = 48.dp
+private val SPINNER_TEXT_DROP = 8.dp
+private val PICTURE_BADGES = setOf("4K", "FHD", "HD", "SD")
+private const val SD_BADGE = "SD"
 private val TOP_SHADE = Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.45f), 0.25f to Color.Transparent)
 private val FAST_SEEK_STEP = 30.seconds
 private const val SEEK_HUD_TIMEOUT_MS = 2_000L

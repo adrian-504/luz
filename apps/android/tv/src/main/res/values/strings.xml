@@ -32,8 +32,8 @@
     <string name="playlists_add_source">Add a source</string>
 
     <!-- Player (Phase 6). Error texts per shared taxonomy code (docs/PLAYBACK.md §5). -->
-    <string name="player_state_preparing">Loading…</string>
-    <string name="player_state_buffering">Buffering…</string>
+    <string name="player_state_preparing">Starting…</string>
+    <string name="player_state_buffering">Loading…</string>
     <string name="player_state_paused">Paused</string>
     <string name="player_state_playing">Playing</string>
     <string name="player_state_ended">Finished</string>
