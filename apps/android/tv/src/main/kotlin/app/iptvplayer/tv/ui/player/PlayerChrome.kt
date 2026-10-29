@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -270,21 +271,19 @@ fun ScrubBar(positionMs: Long, durationMs: Long, scrubMs: Long?, focused: Boolea
         Box(Modifier.fillMaxWidth().height(KNOB), contentAlignment = Alignment.CenterStart) {
             Box(
                 Modifier.fillMaxWidth().height(barHeight).clip(RoundedCornerShape(Tokens.radiusPill))
-                    .background(Color.White.copy(alpha = TRACK_ALPHA)),
+                    .background(Color.White.copy(alpha = TRACK_ALPHA))
+                    // The distance a skip will cover, in amber, so its size is seen before the jump (x16).
+                    .drawWithContent {
+                        drawContent()
+                        if (scrubMs != null) {
+                            val from = minOf(played, target) * size.width
+                            val to = maxOf(played, target) * size.width
+                            drawRect(Tokens.accent, topLeft = Offset(from, 0f), size = Size(to - from, size.height))
+                        }
+                    },
             ) {
-                Box(
-                    Modifier.fillMaxWidth(played).height(barHeight).background(
-                        Color.White.copy(
-                            alpha = if (scrubMs !=
-                                null
-                            ) {
-                                PLAYED_DIM
-                            } else {
-                                1f
-                            },
-                        ),
-                    ),
-                )
+                // What has played stays white; the amber stretch above shows where a skip will land.
+                Box(Modifier.fillMaxWidth(played).height(barHeight).background(Color.White))
             }
             if (focused || scrubMs != null) {
                 Row(Modifier.fillMaxWidth()) {
@@ -520,7 +519,6 @@ private val BAR = 4.dp
 private val BAR_FOCUSED = 6.dp
 private val KNOB = 14.dp
 private const val TRACK_ALPHA = 0.25f
-private const val PLAYED_DIM = 0.6f
 private val LOGO_WIDTH = 120.dp
 private val LOGO_HEIGHT = 68.dp
 private val PROGRAMME_BAR = 320.dp

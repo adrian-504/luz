@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -605,11 +606,22 @@ fun PlayerScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(Tokens.space2)) {
                     val target = scrubMs
                     if (target != null) {
-                        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(Tokens.space4)) {
-                            Text(clockOf(target), fontSize = SKIP_TIME_TEXT, color = Tokens.textPrimary)
+                        // The step in amber over the large target time, riding where the knob is going, never past the
+                        // bar's ends (Design 5.2).
+                        val fraction = (target.toFloat() / durationMs).coerceIn(0f, 1f)
+                        Column(
+                            Modifier.layout { measurable, constraints ->
+                                val label = measurable.measure(constraints.copy(minWidth = 0))
+                                val x = (fraction * constraints.maxWidth - label.width / 2f)
+                                    .coerceIn(0f, (constraints.maxWidth - label.width).toFloat().coerceAtLeast(0f))
+                                layout(constraints.maxWidth, label.height) { label.place(x.toInt(), 0) }
+                            },
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
                             skipStep?.let { step ->
-                                Text(stepLabel(step), style = MaterialTheme.typography.titleMedium, color = Tokens.textSecondary)
+                                Text(stepLabel(step), style = MaterialTheme.typography.titleMedium, color = Tokens.accent)
                             }
+                            Text(clock(target), fontSize = SKIP_TIME_TEXT, color = Tokens.textPrimary)
                         }
                     }
                     ScrubBar(positionMs, durationMs, target, focused = false)
@@ -1281,21 +1293,10 @@ private fun stepLabel(step: Duration): String {
     }
 }
 
-/** "1:02:05" or "2:05": where the picture will jump to. */
-private fun clockOf(ms: Long): String {
-    val total = ms / MS_PER_SECOND
-    val h = total / SECONDS_PER_HOUR
-    val m = total % SECONDS_PER_HOUR / SECONDS_PER_MINUTE
-    val sec = total % SECONDS_PER_MINUTE
-    return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
-}
-
 private val SEEK_STEP = 10.seconds
 private const val SKIP_COMMIT_MS = 400L
 private val SKIP_TIME_TEXT = 30.sp
-private const val MS_PER_SECOND = 1_000L
 private const val SECONDS_PER_MINUTE = 60L
-private const val SECONDS_PER_HOUR = 3_600L
 private const val MINUS = "\u2212"
 private const val SCRUB_COMMIT_MS = 900L
 private const val NEXT_LEAD_MS = 20_000L
