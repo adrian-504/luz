@@ -1,5 +1,7 @@
 package app.iptvplayer.storage
 
+import app.iptvplayer.domain.text.SearchFold
+
 /**
  * Turns what someone types into an FTS5 query for the `title_search` index (FR-SRCH-001).
  *
@@ -13,6 +15,23 @@ internal object TitleIndex {
         .filter { it.isNotEmpty() }
         .ifEmpty { return null }
         .joinToString(" ") { "\"" + it.replace("\"", "\"\"") + "\"*" }
+
+    /**
+     * The MATCH expression for [query] against the title and its folded spellings (ADR-0055): each typed word matches
+     * its own spelling, folded, or (three letters and more) its sound key; words are combined with AND.
+     */
+    fun matchFolded(query: String): String? {
+        val words = SearchFold.spellings(query).ifEmpty { return null }
+        // Only `title` and `folded` are indexed, so no column filter is needed; groups are joined with an explicit AND.
+        return words.joinToString(" AND ") { word ->
+            val plain = "\"" + word.replace("\"", "\"\"") + "\"*"
+            // A sound key of one consonant ("two" is "t") would match half the list as a prefix: spelling only then.
+            val key = SearchFold.soundKey(word)?.takeIf { it.length >= MIN_SOUND_KEY }?.let { "\"" + SearchFold.SOUND_MARK + it + "\"*" }
+            if (key == null) plain else "($plain OR $key)"
+        }
+    }
+
+    private const val MIN_SOUND_KEY = 2
 
     /** Only letters and digits are indexed (unicode61), so everything else separates tokens. */
     private val SEPARATORS = Regex("[^\\p{L}\\p{N}]+")

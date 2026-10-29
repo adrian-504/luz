@@ -57,7 +57,7 @@
     <string name="player_forward_10">Forward 10 seconds</string>
     <string name="player_channel_list">Channels</string>
     <string name="player_next_channel">Next channel</string>
-    <string name="player_live">LIVE</string>
+    <string name="player_live">Live</string>
     <string name="player_no_description">No description.</string>
     <string name="player_next_programme">Next · %1$s %2$s</string>
     <string name="player_up_next">Up next</string>
@@ -155,6 +155,8 @@
     <string name="guide_now">Now</string>
     <string name="guide_on_now">On now</string>
     <string name="guide_today">Today</string>
+    <!-- The guide's day: "Today" or "Tomorrow", then the weekday and date. -->
+    <string name="guide_day">%1$s, %2$s</string>
     <string name="guide_tomorrow">Tomorrow</string>
     <string name="guide_programme_time">%1$s – %2$s</string>
 
@@ -302,7 +304,7 @@
         <item quantity="other">%1$d titles</item>
     </plurals>
     <string name="search_label">Channels, films, series and more</string>
-    <string name="search_key_space">SPACE</string>
+    <string name="search_key_space">Space</string>
     <string name="search_hint">Type with the letters above. Results appear as you type.</string>
     <string name="search_nothing">Nothing matches “%1$s”.</string>
     <string name="search_channels">Channels</string>
@@ -545,4 +547,13 @@
     <string name="fixguide_none_now">No listings now</string>
     <string name="fixguide_search">Search all guide listings</string>
     <string name="fixguide_reset">Use the provider\'s guide again</string>
+    <!-- Round 4: the letter strip (Words - rounds 1 and 4) -->
+    <string name="search_key_arabic" translatable="false">ع</string>
+    <string name="search_key_latin" translatable="false">abc</string>
+    <string name="search_key_digits" translatable="false">123</string>
+    <string name="search_key_space_ar" translatable="false">مسافة</string>
+    <string name="search_phone">Or type on your phone</string>
+    <string name="search_phone_unpaired">Or type on your phone · scan the code in Settings → Phone companion</string>
+    <!-- x13: the live mark when what is on is Arabic -->
+    <string name="player_live_ar" translatable="false">مباشر</string>
 </resources>

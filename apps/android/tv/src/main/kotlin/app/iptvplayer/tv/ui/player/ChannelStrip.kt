@@ -109,6 +109,8 @@ fun ChannelStrip(
     }
     val tab = tabs.firstOrNull { it.key == selected } ?: tabs.firstOrNull() ?: return
     val first = remember { FocusRequester() }
+    // Up from the cards goes to the tab that is open, not to whichever tab happens to sit above the card.
+    val tabFocus = remember { tabs.associate { it.key to FocusRequester() } }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
 
     Box(
@@ -134,6 +136,7 @@ fun ChannelStrip(
                     var focused by remember { mutableStateOf(false) }
                     Column(
                         Modifier
+                            .focusRequester(tabFocus.getValue(each.key))
                             .luzClickable(onClick = { selected = each.key }, onFocus = {
                                 focused = it
                                 // Left and Right on the tabs change the cards at once.
@@ -173,16 +176,17 @@ fun ChannelStrip(
                 state = listState,
                 horizontalArrangement = Arrangement.spacedBy(Tokens.space3),
                 contentPadding = PaddingValues(end = Tokens.safeHorizontal),
-                verticalAlignment = Alignment.Bottom,
+                verticalAlignment = Alignment.Top,
             ) {
                 tab.cards.forEachIndexed { index, card ->
                     tab.runs[index]?.let { label ->
                         item(key = "run-$index") {
+                            // On the line of the next card's logo and name: a label for what follows.
                             Text(
                                 label,
                                 style = MaterialTheme.typography.labelLarge,
                                 color = Tokens.textTertiary,
-                                modifier = Modifier.padding(bottom = Tokens.space2),
+                                modifier = Modifier.padding(top = Tokens.space3 + Tokens.space1),
                             )
                         }
                     }
@@ -192,6 +196,8 @@ fun ChannelStrip(
                             resolver,
                             chosen = chosen == card.id,
                             modifier = Modifier
+                                // On each card: a focus property on the row would not reach the cards inside it.
+                                .focusProperties { up = tabFocus[tab.key] ?: FocusRequester.Default }
                                 .testTag(StripTags.card(tab.key, card.id))
                                 .then(if (index == start) Modifier.focusRequester(first) else Modifier),
                         ) {
@@ -267,11 +273,12 @@ private fun StripCardView(
                 overflow = TextOverflow.Ellipsis,
             )
         } else {
+            // One line, so the bar and "Until" always fit the card.
             Text(
                 programme,
                 style = MaterialTheme.typography.bodyMedium,
                 color = Tokens.textPrimary,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             val begin = card.start
@@ -301,7 +308,9 @@ private val LOGO_H = 28.dp
 private val BAR = 3.dp
 private val TAB_UNDERLINE = 24.dp
 private const val TRACK_ALPHA = 0.25f
-private const val GRADIENT_SOLID = 0.35f
+
+// The dark reaches the tab row, so the tabs never sit on bright picture (Design review, 29 Oct).
+private const val GRADIENT_SOLID = 0.15f
 private const val GROUND_ALPHA = 0.92f
 private const val HOLD_AFTER_CHOICE_MS = 1_500L
 private const val IDLE_CLOSE_MS = 8_000L

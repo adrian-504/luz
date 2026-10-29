@@ -1,16 +1,21 @@
 -- Title search index (FR-SRCH-001/002). One FTS5 table for channels, movies and series: LIKE scans every title, which cost
 -- 70-105 ms on the owner's Bbox TV with 10k channels and 20k movies (PERFORMANCE.md §1 budget is 50 ms).
+-- `folded` holds the title's folded spellings and sound keys (SearchFold, ADR-0055); `~` is kept as part of a word so a
+-- sound key such as `~jdd` never matches the plain word "jdd". Must match 16.sqm.
 CREATE VIRTUAL TABLE title_search USING fts5(
     title,
+    folded,
     kind UNINDEXED,
     playlist_id UNINDEXED,
     snapshot UNINDEXED,
     content_id UNINDEXED,
-    tokenize='unicode61 remove_diacritics 2'
+    tokenize='unicode61 remove_diacritics 2 tokenchars ''~'''
 );
 
 insertTitle:
-INSERT INTO title_search(title, kind, playlist_id, snapshot, content_id) VALUES (?, ?, ?, ?, ?);
+INSERT INTO title_search(title, folded, kind, playlist_id, snapshot, content_id) VALUES (?, ?, ?, ?, ?, ?);
+
+
 
 deleteTitlesOfSnapshot:
 DELETE FROM title_search WHERE playlist_id = :playlistId AND snapshot = :snapshot;

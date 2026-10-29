@@ -30,7 +30,9 @@ XMLTV (xmltv.php, user URL, M3U url-tvg)   Xtream short EPG (fallback)
 
 ## 2. Normalization rules
 
-1. Parse `start`/`stop` as `YYYYMMDDhhmm[ss] [±hhmm]`; missing offset → UTC; apply `timeShiftMinutes`.
+1. Parse `start`/`stop` as `YYYYMMDDhhmm[ss] [±hhmm]`; missing offset → UTC; apply `timeShiftMinutes`. A guide whose times
+   are local without saying so is caught after import: its programmes are compared with the provider's own short guide
+   and, when at least five agree on one whole or half hour, every link to that source carries the shift (ADR-0056).
 2. Group by EPG channel; sort by start.
 3. Missing `stop` → next programme's start; last programme without stop is dropped (diagnostic).
 4. `end ≤ start` → dropped (diagnostic `XMLTV_NON_POSITIVE_DURATION`).

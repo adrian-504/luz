@@ -249,7 +249,9 @@ class LivePlayerTest {
             awaitExists(row)
             rule.onNodeWithTag(row).performClick()
             rule.waitUntil(5_000) { runBlocking { graph.channelsInUserGroup(playlist, list.id) }.map { it.id } == listOf(target.id) }
-            awaitExists(ListMakerTags.HEADER, "New list · 1")
+            // The count is a text inside the header row.
+            rule.waitUntil(10_000) { rule.onAllNodes(hasText("New list · 1"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+            shot("r2b-list-maker")
             rule.onNodeWithTag(row).performClick()
             rule.waitUntil(5_000) { runBlocking { graph.channelsInUserGroup(playlist, list.id) }.isEmpty() }
             rule.onNodeWithTag(row).performClick()
@@ -260,6 +262,7 @@ class LivePlayerTest {
             rule.onNodeWithTag(LuzPromptTags.CLEAR).performClick()
             awaitGone(ListMakerTags.SCREEN)
             assertEquals(null, CompanionHub.addingTo.value)
+            // Focus moves to the new list's row as soon as it is on screen.
             awaitFocus(LiveTags.group(list.id))
         } finally {
             runBlocking { graph.userGroups(playlist).forEach { graph.deleteGroup(playlist, it.id) } }
@@ -352,10 +355,29 @@ class LivePlayerTest {
         assertEquals("three copies, one row", 1, copies.size)
         assertEquals("the best copy is the one shown", "FHD", copies.single().quality)
         playChannel(all.indexOf(copies.single()))
-        rule.waitUntil(30_000) {
-            runBlocking { graph.channelCopies(playlist, copies.single().id) }.first().value == "402"
+        // The offline copy keeps the player retrying; after its start time Luz moves to the next copy. Timers run on the
+        // test's clock, so it is moved on until the FHD copy is given up, and then left to run, or the HD copy's own start
+        // time would pass before it starts for real.
+        runCatching {
+            rule.waitUntil(30_000) {
+                rule.mainClock.advanceTimeBy(1_000)
+                runBlocking { graph.copyChoices(playlist, copies.single().id) }.last().quality == "FHD"
+            }
+        }.onFailure {
+            val choices = runBlocking { graph.copyChoices(playlist, copies.single().id) }
+            val error = rule.onAllNodes(hasTestTag(PlayerTags.ERROR_MESSAGE)).fetchSemanticsNodes().isNotEmpty()
+            throw AssertionError("FHD copy never given up: copies $choices, error shown $error, focused ${focusedTag()}", it)
         }
-        assertEquals("401", runBlocking { graph.channelCopies(playlist, copies.single().id) }.last().value)
+        rule.waitUntil(30_000) { runBlocking { graph.copyChoices(playlist, copies.single().id) }.first().quality == "HD" }
+        assertEquals("FHD", runBlocking { graph.copyChoices(playlist, copies.single().id) }.last().quality)
+        // The bar says so once, in words (3.3).
+        rule.waitUntil(10_000) {
+            rule.onAllNodes(
+                hasText("The FHD copy didn't start", substring = true),
+                useUnmergedTree = true,
+            ).fetchSemanticsNodes().isNotEmpty()
+        }
+        shot("r3-copy-fallback-note")
         assertTrue(
             "no error while another copy plays",
             rule.onAllNodes(hasTestTag(PlayerTags.ERROR_MESSAGE)).fetchSemanticsNodes().isEmpty(),
@@ -368,6 +390,8 @@ class LivePlayerTest {
         graph.sessionMinSeconds = 2
         try {
             playChannel(0)
+            // Counted from the first picture, which an emulator can take a few seconds to show.
+            rule.waitUntil(20_000) { CompanionHub.playing.value?.playing == true }
             Thread.sleep(4_000)
             press(KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_BACK)
             rule.waitUntil(10_000) { runBlocking { graph.sessionCount(playlist) } == 1L }
@@ -387,8 +411,10 @@ class LivePlayerTest {
             rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(PlayerTags.PLAY_PAUSE)).fetchSemanticsNodes().isEmpty() }
             press(KeyEvent.KEYCODE_CHANNEL_UP)
             awaitExists(PlayerTags.BANNER)
-            Thread.sleep(5_500)
+            // The bar's timer runs on the test's clock.
+            rule.mainClock.advanceTimeBy(5_500)
             assertTrue("still there after 5 s", rule.onAllNodes(hasTestTag(PlayerTags.BANNER)).fetchSemanticsNodes().isNotEmpty())
+            rule.mainClock.advanceTimeBy(3_000)
             awaitGone(PlayerTags.BANNER)
         } finally {
             runBlocking { graph.setPreference(LIVE_BAR_SECONDS, null) }
@@ -497,8 +523,11 @@ class LivePlayerTest {
                 companionCall("/api/pair", """{"code":"${companion.pairing.code()}","name":"Test phone"}""").second,
             ).getString("token")
             assertEquals(200, companionCall("/api/key", """{"token":"$token","key":"channel-up"}""").first)
-            awaitExists(COMPANION_NOTE_TAG, "from your phone", timeout = 3_000)
-            // The arrow pad shows nothing: it would on every press.
+            rule.waitUntil(3_000) {
+                rule.onAllNodes(hasText("from your phone", substring = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+            }
+            // The note's two seconds run on the test's clock. The arrow pad shows nothing: it would on every press.
+            rule.mainClock.advanceTimeBy(2_500)
             rule.waitUntil(4_000) { rule.onAllNodes(hasTestTag(COMPANION_NOTE_TAG)).fetchSemanticsNodes().isEmpty() }
             assertEquals(200, companionCall("/api/key", """{"token":"$token","key":"down"}""").first)
             Thread.sleep(500)
@@ -595,6 +624,7 @@ class LivePlayerTest {
         press(KeyEvent.KEYCODE_DPAD_DOWN)
         awaitExists(StripTags.STRIP)
         awaitFocus(StripTags.card(ChannelScope.Recent.key(), channels[0].id.value))
+        shot("r3-strip-recent")
     }
 
     /** Up from the cards reaches the tabs; Right moves to Favourites and its cards (or its empty words) show at once. */
@@ -608,7 +638,9 @@ class LivePlayerTest {
         awaitFocus(StripTags.tab(ChannelScope.Recent.key()))
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
         awaitFocus(StripTags.tab(ChannelScope.Favorites.key()))
-        awaitExists(StripTags.STRIP, rule.activity.getString(R.string.strip_empty_fav_title))
+        // The words are inside the strip, not on it: matched on their own.
+        val empty = rule.activity.getString(R.string.strip_empty_fav_title)
+        rule.waitUntil(10_000) { rule.onAllNodes(hasText(empty), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
     }
 
     /** OK on a card tunes; the strip holds a moment on the new channel, then lowers. */
@@ -628,7 +660,14 @@ class LivePlayerTest {
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
         awaitFocus(StripTags.card(ChannelScope.Recent.key(), channels[1].id.value))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitExists(PlayerTags.TITLE, channels[1].label)
+        // The tune settles after a short wait on the test's clock, moved on in small steps: the channels it tunes among
+        // are read again in real time first. The bar stays down while the strip is up; the tune shows as the newest watch.
+        rule.waitUntil(20_000) {
+            rule.mainClock.advanceTimeBy(100)
+            runBlocking { graph.recentChannels(playlist, 1) }.firstOrNull()?.id == channels[1].id
+        }
+        // The strip holds 1.5 s on the new channel (the test's clock), then lowers.
+        rule.mainClock.advanceTimeBy(2_000)
         awaitGone(StripTags.STRIP)
     }
 
@@ -639,8 +678,10 @@ class LivePlayerTest {
         pictureAlone()
         press(KeyEvent.KEYCODE_DPAD_DOWN)
         awaitExists(StripTags.STRIP)
-        Thread.sleep(6_000)
+        // The strip's timer runs on the test's clock.
+        rule.mainClock.advanceTimeBy(6_000)
         assertTrue("still up after 6 s", rule.onAllNodes(hasTestTag(StripTags.STRIP)).fetchSemanticsNodes().isNotEmpty())
+        rule.mainClock.advanceTimeBy(3_000)
         awaitGone(StripTags.STRIP)
     }
 
@@ -654,6 +695,9 @@ class LivePlayerTest {
         pictureAlone()
         press(KeyEvent.KEYCODE_DPAD_DOWN)
         awaitExists(StripTags.tab(ChannelScope.News.key()))
+        press(KeyEvent.KEYCODE_DPAD_UP)
+        repeat(4) { if (focusedTag() != StripTags.tab(ChannelScope.News.key())) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        shot("r3-strip-news")
     }
 
     /** "Choose copy" (x9): choosing the SD copy plays it and keeps it first until another is chosen. */
@@ -673,6 +717,8 @@ class LivePlayerTest {
         focusChannel(0)
         rule.waitUntil(15_000) { graph.playing }
         assertTrue(rule.onAllNodes(hasTestTag(LivePreviewTags.BOX)).fetchSemanticsNodes().isNotEmpty())
+        Thread.sleep(3_000)
+        shot("r3-livetv-preview")
         // To the categories: the remote has left the channel list, so the preview stops.
         press(KeyEvent.KEYCODE_DPAD_LEFT)
         rule.waitUntil(5_000) { !graph.playing }

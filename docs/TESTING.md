@@ -149,12 +149,13 @@ Round 3 batch A's full check (2026-10-29) ran with the Apple targets left out (`
 Gradle worker, because the Mac was short of memory; the Apple simulator tests of the shared modules were not run for
 it. The next full check with memory to spare runs them again.
 
-**Round 3's screens are NOT YET SEEN** (2026-10-29). They were built without the virtual TV or the owner's Bbox (the
-owner's terms that evening), so no screenshot exists; the Design chat checked the code against its approved files by
-reading it. **First thing in the TV session:** run `Screenshots.kt` (the screenshot device tests) and have Design look at
-every round 3 screen: the strip and its tabs, the live bar's note and list name, the preview box and its plate, Live TV
-rows at 15 sp with the amber bar, Choose copy, Home's channel cards and channel stage, Settings → Live TV and the
-categories page. Then the strip's rise on the Bbox: if it drops frames, it fades in instead (ADR-0053).
+**Round 3's screens were seen on the virtual TV** (2026-10-29, evening): the screenshot device tests ran on the
+`googletv34` emulator and the Design chat looked at the guide (40 dp rows, the white focused programme, the day beside
+*Now*, the chip, the quiet bar), the strip's Recent and News tabs, the preview box, the list maker and the copy fallback's
+note, and the Arabic letter strip. The full TV device suite: 77 of 78 pass. **Open:** after the list maker closes with a
+new list, focus stays on *New list…* instead of moving to the new list (`aListIsMadeOnTheTvBySearchingAndPressingOk`);
+the list itself is made and filled correctly. Still to do on the Bbox: the strip's rise (if it drops frames, it fades in
+instead, ADR-0053) and the guide's dashed quiet bar.
 
 ## 5. Device matrix (initial proposal, finalized per platform phase)
 

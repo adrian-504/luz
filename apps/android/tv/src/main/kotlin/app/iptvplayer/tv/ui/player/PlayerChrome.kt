@@ -46,12 +46,14 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.security.UrlTemplate
+import app.iptvplayer.domain.text.ArabicText
 import app.iptvplayer.platform.playback.PlaybackDiagnostics
 import app.iptvplayer.storage.GuideProgramme
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.ui.library.ArtworkImage
 import app.iptvplayer.tv.ui.shortTime
 import app.iptvplayer.tv.ui.theme.LuzBadge
+import app.iptvplayer.tv.ui.theme.LuzText
 import app.iptvplayer.tv.ui.theme.NoteText
 import app.iptvplayer.tv.ui.theme.Tokens
 import app.iptvplayer.tv.ui.theme.luzClickable
@@ -336,7 +338,7 @@ fun LiveBar(info: LiveInfo, resolver: ((UrlTemplate) -> String?)?, badges: List<
                         color = Tokens.textSecondary,
                     )
                 }
-                Text(
+                LuzText(
                     info.name,
                     style = MaterialTheme.typography.headlineMedium,
                     color = Tokens.textPrimary,
@@ -344,7 +346,7 @@ fun LiveBar(info: LiveInfo, resolver: ((UrlTemplate) -> String?)?, badges: List<
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false).testTag(PlayerTags.TITLE),
                 )
-                LiveBadge()
+                LiveBadge(arabic = ArabicText.isArabic(info.now?.title ?: info.name))
                 badges.forEach { LuzBadge(it) }
                 info.group?.let {
                     Text(
@@ -358,7 +360,7 @@ fun LiveBar(info: LiveInfo, resolver: ((UrlTemplate) -> String?)?, badges: List<
             }
             val now = info.now
             if (now != null) {
-                Text(
+                LuzText(
                     now.title,
                     style = MaterialTheme.typography.titleMedium,
                     color = Tokens.textPrimary,
@@ -409,9 +411,10 @@ fun ProgrammeProgress(programme: GuideProgramme, now: Instant = Clock.System.now
 }
 
 @Composable
-private fun LiveBadge() {
+private fun LiveBadge(arabic: Boolean = false) {
+    // Always a word, never colour alone; in Arabic when what is on is Arabic (x13).
     Text(
-        stringResource(R.string.player_live),
+        stringResource(if (arabic) R.string.player_live_ar else R.string.player_live),
         style = MaterialTheme.typography.labelSmall,
         color = Color.White,
         modifier = Modifier.clip(

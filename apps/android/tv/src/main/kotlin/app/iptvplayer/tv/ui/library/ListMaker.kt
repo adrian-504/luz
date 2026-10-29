@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -39,6 +40,9 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.model.ContentType
+import app.iptvplayer.domain.security.UrlTemplate
+import app.iptvplayer.storage.ChannelRow
+import app.iptvplayer.storage.NowNextRow
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.app.SearchResults
@@ -46,6 +50,7 @@ import app.iptvplayer.tv.companion.CompanionHub
 import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.RestoreFocusEffect
 import app.iptvplayer.tv.ui.TvTextField
+import app.iptvplayer.tv.ui.live.ChannelLeading
 import app.iptvplayer.tv.ui.rememberFocusMemory
 import app.iptvplayer.tv.ui.rememberedFocus
 import app.iptvplayer.tv.ui.theme.LuzPrompt
@@ -53,6 +58,8 @@ import app.iptvplayer.tv.ui.theme.LuzRow
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 object ListMakerTags {
     const val SCREEN = "list-maker"
@@ -63,8 +70,14 @@ object ListMakerTags {
     fun row(kind: String, id: String) = "list-maker-$kind-$id"
 }
 
-/** One thing that can go in a list, as the maker shows it. */
-private data class ListEntry(val type: ContentType, val id: String, val title: String, val subtitle: String?)
+/** One thing that can go in a list, as the maker shows it; [channel] is set for a channel, drawn like a Live TV row. */
+private data class ListEntry(
+    val type: ContentType,
+    val id: String,
+    val title: String,
+    val subtitle: String?,
+    val channel: ChannelRow? = null,
+)
 
 /**
  * Making a list on the TV (Design 2.9), the same three steps as on the phone: a name or "Name it later", then straight to
@@ -146,7 +159,7 @@ fun ListMaker(playlistId: PlaylistId, listId: String?, onClose: (String?) -> Uni
             graph.channelsInUserGroup(
                 playlistId,
                 list,
-            ).map { ListEntry(ContentType.CHANNEL, it.id.value, it.label, it.number?.toString()) } +
+            ).map { ListEntry(ContentType.CHANNEL, it.id.value, it.label, it.number?.toString(), it) } +
             graph.moviesInUserGroup(playlistId, list, MEMBERS).map { ListEntry(ContentType.MOVIE, it.id, it.title, it.year?.toString()) } +
             graph.seriesInUserGroup(playlistId, list, MEMBERS).map { ListEntry(ContentType.SERIES, it.id, it.title, it.year?.toString()) }
     }
@@ -181,7 +194,13 @@ fun ListMaker(playlistId: PlaylistId, listId: String?, onClose: (String?) -> Uni
         query.isBlank() -> members
         found == null -> emptyList()
         else -> found.channels.map {
-            ListEntry(ContentType.CHANNEL, it.id.value, it.label, listOfNotNull(kindChannel, it.number?.toString()).joinToString(" · "))
+            ListEntry(
+                ContentType.CHANNEL,
+                it.id.value,
+                it.label,
+                listOfNotNull(kindChannel, it.number?.toString()).joinToString(" · "),
+                it,
+            )
         } +
             found.movies.map {
                 ListEntry(
@@ -251,6 +270,12 @@ fun ListMaker(playlistId: PlaylistId, listId: String?, onClose: (String?) -> Uni
                     modifier = Modifier.testTag(ListMakerTags.STATUS),
                 )
             }
+            // What is on, so "beIN Sports 1" and "beIN Sports 1 HD" can be told apart (2.9); the stored guide only.
+            val channels = shown.mapNotNull { it.channel }
+            var guide by remember { mutableStateOf<Map<String, NowNextRow>>(emptyMap()) }
+            val now = remember(channels) { Clock.System.now() }
+            LaunchedEffect(channels) { guide = if (channels.isEmpty()) emptyMap() else graph.storedNowNext(playlistId, channels, now) }
+            val resolver = rememberArtworkResolver(playlistId)
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(Tokens.space1),
                 contentPadding = PaddingValues(bottom = Tokens.space10),
@@ -259,6 +284,7 @@ fun ListMaker(playlistId: PlaylistId, listId: String?, onClose: (String?) -> Uni
                     val entry = shown[index]
                     EntryRow(
                         entry,
+                        entry.channel?.let { ChannelLook(guide[it.id.value], now, resolver) },
                         added = entry.type to entry.id in held,
                         modifier = Modifier.rememberedFocus(focus, ListMakerTags.row(entry.type.name.lowercase(), entry.id)),
                     ) { toggle(entry) }
@@ -294,42 +320,62 @@ fun ListMaker(playlistId: PlaylistId, listId: String?, onClose: (String?) -> Uni
     }
 }
 
-/** A result or a member: its name and kind, and "+ Add" (white under the remote) or an amber "✓ Added". */
+/** A result or a member: a channel as on Live TV, a film or series by name and kind; then its add mark. */
 @Composable
-private fun EntryRow(entry: ListEntry, added: Boolean, modifier: Modifier, onToggle: () -> Unit) {
+private fun EntryRow(entry: ListEntry, look: ChannelLook?, added: Boolean, modifier: Modifier, onToggle: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     LuzRow(onClick = onToggle, modifier = modifier, onFocusChange = { focused = it }) {
-        Column(Modifier.weight(1f).padding(vertical = Tokens.space2)) {
-            Text(
-                entry.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = Tokens.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            entry.subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary, maxLines = 1) }
-        }
-        if (added) {
-            val words = stringResource(R.string.list_added)
-            Text(
-                buildAnnotatedString {
-                    // The tick is amber, as everything "on" is; the word stays quiet.
-                    withStyle(SpanStyle(color = Tokens.accent)) { append(words.take(1)) }
-                    append(words.drop(1))
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = Tokens.textSecondary,
-            )
+        val channel = entry.channel
+        if (channel != null && look != null) {
+            ChannelLeading(channel, look.guide, look.now, look.resolver)
         } else {
-            Text(
-                stringResource(R.string.list_add),
-                style = MaterialTheme.typography.labelMedium,
-                color = if (focused) Color.Black else Tokens.textSecondary,
-                modifier = Modifier
-                    .background(if (focused) Color.White else Tokens.raised, RoundedCornerShape(Tokens.radiusPill))
-                    .padding(horizontal = Tokens.space3, vertical = Tokens.space1),
-            )
+            EntryWords(entry)
         }
+        AddMark(added, focused)
+    }
+}
+
+/** What a channel row needs besides the channel: what is on, the time it was read at, and where logos come from. */
+private class ChannelLook(val guide: NowNextRow?, val now: Instant, val resolver: ((UrlTemplate) -> String?)?)
+
+/** A film or series: its title, and its kind and year. */
+@Composable
+private fun RowScope.EntryWords(entry: ListEntry) {
+    Column(Modifier.weight(1f).padding(vertical = Tokens.space2)) {
+        Text(
+            entry.title,
+            style = MaterialTheme.typography.titleSmall,
+            color = Tokens.textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        entry.subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary, maxLines = 1) }
+    }
+}
+
+/** "+ Add" (white under the remote) or an amber "✓ Added". */
+@Composable
+private fun AddMark(added: Boolean, focused: Boolean) {
+    if (added) {
+        val words = stringResource(R.string.list_added)
+        Text(
+            buildAnnotatedString {
+                // The tick is amber, as everything "on" is; the word stays quiet.
+                withStyle(SpanStyle(color = Tokens.accent)) { append(words.take(1)) }
+                append(words.drop(1))
+            },
+            style = MaterialTheme.typography.labelMedium,
+            color = Tokens.textSecondary,
+        )
+    } else {
+        Text(
+            stringResource(R.string.list_add),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (focused) Color.Black else Tokens.textSecondary,
+            modifier = Modifier
+                .background(if (focused) Color.White else Tokens.raised, RoundedCornerShape(Tokens.radiusPill))
+                .padding(horizontal = Tokens.space3, vertical = Tokens.space1),
+        )
     }
 }
 

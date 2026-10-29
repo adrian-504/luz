@@ -15,6 +15,7 @@ import app.iptvplayer.domain.model.Series
 import app.iptvplayer.domain.model.TitleDetail
 import app.iptvplayer.domain.ports.Clock
 import app.iptvplayer.domain.security.UrlTemplate
+import app.iptvplayer.domain.text.SearchFold
 import app.iptvplayer.storage.db.Watch_state
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -1117,6 +1118,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             add {
                 content.searchQueries.insertTitle(
                     movie.title,
+                    SearchFold.fold(movie.title).ifEmpty { " " },
                     ContentType.MOVIE.name,
                     playlistId.value,
                     snapshot.toString(),
@@ -1139,6 +1141,7 @@ public class LibraryStore(private val content: ContentStore, private val clock: 
             add {
                 content.searchQueries.insertTitle(
                     series.title,
+                    SearchFold.fold(series.title).ifEmpty { " " },
                     ContentType.SERIES.name,
                     playlistId.value,
                     snapshot.toString(),

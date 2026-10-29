@@ -64,8 +64,13 @@ CREATE TABLE channel_epg_link (
     epg_channel_id TEXT NOT NULL,
     method TEXT NOT NULL,
     confidence INTEGER NOT NULL,
+    -- Minutes the guide is off for this channel, measured against the provider's own short guide (ADR-0056).
+    shift_minutes INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (playlist_id, channel_id)
 );
+
+-- A guide search hit finds its channel without a scan (round 4).
+CREATE INDEX channel_epg_link_epg ON channel_epg_link(playlist_id, epg_source_id, epg_channel_id);
 
 deleteLinks:
 DELETE FROM channel_epg_link WHERE playlist_id = ?;
@@ -101,14 +106,24 @@ linkCount:
 SELECT COUNT(*) FROM channel_epg_link WHERE playlist_id = ?;
 
 -- Programmes of linked channels that have not ended before :now and start within the look-ahead, per channel by start.
+-- Times carry the guide's measured shift (ADR-0056); a guide with none has 0.
 guideForChannels:
-SELECT l.channel_id, p.title, p.start_utc, p.end_utc, p.description
+SELECT l.channel_id, p.title, p.start_utc + l.shift_minutes * 60 AS start_utc, p.end_utc + l.shift_minutes * 60 AS end_utc,
+    p.description
 FROM channel_epg_link l
 JOIN epg_active_snapshot a ON a.source_id = l.epg_source_id
 JOIN epg_program p ON p.source_id = l.epg_source_id AND p.snapshot = a.snapshot AND p.channel_key = l.epg_channel_id
 WHERE l.playlist_id = :playlistId
   AND l.channel_id IN :channelIds
-  AND p.start_utc >= :earliestStart
-  AND p.start_utc < :until
-  AND p.end_utc > :from
-ORDER BY l.channel_id, p.start_utc;
+  AND p.start_utc + l.shift_minutes * 60 >= :earliestStart
+  AND p.start_utc + l.shift_minutes * 60 < :until
+  AND p.end_utc + l.shift_minutes * 60 > :from
+ORDER BY l.channel_id, start_utc;
+
+-- The guide source a channel is linked to, for measuring that source's shift (ADR-0056).
+linkSource:
+SELECT epg_source_id FROM channel_epg_link WHERE playlist_id = ? AND channel_id = ?;
+
+-- Every link to one guide source moves by its measured shift; links are rewritten (shift 0) at each guide import.
+setShift:
+UPDATE channel_epg_link SET shift_minutes = ? WHERE playlist_id = ? AND epg_source_id = ?;

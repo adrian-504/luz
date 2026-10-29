@@ -90,7 +90,7 @@ fun LuzCard(
         if (title != null || subtitle != null) {
             Column(modifier = Modifier.padding(horizontal = Tokens.space1), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 title?.let {
-                    Text(
+                    LuzText(
                         it,
                         style = MaterialTheme.typography.labelLarge,
                         color = if (focused) Tokens.textPrimary else Tokens.textPrimary.copy(alpha = RESTING_TITLE_ALPHA),

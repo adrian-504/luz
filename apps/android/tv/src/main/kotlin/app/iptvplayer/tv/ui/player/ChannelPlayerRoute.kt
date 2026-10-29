@@ -172,6 +172,38 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, startScope: ChannelScope, startCh
         listGuide = listGuide + graph.storedNowNext(playlistId, around.filter { it.id.value !in listGuide }, Clock.System.now())
     }
     val resolver = rememberArtworkResolver(playlistId)
+
+    /** Moves to the channel's next copy; false when there is none left to try (ADR-0052). */
+    fun fallBack(): Boolean {
+        val failed = playingCopy
+        failed?.let { coroutines.launch { graph.recordPlayback(playlistId, ChannelId(it), ok = false) } }
+        val next = copies.firstOrNull { it.value !in tried }
+        return if (next == null) {
+            false
+        } else {
+            tried += next.value
+            playingCopy = next.value
+            coroutines.launch {
+                val resolved = graph.playbackRequest(playlistId, next)
+                if (resolved == null) {
+                    unavailable = true
+                    return@launch
+                }
+                request = resolved
+                val from = failed?.let { graph.channelRow(playlistId, ChannelId(it))?.quality }
+                val to = graph.channelRow(playlistId, next)?.quality
+                fellBack = if (from != null && to != null) from to to else null
+            }
+            true
+        }
+    }
+    // A copy that has not shown its first picture after a while gives way too: a dead copy can keep the player
+    // retrying for a minute before it reports an error, and the viewer would be looking at a still frame.
+    LaunchedEffect(playingCopy, request) {
+        val copy = playingCopy ?: return@LaunchedEffect
+        delay(COPY_START_MS)
+        if (recordedOk != copy && playingCopy == copy) fallBack()
+    }
     val recentWord = stringResource(R.string.strip_recent)
     val favouritesWord = stringResource(R.string.live_favorites)
     val newsWord = stringResource(R.string.strip_news)
@@ -247,29 +279,7 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, startScope: ChannelScope, startCh
             session.value?.second?.let { if (state == PlaybackState.PLAYING) it.play(now) else it.hold(now) }
         },
         // A copy that does not start: the next one, quietly, and the live bar says why (ADR-0052).
-        onFailed = {
-            val failed = playingCopy
-            failed?.let { coroutines.launch { graph.recordPlayback(playlistId, ChannelId(it), ok = false) } }
-            val next = copies.firstOrNull { it.value !in tried }
-            if (next == null) {
-                false
-            } else {
-                tried += next.value
-                playingCopy = next.value
-                coroutines.launch {
-                    val resolved = graph.playbackRequest(playlistId, next)
-                    if (resolved == null) {
-                        unavailable = true
-                        return@launch
-                    }
-                    request = resolved
-                    val from = failed?.let { graph.channelRow(playlistId, ChannelId(it))?.quality }
-                    val to = graph.channelRow(playlistId, next)?.quality
-                    fellBack = if (from != null && to != null) from to to else null
-                }
-                true
-            }
-        },
+        onFailed = { fallBack() },
         channels = list.map { ChannelChoice(it.id.value, it.number, it.label, it.logo, listGuide[it.id.value]?.current?.title) },
         currentChannelId = channel.id.value,
         onChooseChannel = { id ->
@@ -313,6 +323,9 @@ fun ChannelPlayerRoute(playlistId: PlaylistId, startScope: ChannelScope, startCh
 }
 
 private const val ZAP_SETTLE_MS = 350L
+
+/** How long a copy may take to show its first picture before the next copy is tried (ADR-0052). */
+private const val COPY_START_MS = 8_000L
 
 /** Design 3.2: up to 60 cards a tab. */
 private const val STRIP_CARDS = 60

@@ -1,0 +1,90 @@
+-- Migration 16 -> 17 (round 4): search that folds Arabic and Latin spellings (ADR-0055), guide time shifts (ADR-0056)
+-- and sport fixtures (ADR-0057). Must match Search.sq, Epg.sq and Sport.sq.
+
+-- FTS5 cannot add a column, and renaming an FTS5 table is beyond the code generator: the index is dropped and rebuilt
+-- from the channel, film and series tables (as migration 2 first built it), and `folded` is filled after the first frame.
+DROP TABLE title_search;
+
+CREATE VIRTUAL TABLE title_search USING fts5(
+    title,
+    folded,
+    kind UNINDEXED,
+    playlist_id UNINDEXED,
+    snapshot UNINDEXED,
+    content_id UNINDEXED,
+    tokenize='unicode61 remove_diacritics 2 tokenchars ''~'''
+);
+
+INSERT INTO title_search(title, folded, kind, playlist_id, snapshot, content_id)
+SELECT name, '', 'CHANNEL', playlist_id, CAST(snapshot AS TEXT), id FROM channel;
+
+INSERT INTO title_search(title, folded, kind, playlist_id, snapshot, content_id)
+SELECT title, '', 'MOVIE', playlist_id, CAST(snapshot AS TEXT), id FROM movie;
+
+INSERT INTO title_search(title, folded, kind, playlist_id, snapshot, content_id)
+SELECT title, '', 'SERIES', playlist_id, CAST(snapshot AS TEXT), id FROM series;
+
+ALTER TABLE channel_epg_link ADD COLUMN shift_minutes INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX channel_epg_link_epg ON channel_epg_link(playlist_id, epg_source_id, epg_channel_id);
+
+CREATE TABLE sport_follow (
+    kind TEXT NOT NULL,
+    ref TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (kind, ref)
+);
+
+CREATE TABLE sport_team (
+    ref TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    short_name TEXT,
+    tla TEXT,
+    crest_url TEXT,
+    fetched_at INTEGER NOT NULL
+);
+
+CREATE TABLE sport_alias (
+    team_ref TEXT NOT NULL,
+    alias_fold TEXT NOT NULL,
+    origin TEXT NOT NULL,
+    PRIMARY KEY (team_ref, alias_fold)
+);
+
+CREATE TABLE sport_fixture (
+    id TEXT NOT NULL PRIMARY KEY,
+    competition TEXT NOT NULL,
+    competition_name TEXT NOT NULL,
+    home_ref TEXT NOT NULL,
+    away_ref TEXT NOT NULL,
+    home_name TEXT NOT NULL,
+    away_name TEXT NOT NULL,
+    kickoff_utc INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL
+);
+
+CREATE INDEX sport_fixture_kickoff ON sport_fixture(kickoff_utc);
+
+CREATE TABLE sport_standing (
+    competition TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    team_ref TEXT NOT NULL,
+    team_name TEXT NOT NULL,
+    played INTEGER NOT NULL,
+    points INTEGER NOT NULL,
+    goal_diff INTEGER NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    PRIMARY KEY (competition, position)
+);
+
+CREATE TABLE sport_reminder (
+    fixture_id TEXT NOT NULL PRIMARY KEY,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE sport_fetch (
+    resource TEXT NOT NULL PRIMARY KEY,
+    fetched_at INTEGER NOT NULL
+);

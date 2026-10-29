@@ -126,6 +126,8 @@ fun AppNavHost() {
                 }
                 // TMDB lists, when the viewer gave a key: read again when more than a day old (ADR-0038).
                 graph.refreshTmdb()
+                // Titles from before Arabic search, folded once in the background (ADR-0055).
+                graph.foldTitles()
                 // Opening Luz plays the channel watched last, with Live TV behind it for Back (3.9). Only here, on a cold
                 // start: coming back to Luz from the background resumes where the viewer was.
                 val source = graph.currentSource()

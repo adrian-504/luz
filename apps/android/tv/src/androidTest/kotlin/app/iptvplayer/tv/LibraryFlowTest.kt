@@ -225,6 +225,34 @@ class LibraryFlowTest {
         awaitFocus(DetailTags.PLAY)
     }
 
+    /** Arabic search (ADR-0055, Design 4.2): "ع" swaps the strip to Arabic letters, and an Arabic query finds the channel. */
+    @Test
+    fun arabicLettersTypeAnArabicQueryAndFindTheChannel() {
+        val channel = runBlocking { graph.channels(playlist, null) }.single { it.name.endsWith("Example") }
+        openSection(Section.SEARCH, SearchTags.FIELD)
+        if (keyboardShown()) press(KeyEvent.KEYCODE_BACK)
+        // Down reaches the strip in the middle; Left walks to its first key, the script key.
+        repeat(3) { if (focusedTag()?.startsWith("search-key") != true) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        repeat(40) { if (focusedTag() != SearchTags.key("script")) press(KeyEvent.KEYCODE_DPAD_LEFT) }
+        awaitFocus(SearchTags.key("script"))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        // The strip now holds Arabic letters: alef is one of its keys.
+        rule.waitUntil(5_000) { rule.onAllNodes(hasTestTag(SearchTags.key("\u0627"))).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitForIdle()
+        screenshot("r4-arabic-strip")
+        // Right to left (Design 4.2): from alef, Right lands on the key that is to its right on screen, the space key.
+        repeat(6) { if (focusedTag() != SearchTags.key("\u0627")) press(KeyEvent.KEYCODE_DPAD_LEFT) }
+        awaitFocus(SearchTags.key("\u0627"))
+        screenshot("r4-arabic-strip-alef")
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        awaitFocus(SearchTags.key("space"))
+        screenshot("r4-arabic-strip-right")
+        rule.onNodeWithTag(SearchTags.FIELD).performTextInput("\u0642\u0646\u0627\u0629")
+        rule.waitUntil(10_000) {
+            rule.onAllNodes(hasTestTag(SearchTags.result("channel", channel.id.value))).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     /** Whether the card for [movieId] in the search results shows its title on the picture's place (the stand-in). */
     private fun standInShown(movieId: String): Boolean = rule.onAllNodes(
         hasTestTag(ArtworkTags.STAND_IN).and(hasAnyAncestor(hasTestTag(SearchTags.result("movie", movieId)))),

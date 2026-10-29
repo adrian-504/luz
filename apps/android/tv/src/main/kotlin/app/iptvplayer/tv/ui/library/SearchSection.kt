@@ -14,13 +14,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -28,11 +31,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -52,10 +58,12 @@ import app.iptvplayer.tv.ui.theme.LuzCard
 import app.iptvplayer.tv.ui.theme.LuzIcons
 import app.iptvplayer.tv.ui.theme.LuzShelf
 import app.iptvplayer.tv.ui.theme.LuzSkeletonShelf
+import app.iptvplayer.tv.ui.theme.NoteText
 import app.iptvplayer.tv.ui.theme.Tokens
 import app.iptvplayer.tv.ui.theme.luzClickable
 import app.iptvplayer.tv.ui.theme.luzLift
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 object SearchTags {
     const val FIELD = "search-field"
@@ -243,30 +251,102 @@ fun SearchSection(
     }
 }
 
+/** Which letters the strip shows (Design 4.2): Latin, Arabic (right to left) or digits. */
+internal enum class Keys { LATIN, ARABIC, DIGITS }
+
 /**
- * The letters, in one line, typed with the remote: the letter under the remote is a small white square, the rest are
- * grey. Space and delete sit at the ends, and 123 swaps the letters for digits.
+ * The letters, in one line, typed with the remote (Design 4.1, D3): 20 sp letters in 40 dp cells, the letter under the
+ * remote a white square, the strip sliding so it stays in the middle third. "ع" swaps to Arabic letters laid out right
+ * to left, so Right moves to the next letter on screen; "abc" swaps back; "123" gives digits. Under the strip, while the
+ * phone companion is on, a line offers typing on the phone instead.
  */
 @Composable
 internal fun LetterStrip(focus: FocusMemory, onType: (String) -> Unit, onDelete: () -> Unit) {
-    var digits by rememberSaveable { mutableStateOf(false) }
-    val keys = if (digits) DIGITS else LETTERS
-    LazyRow(
-        modifier = Modifier.focusRestorer(),
-        horizontalArrangement = Arrangement.spacedBy(KEY_GAP),
-        contentPadding = PaddingValues(start = Tokens.space4, end = Tokens.space4, top = Tokens.space1, bottom = Tokens.space1),
-    ) {
-        item(key = "mode") {
-            Key(if (digits) "abc" else "123", focus, SearchTags.key("mode"), wide = true) { digits = !digits }
+    var mode by rememberSaveable { mutableStateOf(Keys.LATIN) }
+    // The letters the viewer came from: digits keep their direction, and the mode key goes back to them.
+    var script by rememberSaveable { mutableStateOf(Keys.LATIN) }
+    val keys = when (mode) {
+        Keys.LATIN -> LETTERS
+        Keys.ARABIC -> ARABIC_LETTERS
+        Keys.DIGITS -> DIGITS
+    }
+    val listState = rememberLazyListState()
+    val coroutines = rememberCoroutineScope()
+    // Keeps the key under the remote in the middle third: the strip slides one step at a time, never jumps.
+    val centre: (Int) -> Unit = { index ->
+        coroutines.launch {
+            val visible = listState.layoutInfo.visibleItemsInfo
+            val first = visible.firstOrNull()?.index ?: 0
+            val count = visible.size.coerceAtLeast(1)
+            if (index < first + count / 3 || index > first + 2 * count / 3) {
+                listState.animateScrollToItem((index - count / 2).coerceAtLeast(0))
+            }
         }
-        item(key = "space") { Key(stringResource(R.string.search_key_space), focus, SearchTags.key("space"), wide = true) { onType(" ") } }
-        items(keys.size, key = { keys[it] }) { index -> Key(keys[index], focus, SearchTags.key(keys[index])) { onType(keys[index]) } }
-        item(key = "delete") { Key("\u232B", focus, SearchTags.key("delete"), wide = true) { onDelete() } }
+    }
+    val direction = if (script == Keys.ARABIC) LayoutDirection.Rtl else LayoutDirection.Ltr
+    Column(verticalArrangement = Arrangement.spacedBy(Tokens.space2)) {
+        CompositionLocalProvider(LocalLayoutDirection provides direction) {
+            LazyRow(
+                state = listState,
+                modifier = Modifier.focusRestorer(),
+                horizontalArrangement = Arrangement.spacedBy(KEY_GAP),
+                contentPadding = PaddingValues(start = Tokens.space4, end = Tokens.space4, top = Tokens.space1, bottom = Tokens.space1),
+            ) {
+                item(key = "script") {
+                    val label = stringResource(if (script == Keys.ARABIC) R.string.search_key_latin else R.string.search_key_arabic)
+                    Key(label, focus, SearchTags.key("script"), wide = true, onFocused = { centre(0) }) {
+                        script = if (script == Keys.ARABIC) Keys.LATIN else Keys.ARABIC
+                        mode = script
+                    }
+                }
+                item(key = "mode") {
+                    // In digits the key goes back to the letters the viewer came from ("abc" or "ع").
+                    val back = if (script == Keys.ARABIC) R.string.search_key_arabic else R.string.search_key_latin
+                    val label = stringResource(if (mode == Keys.DIGITS) back else R.string.search_key_digits)
+                    Key(label, focus, SearchTags.key("mode"), wide = true, onFocused = { centre(1) }) {
+                        mode = if (mode == Keys.DIGITS) script else Keys.DIGITS
+                    }
+                }
+                item(key = "space") {
+                    // "Space" in the strip's own language.
+                    val label = stringResource(if (script == Keys.ARABIC) R.string.search_key_space_ar else R.string.search_key_space)
+                    Key(label, focus, SearchTags.key("space"), wide = true, onFocused = { centre(2) }) { onType(" ") }
+                }
+                items(keys.size, key = { keys[it] }) { index ->
+                    Key(keys[index], focus, SearchTags.key(keys[index]), onFocused = { centre(index + FIXED_KEYS) }) { onType(keys[index]) }
+                }
+                item(key = "delete") {
+                    Key(
+                        "\u232B",
+                        focus,
+                        SearchTags.key("delete"),
+                        wide = true,
+                        onFocused = { centre(keys.size + FIXED_KEYS) },
+                    ) { onDelete() }
+                }
+            }
+        }
+        PhoneLine()
     }
 }
 
+/** "Or type on your phone" under the strip while the companion is on, pointing to its code until a phone is paired. */
 @Composable
-private fun Key(label: String, focus: FocusMemory, tag: String, wide: Boolean = false, onPress: () -> Unit) {
+private fun PhoneLine() {
+    val companion = LocalAppGraph.current.companion
+    val status by companion.status.collectAsState()
+    val phones by companion.pairing.phones.collectAsState()
+    if (!status.on) return
+    Text(
+        stringResource(if (phones.isEmpty()) R.string.search_phone_unpaired else R.string.search_phone),
+        style = NoteText,
+        color = Tokens.textTertiary,
+        modifier = Modifier.padding(start = Tokens.space4),
+    )
+}
+
+@Composable
+private fun Key(label: String, focus: FocusMemory, tag: String, wide: Boolean = false, onFocused: () -> Unit = {}, onPress: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Box(
         modifier = Modifier
@@ -284,13 +364,16 @@ private fun Key(label: String, focus: FocusMemory, tag: String, wide: Boolean = 
                     Color.Transparent
                 },
             )
-            .luzClickable(onClick = onPress, onFocus = { focused = it })
+            .luzClickable(onClick = onPress, onFocus = {
+                focused = it
+                if (it) onFocused()
+            })
             .padding(horizontal = if (wide) Tokens.space3 else 0.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
-            style = if (wide) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleLarge,
+            style = if (wide) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleLarge.copy(fontSize = LETTER_SIZE),
             color = if (focused) Color.Black else Tokens.textSecondary,
         )
     }
@@ -309,8 +392,21 @@ private fun StatusLine(text: String) {
 private val LETTERS = ('a'..'z').map { it.toString() }
 private val DIGITS = ('0'..'9').map { it.toString() }
 
+// Design 4.2: the Arabic alphabet in its order, then teh marbuta, alef maksura and hamza.
+private val ARABIC_LETTERS = listOf(
+    "\u0627", "\u0628", "\u062A", "\u062B", "\u062C", "\u062D", "\u062E", "\u062F", "\u0630", "\u0631",
+    "\u0632", "\u0633", "\u0634", "\u0635", "\u0636", "\u0637", "\u0638", "\u0639", "\u063A", "\u0641",
+    "\u0642", "\u0643", "\u0644", "\u0645", "\u0646", "\u0647", "\u0648", "\u064A", "\u0629", "\u0649",
+    "\u0621",
+)
+
+// The script, digits and space keys before the letters.
+private const val FIXED_KEYS = 3
+
 // Narrow enough that the whole alphabet, space and delete sit on one line beside the rail, as in the reference app.
-private val KEY_SIZE = 30.dp
-private val KEY_WIDTH = 22.dp
+// D3: letters 20 sp in 40 dp cells, readable from the sofa.
+private val KEY_SIZE = 40.dp
+private val KEY_WIDTH = 40.dp
+private val LETTER_SIZE = 20.sp
 private val KEY_GAP = 1.dp
 private val SEARCH_ICON = 26.dp

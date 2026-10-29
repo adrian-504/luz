@@ -49,6 +49,11 @@ internal class ShortGuide(
     private val lock = Mutex()
     private val permits = Semaphore(MAX_PARALLEL)
 
+    /** Forgets every answer held, so the next ask goes to the provider. */
+    suspend fun forget() {
+        lock.withLock { cache.clear() }
+    }
+
     suspend fun programmes(
         playlistId: PlaylistId,
         channelIds: List<ChannelId>,

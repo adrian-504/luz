@@ -512,7 +512,8 @@ fun PlayerScreen(
                         if (!it) return@also
                         if (isLive && loadStrip != null) strip = true else openPanel(PanelTab.INFO, null)
                     }
-                    in SELECT_KEYS -> if (!overlayVisible && !isError && panel == null && !channelList) {
+                    // Not under the strip: OK there belongs to the card under the remote.
+                    in SELECT_KEYS -> if (!overlayVisible && !isError && panel == null && !channelList && !strip) {
                         // On the pause card OK carries on; anywhere else it brings the controls up.
                         if (isVod && snapshot.state == PlaybackState.PAUSED) controller.play() else overlayVisible = true
                         swallowSelectUp = true
@@ -545,7 +546,8 @@ fun PlayerScreen(
             )
         }
 
-        if (live != null && bannerShownAt != 0L && !overlayVisible && !isError && panel == null && !channelList) {
+        // Not under the strip: one band at the foot of the picture at a time.
+        if (live != null && bannerShownAt != 0L && !overlayVisible && !isError && panel == null && !channelList && !strip) {
             LiveBar(
                 live,
                 resolver,

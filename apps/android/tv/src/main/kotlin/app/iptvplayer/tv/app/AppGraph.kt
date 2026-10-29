@@ -17,6 +17,7 @@ import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.domain.playback.PlaybackMode
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.domain.text.TextNormalization
+import app.iptvplayer.epg.GuideOffset
 import app.iptvplayer.ingestion.AddSourceFailure
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.ingestion.EpisodeArt
@@ -310,8 +311,56 @@ class AppGraph(context: Context) {
         content.channelsByIds(playlistId, listOf(id)).firstOrNull()?.id
     }
 
+    /**
+     * Folds titles indexed before Arabic search existed (ADR-0055), a batch at a time in the background, once; until it is
+     * done those titles are found by their plain spelling, as before.
+     */
+    fun foldTitles() {
+        scope.launch {
+            io {
+                do {
+                    val folded = content.backfillFolded()
+                } while (folded > 0)
+            }
+        }
+    }
+
+    /**
+     * Measures each guide source's time shift against the provider's own short guide (ADR-0056): up to twenty of the
+     * viewer's own channels that the guide covers, one short-guide call each, after every guide import. A clear shift
+     * moves that source's programmes; anything unclear leaves them as they are. Counts only in the log.
+     */
+    private suspend fun measureGuideShift(playlistId: PlaylistId) {
+        val now = SystemClock.now()
+        val watched = content.channelsByIds(playlistId, library.mostWatchedChannelIds(playlistId, SHIFT_SAMPLE * 2))
+        val own = (content.favoriteChannels(playlistId) + watched).distinctBy { it.id }
+        val stored = epg.programmes(
+            playlistId.value,
+            own.map { it.id.value },
+            now - 1.hours,
+            now + 12.hours,
+        ).filterValues { it.isNotEmpty() }
+        val sample = own.filter { it.id.value in stored }.take(SHIFT_SAMPLE)
+        if (sample.isEmpty()) return
+        val short = service.shortGuide(playlistId, sample.map { it.id }, ::logShortGuide)
+        for ((source, channels) in sample.groupBy { epg.linkSource(playlistId.value, it.id.value) }) {
+            if (source == null) continue
+            val pairs = channels.mapNotNull { channel ->
+                val guide = stored[channel.id.value] ?: return@mapNotNull null
+                val provider = short[channel.id.value]?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                guide.map { GuideOffset.Listing(it.title, it.start) } to provider.map { GuideOffset.Listing(it.title, it.start) }
+            }
+            val shift = GuideOffset.measure(pairs) ?: continue
+            if (shift != 0) epg.setShift(playlistId.value, source, shift)
+            Log.i(LOG_TAG, "guide shift: ${channels.size} channels compared, shift=$shift min")
+        }
+    }
+
     /** The film a version belongs to (ADR-0042), for the viewing log. */
     suspend fun movieWork(playlistId: PlaylistId, movieId: String): String = io { library.workOf(playlistId, movieId) }
+
+    /** Forgets the provider's per-channel guide answers held in memory; device tests use it, the app never does. */
+    suspend fun forgetShortGuide() = service.forgetShortGuide()
 
     /** The shortest session the viewing log keeps; device tests lower it, the app never does. */
     @Volatile
@@ -794,6 +843,8 @@ class AppGraph(context: Context) {
         try {
             val started = android.os.SystemClock.elapsedRealtime()
             logImport("guide", io { service.refreshEpg(playlistId) }, started)
+            // The guide's links were just rewritten (shift 0): measure its time shift again (ADR-0056).
+            io { measureGuideShift(playlistId) }
         } catch (e: Exception) {
             // Background imports never take the app down; the unit is marked failed in storage.
             Log.i(LOG_TAG, "guide: exception ${e::class.simpleName}")
@@ -1203,6 +1254,9 @@ class AppGraph(context: Context) {
 
     private companion object {
         const val LOG_TAG = "IptvImport"
+
+        /** Channels compared when measuring a guide's time shift (ADR-0056), the short-guide limit. */
+        const val SHIFT_SAMPLE = 20
 
         /** Calls for more channels than this (whole lists) use the stored guide only. */
         const val SHORT_GUIDE_MAX_CHANNELS = 20

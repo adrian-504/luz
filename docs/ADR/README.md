@@ -75,3 +75,5 @@ line. Product-scope decisions still go to the owner.
 | [0052](0052-one-channel-from-many-copies.md) | One channel from many copies, numbers that stay, new groups that wait, and opening on the last channel | Accepted |
 | [0053](0053-the-channel-strip-and-the-live-preview.md) | The channel strip, the Down key in live TV, and the live preview | Accepted |
 | [0054](0054-the-guide-denser-and-honest.md) | A denser, honest guide; no second free guide for now | Accepted |
+| [0055](0055-search-that-folds-arabic-and-latin.md) | Search that folds Arabic and Latin spellings | Accepted |
+| [0056](0056-guide-time-shifts.md) | Guide time shifts measured against the provider's own guide | Accepted |

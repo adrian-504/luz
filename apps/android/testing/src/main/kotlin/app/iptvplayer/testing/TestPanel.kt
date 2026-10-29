@@ -8,7 +8,7 @@ import java.time.temporal.ChronoUnit
 import java.util.Base64
 
 /**
- * A synthetic Xtream Codes panel for device tests and debug builds: eleven test channels in five categories (three are
+ * A synthetic Xtream Codes panel for device tests and debug builds: twelve test channels in five categories (three are
  * copies of one channel), a guide generated around the current time, and an M3U export. Only [USERNAME] / [PASSWORD] (canary values) are accepted.
  * Channels 999 and 401 (the FHD copy of "Test Copies") are listed but their streams do not exist, for error handling
  * and for falling back to another copy.
@@ -63,6 +63,8 @@ object TestPanel {
         TestChannel(403, "Test Copies SD", "4", null),
         TestChannel(501, "AR| Test News Arabic", "5", null),
         TestChannel(502, "FR| Test Info", "5", null),
+        // An Arabic name for Arabic search (ADR-0055): "Qanat Example".
+        TestChannel(503, "\u0642\u0646\u0627\u0629 Example", "3", null),
     )
 
     private fun params(query: String): Map<String, String> = query.split('&').filter { '=' in it }.associate {

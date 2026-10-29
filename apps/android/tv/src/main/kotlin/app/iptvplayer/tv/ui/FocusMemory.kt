@@ -4,15 +4,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Remembers which element of a destination had focus and restores it when the destination is shown again, for example
@@ -20,7 +24,9 @@ import kotlinx.coroutines.delay
  */
 class FocusMemory internal constructor(private val saved: MutableState<String?>) {
     private val requesters = HashMap<String, FocusRequester>()
-    private val attached = HashSet<String>()
+
+    // Snapshot state, so [awaitFocus] wakes the moment an element arrives.
+    private val attached = mutableStateMapOf<String, Unit>()
 
     val lastFocusedKey: String? get() = saved.value
 
@@ -28,11 +34,11 @@ class FocusMemory internal constructor(private val saved: MutableState<String?>)
     fun requester(key: String): FocusRequester = requesters.getOrPut(key) { FocusRequester() }
 
     internal fun attach(key: String) {
-        attached += key
+        attached[key] = Unit
     }
 
     internal fun detach(key: String) {
-        attached -= key
+        attached.remove(key)
         // Also drop the requester: a list of 10,000 channels would otherwise leave one behind for every row ever focused,
         // growing for as long as the app runs (PERFORMANCE.md §1 "Memory"). A row that comes back gets a fresh one.
         requesters -= key
@@ -44,6 +50,20 @@ class FocusMemory internal constructor(private val saved: MutableState<String?>)
 
     /** Moves focus to [key]; returns false when that element is not currently on screen. */
     fun requestFocus(key: String): Boolean = key in attached && requester(key).requestFocus()
+
+    /**
+     * Moves focus to [key] as soon as that element is on screen, waiting up to [timeoutMs] for it (a row read from the
+     * database arrives a moment after its list); false if it never came.
+     */
+    suspend fun awaitFocus(key: String, timeoutMs: Long): Boolean = withTimeoutOrNull(timeoutMs) {
+        snapshotFlow { key in attached }.first { it }
+        // Attached with the composition; the focus target may need one more frame.
+        repeat(ATTACH_FRAMES) {
+            if (requestFocus(key)) return@withTimeoutOrNull true
+            delay(FRAME_MS)
+        }
+        false
+    } ?: false
 }
 
 @Composable
@@ -84,4 +104,6 @@ fun RestoreFocusEffect(memory: FocusMemory, defaultKey: String) {
 }
 
 private const val RESTORE_ATTEMPTS = 20
+private const val ATTACH_FRAMES = 5
+private const val FRAME_MS = 16L
 private const val RESTORE_INTERVAL_MS = 50L

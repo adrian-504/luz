@@ -44,6 +44,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEventType
@@ -111,6 +112,7 @@ object GuideTags {
     const val SCOPE = "guide-scope"
     const val WINDOW_START = "guide-window-start"
     const val DETAILS = "guide-details"
+    const val DAY = "guide-day"
 
     /** The first visible cell of the first row, where focus enters the guide. */
     const val FIRST_CELL = "guide-first-cell"
@@ -126,7 +128,8 @@ private const val PAGE_MINUTES = 90
 private val MINUTE_WIDTH: Dp = 3.3.dp
 private val CHANNEL_COLUMN: Dp = 220.dp
 
-// x10: 40 dp rows, about eight channels under the header; fixed, so the list never measures a row while it scrolls.
+// x10: 40 dp from row to row (a 36 dp cell and its 4 dp gap), about eight channels under the header; fixed, so the list
+// never measures a row while it scrolls.
 private val ROW_HEIGHT: Dp = 40.dp
 
 /** Channels whose programmes are read together; the provider's per-channel guide allows this many at once (AppGraph). */
@@ -383,6 +386,13 @@ fun GuideSection(
                 // Read inside the details line, so a focus move rebuilds that line and not the grid beneath it.
                 ProgrammeDetails({ rows.getOrNull(focusedRow) }, { focusedProgramme }, now)
             }
+            // The day the grid shows, beside "Now" (3.6); the time row below carries times only.
+            Text(
+                dayLabel(window.start, now),
+                style = MaterialTheme.typography.labelLarge,
+                color = Tokens.textSecondary,
+                modifier = Modifier.padding(end = Tokens.space4, top = Tokens.space2).testTag(GuideTags.DAY),
+            )
             LuzButton(
                 stringResource(R.string.guide_now),
                 {
@@ -395,7 +405,7 @@ fun GuideSection(
                 icon = LuzIcons.Restart,
             )
         }
-        TimeHeader(window.start, now)
+        TimeHeader(window.start)
         UpdatingNote(if (activity[current]?.guideRunning == true) stringResource(R.string.live_updating_guide) else null)
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
@@ -406,7 +416,6 @@ fun GuideSection(
                     .onPreviewKeyEvent { event ->
                         event.type == KeyEventType.KeyDown && onGridKey(event.nativeKeyEvent.keyCode)
                     },
-                verticalArrangement = Arrangement.spacedBy(Tokens.space2),
             ) {
                 items(rows.size, key = { rows[it].id.value }) { rowIndex ->
                     val channel = rows[rowIndex]
@@ -416,7 +425,9 @@ fun GuideSection(
                     // row on screen.
                     val isCurrent by remember(rowIndex) { derivedStateOf { focusedRow == rowIndex } }
                     GuideRow(channel, isCurrent, resolver, slide = { slidePx }) {
-                        if (all != null && cells.isEmpty()) {
+                        // A channel the guide holds nothing for has no entry at all; once the guide has answered for any
+                        // channel, its row is the quiet bar rather than empty space.
+                        if (cells.isEmpty() && (all != null || programmes.isNotEmpty())) {
                             // One quiet block across the window with the channel's name (x10), never "No information" cells.
                             GuideCell(
                                 stringResource(R.string.guide_no_listings, channel.label),
@@ -431,6 +442,7 @@ fun GuideSection(
                                         horizontalMove = false
                                     }
                                 },
+                                quiet = true,
                             ) { onPlay(current, ChannelScope.of(scopeKey ?: ChannelScope.All.key()), channel.id) }
                         }
                         all.orEmpty().filter { it.end > built.start && it.start < built.end }.forEach { programme ->
@@ -560,9 +572,9 @@ private fun ProgrammeDetails(channelOf: () -> ChannelRow?, programmeOf: () -> Gu
     }
 }
 
-/** The day in the channel column, and the half hours across the grid, small and quiet over a hairline. */
+/** The half hours across the grid, small and quiet over a hairline. */
 @Composable
-private fun TimeHeader(start: Instant, now: Instant) {
+private fun TimeHeader(start: Instant) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -571,12 +583,6 @@ private fun TimeHeader(start: Instant, now: Instant) {
                 drawLine(Tokens.hairline, Offset(0f, size.height - 1f), Offset(size.width, size.height - 1f), 1f)
             },
     ) {
-        Text(
-            dayLabel(start, now),
-            style = MaterialTheme.typography.labelMedium,
-            color = Tokens.textSecondary,
-            modifier = Modifier.padding(start = Tokens.space4),
-        )
         for (slot in 0 until WINDOW_MINUTES / 30) {
             val time = start + (slot * 30).minutes
             Text(
@@ -591,20 +597,21 @@ private fun TimeHeader(start: Instant, now: Instant) {
     }
 }
 
-/** "Today", "Tomorrow", or the day and date, in the television's language. */
+/** "Today, Wednesday 29", "Tomorrow, Thursday 30", or the day and date, in the television's language. */
 @Composable
 private fun dayLabel(start: Instant, now: Instant): String {
     val zone = ZoneId.systemDefault()
     val day = start.toJavaInstant().atZone(zone).toLocalDate()
     val today = now.toJavaInstant().atZone(zone).toLocalDate()
     return when (day) {
-        today -> stringResource(R.string.guide_today)
-        today.plusDays(1) -> stringResource(R.string.guide_tomorrow)
+        today -> stringResource(R.string.guide_day, stringResource(R.string.guide_today), DATE_FORMAT.format(day))
+        today.plusDays(1) -> stringResource(R.string.guide_day, stringResource(R.string.guide_tomorrow), DATE_FORMAT.format(day))
         else -> DAY_FORMAT.format(day)
     }
 }
 
-private val DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM")
+private val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE d")
+private val DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE d MMMM")
 
 /**
  * One channel's row: its number, logo and name in a column of their own — brighter while the remote is on the row — then
@@ -662,18 +669,27 @@ private fun GuideRow(
 
 /**
  * A programme: a soft glass block as long as it runs. What is on now is filled as far as it has got; the block under the
- * remote is brightest and catches a white edge. [textInset] keeps the title of a programme that began before the window
+ * remote is the one white thing, with dark words (DESIGN_SYSTEM §14, 3.6). [textInset] keeps the title of a programme that began before the window
  * where it can be read.
  *
  * Drawn, not built from surfaces: the guide can show several hundred of these, and a focus move repaints two of them
  * instead of rebuilding them (PERFORMANCE.md §6.2).
  */
 @Composable
-private fun GuideCell(title: String, x: Dp, width: Dp, textInset: Dp, airingFraction: Float?, modifier: Modifier, onClick: () -> Unit) {
+private fun GuideCell(
+    title: String,
+    x: Dp,
+    width: Dp,
+    textInset: Dp,
+    airingFraction: Float?,
+    modifier: Modifier,
+    quiet: Boolean = false,
+    onClick: () -> Unit,
+) {
     val focused = remember { mutableStateOf(false) }
     val density = LocalDensity.current
     val radius = with(density) { Tokens.radiusMedium.toPx() }
-    val line = with(density) { Tokens.focusRingWidth.toPx() }
+    val edge = with(density) { Tokens.focusRingWidth.toPx() }
     Box(
         modifier = Modifier
             .offset(x = x)
@@ -683,25 +699,33 @@ private fun GuideCell(title: String, x: Dp, width: Dp, textInset: Dp, airingFrac
             .luzClickable(onClick = onClick, onFocus = { focused.value = it })
             .drawBehind {
                 val corner = CornerRadius(radius, radius)
-                drawRoundRect(if (focused.value) Tokens.raisedFocused else Tokens.raised, cornerRadius = corner)
+                when {
+                    focused.value -> drawRoundRect(Color.White, cornerRadius = corner)
+                    // No listings (3.6): an empty bar with a dashed hairline edge, so it never reads as a programme.
+                    quiet -> drawRoundRect(
+                        Tokens.hairline,
+                        topLeft = Offset(edge / 2, edge / 2),
+                        size = Size(size.width - edge, size.height - edge),
+                        cornerRadius = corner,
+                        style = Stroke(edge, pathEffect = QUIET_DASH),
+                    )
+                    else -> drawRoundRect(Tokens.raised, cornerRadius = corner)
+                }
                 if (airingFraction != null && !focused.value) {
                     val filled = Size(size.width * airingFraction.coerceIn(0f, 1f), size.height)
                     drawRoundRect(AIRING_FILL, size = filled, cornerRadius = corner)
-                }
-                if (focused.value) {
-                    drawRoundRect(
-                        Tokens.focusRing.copy(alpha = Tokens.FOCUS_RING_ALPHA),
-                        topLeft = Offset(line / 2, line / 2),
-                        size = Size(size.width - line, size.height - line),
-                        cornerRadius = corner,
-                        style = Stroke(line),
-                    )
                 }
             }
             .padding(start = Tokens.space3 + textInset, end = Tokens.space3),
         contentAlignment = Alignment.CenterStart,
     ) {
-        Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = Tokens.textPrimary)
+        Text(
+            title,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (focused.value) Color.Black else Tokens.textPrimary,
+        )
     }
 }
 
@@ -714,6 +738,7 @@ private val CELL_GAP = 4.dp
 private val NOW_LINE = 2.dp
 private const val NOW_LINE_ALPHA = 0.85f
 private val AIRING_FILL = Color.White.copy(alpha = 0.10f)
+private val QUIET_DASH = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
 private val LOGO_WIDTH = 44.dp
 private val LOGO_HEIGHT = 27.dp
 

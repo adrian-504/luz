@@ -1,5 +1,6 @@
 package app.iptvplayer.storage
 
+import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlDriver
 import app.iptvplayer.domain.capability.StreamFormat
 import app.iptvplayer.domain.id.ChannelId
@@ -27,6 +28,7 @@ import app.iptvplayer.domain.model.TransportSecurity
 import app.iptvplayer.domain.model.XtreamStreamKind
 import app.iptvplayer.domain.ports.Clock
 import app.iptvplayer.domain.security.UrlTemplate
+import app.iptvplayer.domain.text.SearchFold
 import app.iptvplayer.storage.db.IptvDatabase
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -221,6 +223,29 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
     }
 
     /**
+     * Folds a batch of titles indexed before folding existed (ADR-0055); call until it returns 0, off the main thread.
+     * A title with nothing to fold gets a space, so it is never picked again.
+     */
+    public fun backfillFolded(batch: Int = 2_000): Int {
+        // Read and written directly: the code generator cannot type `rowid` on an FTS5 table.
+        val rows = driver.executeQuery(null, "SELECT rowid, title FROM title_search WHERE folded = '' LIMIT ?", { cursor ->
+            val found = mutableListOf<Pair<Long, String>>()
+            while (cursor.next().value) found += cursor.getLong(0)!! to cursor.getString(1).orEmpty()
+            QueryResult.Value(found)
+        }, 1) { bindLong(0, batch.toLong()) }.value
+        if (rows.isEmpty()) return 0
+        database.transaction {
+            rows.forEach { (rowid, title) ->
+                driver.execute(null, "UPDATE title_search SET folded = ? WHERE rowid = ?", 2) {
+                    bindString(0, SearchFold.fold(title).ifEmpty { " " })
+                    bindLong(1, rowid)
+                }
+            }
+        }
+        return rows.size
+    }
+
+    /**
      * Folds the write-ahead log back into the database file. An import writes tens of thousands of rows; until that log is
      * folded in, every read has to look through it, which measured 6x slower on the owner's Bbox TV right after an import
      * (PERFORMANCE.md §6). Callers run this off the main thread after publishing. Busy readers only postpone it.
@@ -344,7 +369,7 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
      * selective enough to return fewer than [CANDIDATES] rows is ranked exactly, which is every realistic search.
      */
     internal fun searchTitles(playlistId: PlaylistId, snapshot: Long, type: ContentType, query: String, limit: Int): List<String> {
-        val match = TitleIndex.match(query) ?: return emptyList()
+        val match = TitleIndex.matchFolded(query) ?: return emptyList()
         val candidates = (limit * 8).coerceIn(limit, CANDIDATES)
         // FTS5 columns are untyped, so the snapshot is stored and compared as text.
         val rows = searchQueries
@@ -557,6 +582,7 @@ public class ContentStore(private val driver: SqlDriver, private val clock: Cloc
             add {
                 searchQueries.insertTitle(
                     channel.name,
+                    SearchFold.fold(channel.name).ifEmpty { " " },
                     ContentType.CHANNEL.name,
                     playlistId.value,
                     snapshot.toString(),

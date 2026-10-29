@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,6 +31,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,8 +82,8 @@ import app.iptvplayer.tv.ui.theme.LuzMenuItem
 import app.iptvplayer.tv.ui.theme.LuzPrompt
 import app.iptvplayer.tv.ui.theme.LuzRow
 import app.iptvplayer.tv.ui.theme.LuzSkeletonRows
+import app.iptvplayer.tv.ui.theme.LuzText
 import app.iptvplayer.tv.ui.theme.NoteText
-import app.iptvplayer.tv.ui.theme.ProgressBar
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -478,7 +480,12 @@ fun LiveTvSection(
             ListMaker(current, make.listId) { made ->
                 making = null
                 if (made != null) scopeKey = ChannelScope.Mine(made).key()
-                coroutines.launch { returnFocusTo(focus, if (made != null) LiveTags.group(made) else LiveTags.NEW_LIST) }
+                coroutines.launch {
+                    // Once the maker has left the screen: asked while it is still there, focus would return to where the
+                    // maker was opened from as it goes.
+                    repeat(MAKER_GONE_FRAMES) { withFrameNanos { } }
+                    returnFocusTo(focus, if (made != null) LiveTags.group(made) else LiveTags.NEW_LIST)
+                }
             }
         }
         myGroupMenuFor?.let { group ->
@@ -815,18 +822,17 @@ private fun OnNowPanel(
                 overflow = TextOverflow.Ellipsis,
             )
             if (current != null) {
-                // "21:00 – 22:55 · 40 min left" with the bar (Design 3.1); the guide stores no category for "LaLiga ·".
-                Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), verticalAlignment = Alignment.CenterVertically) {
-                    val left = (current.end - now).inWholeMinutes.coerceAtLeast(1)
-                    Text(
-                        stringResource(R.string.live_time_range, shortTime(current.start), shortTime(current.end)) + " · " +
-                            stringResource(R.string.home_minutes_left, left),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Tokens.textSecondary,
-                        maxLines = 1,
-                    )
-                    Box(Modifier.width(ON_NOW_BAR)) { ProgressBar(progressOf(current, now), Modifier.padding(0.dp)) }
-                }
+                // "21:00 – 22:55 · 40 min left" in words, no bar: the row under the remote carries it (Design 3.1); the guide
+                // stores no category for "LaLiga ·".
+                val left = (current.end - now).inWholeMinutes.coerceAtLeast(1)
+                Text(
+                    stringResource(R.string.live_time_range, shortTime(current.start), shortTime(current.end)) + " · " +
+                        stringResource(R.string.home_minutes_left, left),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Tokens.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             } else if (channel != null) {
                 // No guide: one quiet line under the name.
                 Text(stringResource(R.string.live_no_listings), style = NoteText, color = Tokens.textSecondary, maxLines = 1)
@@ -877,59 +883,68 @@ private fun ChannelItem(
     onPlay: () -> Unit,
     onMenu: () -> Unit,
 ) {
-    val current = guide?.current
     LuzRow(onClick = onPlay, modifier = modifier, onLongClick = onMenu, onFocusChange = { if (it) onFocused() }) {
-        ArtworkImage(
-            channel.logo,
-            resolver,
-            null,
-            Modifier.width(LOGO_WIDTH).height(LOGO_HEIGHT).clip(RoundedCornerShape(Tokens.radiusSmall)),
-            fit = true,
-            inset = Tokens.space1,
-            name = channel.label,
-        )
-        Text(
-            channel.number?.toString() ?: "",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Tokens.textTertiary,
-            maxLines = 1,
-            modifier = Modifier.width(NUMBER_WIDTH),
-        )
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space2), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    channel.label,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Tokens.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
+        ChannelLeading(channel, guide, now, resolver)
+    }
+}
+
+/**
+ * A channel row's leading part, the same wherever a channel is listed (Live TV, the list maker): logo plate, number, name
+ * with its badges, and what is on with how far through. It fills the row's free width.
+ */
+@Composable
+internal fun RowScope.ChannelLeading(channel: ChannelRow, guide: NowNextRow?, now: Instant, resolver: ((UrlTemplate) -> String?)?) {
+    val current = guide?.current
+    ArtworkImage(
+        channel.logo,
+        resolver,
+        null,
+        Modifier.width(LOGO_WIDTH).height(LOGO_HEIGHT).clip(RoundedCornerShape(Tokens.radiusSmall)),
+        fit = true,
+        inset = Tokens.space1,
+        name = channel.label,
+    )
+    Text(
+        channel.number?.toString() ?: "",
+        style = MaterialTheme.typography.bodyMedium,
+        color = Tokens.textTertiary,
+        maxLines = 1,
+        modifier = Modifier.width(NUMBER_WIDTH),
+    )
+    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space2), verticalAlignment = Alignment.CenterVertically) {
+            LuzText(
+                channel.label,
+                style = MaterialTheme.typography.titleSmall,
+                color = Tokens.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            // 4K, FHD or HD, the copy that will play (3.11); never SD, which says nothing worth a badge.
+            channel.quality?.takeIf { it != "SD" }?.let { LuzBadge(it) }
+            if (channel.isFavorite) {
+                // The amber star, the favourite's mark on the TV and the phone alike (Design 2b, 3).
+                Icon(
+                    LuzIcons.Star,
+                    contentDescription = stringResource(R.string.section_favorites),
+                    tint = Tokens.accent,
+                    modifier = Modifier.size(FAVORITE_MARK),
                 )
-                // 4K, FHD or HD, the copy that will play (3.11); never SD, which says nothing worth a badge.
-                channel.quality?.takeIf { it != "SD" }?.let { LuzBadge(it) }
-                if (channel.isFavorite) {
-                    // The amber star, the favourite's mark on the TV and the phone alike (Design 2b, 3).
-                    Icon(
-                        LuzIcons.Star,
-                        contentDescription = stringResource(R.string.section_favorites),
-                        tint = Tokens.accent,
-                        modifier = Modifier.size(FAVORITE_MARK),
-                    )
-                }
             }
-            // A channel with nothing listed has just its name: a line saying so on every row says nothing new.
-            current?.let { programme ->
-                Text(
-                    programme.title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Tokens.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                // How far through, directly under what is on (D2): thin, amber, on a faint white track.
-                Box(Modifier.padding(top = Tokens.space1).width(ROW_BAR).height(ROW_BAR_HEIGHT).background(ROW_BAR_TRACK)) {
-                    Box(Modifier.fillMaxWidth(progressOf(programme, now)).height(ROW_BAR_HEIGHT).background(Tokens.accent))
-                }
+        }
+        // A channel with nothing listed has just its name: a line saying so on every row says nothing new.
+        current?.let { programme ->
+            LuzText(
+                programme.title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Tokens.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // How far through, directly under what is on (D2): thin, amber, on a faint white track.
+            Box(Modifier.padding(top = Tokens.space1).width(ROW_BAR).height(ROW_BAR_HEIGHT).background(ROW_BAR_TRACK)) {
+                Box(Modifier.fillMaxWidth(progressOf(programme, now)).height(ROW_BAR_HEIGHT).background(Tokens.accent))
             }
         }
     }
@@ -951,7 +966,6 @@ private val CATEGORY_WIDTH = 220.dp
 // D2: the preview box is 288 × 162 (16:9); the words beside it share its height.
 private val ON_NOW_HEIGHT = 162.dp
 private val PREVIEW_WIDTH = 288.dp
-private val ON_NOW_BAR = 120.dp
 private val ROW_BAR = 120.dp
 private val ROW_BAR_HEIGHT = 2.dp
 private val ROW_BAR_TRACK = Color.White.copy(alpha = 0.25f)
@@ -968,11 +982,14 @@ private const val FOCUS_RETRY_MS = 50L
 
 /** Puts focus back on the row a menu was opened from; the row re-attaches a moment after the overlay closes. */
 private suspend fun returnFocusTo(focus: FocusMemory, key: String) {
-    repeat(FOCUS_ATTEMPTS) {
-        if (focus.requestFocus(key)) return
-        delay(FOCUS_RETRY_MS)
-    }
+    focus.awaitFocus(key, RETURN_FOCUS_WAIT_MS)
 }
+
+/** How long a row (a new list's, after the list maker) gets to appear before focus stays where it is. */
+private const val RETURN_FOCUS_WAIT_MS = 3_000L
+
+/** Frames for the list maker to leave composition before focus moves to the list it made. */
+private const val MAKER_GONE_FRAMES = 2
 
 /** How many channels Recent holds (the strip, ADR-0053). */
 const val RECENT_CHANNELS = 20

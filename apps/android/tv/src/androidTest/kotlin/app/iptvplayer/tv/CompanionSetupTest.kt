@@ -145,6 +145,7 @@ class CompanionSetupTest {
         val body = JSONObject().put("token", token).put("form", form).put("kind", "link").put("url", link)
         assertEquals(200, companionCall("/api/provider", body.toString()).first)
         awaitSource()
-        assertTrue(runBlocking { graph.channels(graph.sources().single().playlistId, null) }.isNotEmpty())
+        // The source is there at once; its channels follow when the import finishes.
+        rule.waitUntil(60_000) { runBlocking { graph.channels(graph.sources().single().playlistId, null) }.isNotEmpty() }
     }
 }

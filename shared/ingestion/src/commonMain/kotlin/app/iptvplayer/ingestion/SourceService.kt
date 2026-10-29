@@ -614,6 +614,9 @@ public class SourceService(
         return UnitOutcome(ImportUnit.EPG, result.status, written, result.error, summary)
     }
 
+    /** Forgets the per-channel guide answers held in memory (device tests change what the provider answers). */
+    public suspend fun forgetShortGuide(): Unit = shortGuide.forget()
+
     /**
      * Upcoming programmes from the provider's per-channel guide (Xtream `get_short_epg`), for channels that have no XMLTV
      * programmes. Only Xtream sources; at most 20 channels per call; results are cached in memory. Empty for other sources.

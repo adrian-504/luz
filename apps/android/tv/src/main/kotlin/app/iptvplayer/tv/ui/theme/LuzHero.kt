@@ -178,7 +178,7 @@ fun LuzBadge(label: String, modifier: Modifier = Modifier) {
 /** A hero's title in words: large, at most two lines. */
 @Composable
 fun HeroTitle(title: String) {
-    Text(
+    LuzText(
         title,
         style = MaterialTheme.typography.displayLarge,
         color = Tokens.textPrimary,

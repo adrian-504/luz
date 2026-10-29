@@ -130,6 +130,14 @@ public class EpgStore(private val driver: SqlDriver) {
         }
     }
 
+    /** The guide source [channelId] is linked to, or null. */
+    public fun linkSource(playlistId: String, channelId: String): String? = queries.linkSource(playlistId, channelId).executeAsOneOrNull()
+
+    /** Moves every programme of [sourceId] for this playlist by [minutes] (ADR-0056); 0 undoes it. */
+    public fun setShift(playlistId: String, sourceId: String, minutes: Int) {
+        queries.setShift(minutes.toLong(), playlistId, sourceId)
+    }
+
     /** One guide channel to choose in "Fix the guide" (x9): where it comes from, its key, and what it lists now. */
     public data class GuideChannel(public val sourceId: String, public val key: String, public val now: String?)
 

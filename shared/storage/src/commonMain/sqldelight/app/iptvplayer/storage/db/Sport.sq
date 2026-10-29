@@ -1,0 +1,72 @@
+-- Sport fixtures from football-data.org with the viewer's own token, team names from Wikidata (ADR-0057). Not per
+-- source: what the viewer follows is theirs. Must match 16.sqm.
+
+CREATE TABLE sport_follow (
+    kind TEXT NOT NULL,
+    ref TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (kind, ref)
+);
+
+CREATE TABLE sport_team (
+    ref TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    short_name TEXT,
+    tla TEXT,
+    crest_url TEXT,
+    fetched_at INTEGER NOT NULL
+);
+
+CREATE TABLE sport_alias (
+    team_ref TEXT NOT NULL,
+    alias_fold TEXT NOT NULL,
+    origin TEXT NOT NULL,
+    PRIMARY KEY (team_ref, alias_fold)
+);
+
+CREATE TABLE sport_fixture (
+    id TEXT NOT NULL PRIMARY KEY,
+    competition TEXT NOT NULL,
+    competition_name TEXT NOT NULL,
+    home_ref TEXT NOT NULL,
+    away_ref TEXT NOT NULL,
+    home_name TEXT NOT NULL,
+    away_name TEXT NOT NULL,
+    kickoff_utc INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL
+);
+
+CREATE INDEX sport_fixture_kickoff ON sport_fixture(kickoff_utc);
+
+CREATE TABLE sport_standing (
+    competition TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    team_ref TEXT NOT NULL,
+    team_name TEXT NOT NULL,
+    played INTEGER NOT NULL,
+    points INTEGER NOT NULL,
+    goal_diff INTEGER NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    PRIMARY KEY (competition, position)
+);
+
+CREATE TABLE sport_reminder (
+    fixture_id TEXT NOT NULL PRIMARY KEY,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE sport_fetch (
+    resource TEXT NOT NULL PRIMARY KEY,
+    fetched_at INTEGER NOT NULL
+);
+
+follows:
+SELECT kind, ref, name FROM sport_follow ORDER BY created_at;
+
+follow:
+INSERT OR REPLACE INTO sport_follow(kind, ref, name, created_at) VALUES (?, ?, ?, ?);
+
+unfollow:
+DELETE FROM sport_follow WHERE kind = ? AND ref = ?;

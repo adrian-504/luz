@@ -203,8 +203,9 @@ class GuideNavigationTest {
         press(KeyEvent.KEYCODE_DPAD_CENTER)
     }
 
+    // Copies of one channel are one row now (ADR-0052): a category is found by any of its rows' names.
     private fun groupWith(channelName: String) = runBlocking { graph.groups(playlist) }.first { group ->
-        runBlocking { graph.channels(playlist, group.id) }.any { it.name == channelName }
+        runBlocking { graph.channels(playlist, group.id) }.any { it.name == channelName || channelName.startsWith(it.label) }
     }
 
     /** The guide opens on the category last used in Live TV (x10), named in its chip, and shows only its channels. */
@@ -215,8 +216,11 @@ class GuideNavigationTest {
         openGuide()
         rule.waitUntil(20_000) {
             val chip = hasTestTag(GuideTags.SCOPE).and(hasText(sports.title, substring = true, ignoreCase = true))
-            rule.onAllNodes(chip, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+            // The button merges its words into itself.
+            rule.onAllNodes(chip).fetchSemanticsNodes().isNotEmpty()
         }
+        rule.waitForIdle()
+        screenshot("r3-guide-chip")
         val news = runBlocking { graph.channels(playlist, null) }.first { it.name == "Test News HD" }
         assertTrue(
             "a channel from another category is not in the guide",
@@ -228,12 +232,15 @@ class GuideNavigationTest {
     @Test
     fun aChannelWithoutListingsIsOneQuietBar() {
         TestPanel.withoutGuide = setOf(401, 402, 403)
+        // Earlier tests may have asked for these channels' guide; those answers are held for a while.
+        runBlocking { graph.forgetShortGuide() }
         try {
             runBlocking { graph.setPreference(graph.liveScopeKey(playlist), ChannelScope.Group(groupWith("Test Copies HD").id).key()) }
             openGuide()
             rule.waitUntil(30_000) {
                 rule.onAllNodes(hasText("Test Copies · no listings"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
             }
+            screenshot("r3-guide-quiet-bar")
         } finally {
             TestPanel.withoutGuide = emptySet()
         }

@@ -235,12 +235,14 @@ last with that source. While a refresh runs longer than a second, *Updating chan
 beside the title in caption grey, and fades out when done (ADR-0051).
 
 ## 12. Guide (ADR-0037)
-Rows are 40 dp (ADR-0054); the guide opens on the category last used in Live TV, named in a chip beside the title that
-lists the categories on OK; a channel without listings is one quiet bar, "beIN Sports 1 · no listings".
+Rows are 40 dp from row to row, a 36 dp cell and a 4 dp gap (ADR-0054); the guide opens on the category last used in Live
+TV, named in a chip beside the title that lists the categories on OK; a channel without listings is one quiet bar, empty
+with a dashed hairline edge, "beIN Sports 1 · no listings". The day ("Today, Thursday 29") sits at the right of the
+header beside *Now*; the time row carries times only. The focused programme is the one white thing, with dark words.
 A screen title with the focused programme large, its channel, times and "On now" beneath, and two lines of its
-description; a glass *Now* button. The day ("Today", "Tomorrow", a date) and the half-hour marks over a hairline; each
+description; a glass *Now* button. The half-hour marks over a hairline; each
 channel's number, logo plate and name, the focused row's name brighter; programmes as soft glass blocks as long as they
-run. What is on now is filled as far as it has got; the focused block is brightest with a white edge; a red line marks the
+run. What is on now is filled as far as it has got; the focused block is white; a red line marks the
 time. Moving past the edge slides the timeline 90 minutes. Cells are drawn, not built from surfaces. A channel's menu in
 Live TV offers "See in the guide".
 
@@ -255,6 +257,9 @@ remote rests on. The room behind the shelves is plain dark: the earlier blurred 
 wash of a hero are gone, because the wash turned muddy under bright artwork (ADR-0043).
 
 ## 14. Search
+The letter strip (ADR-0055): 20 sp letters in 40 dp cells, sliding to keep the key under the remote in its middle
+third; "ع" for Arabic letters right to left, "abc" and "123"; "Or type on your phone" under it while the companion is
+on. Arabic and Latin spellings find the same title. A mostly-Arabic line is set one sp larger in its own direction.
 The query written large with a search symbol; a **letter strip** beneath it (123/abc, space, a–z, delete) so the remote
 types without the system keyboard covering the results; a hairline; results as shelves — channels, films, series —
 updating 150 ms after each change, with a **People** shelf (round plates, "In 12 titles" / "Director · 3 titles") that
@@ -321,7 +326,7 @@ list"); the provider's are *categories*. Choosing *Add to a list…* shows "Add 
 its own line and an amber tick beside the ones that hold it; OK puts it in or takes it out.
 **Making a list** (Design 2.9): *New list…* at the foot of Live TV's own lists asks for a name (*Start adding*, white) or
 *Name it later*; then a full screen with "Adding to" over "My sports · 2" and *Done* at the top, the search line and the
-Search screen's letter strip, and the results as rows: *+ Add* in a pill, white under the remote, or an amber tick and
+Search screen's letter strip, and the results as rows (a channel drawn like its Live TV row: logo, number, name, what is on): *+ Add* in a pill, white under the remote, or an amber tick and
 *Added*. With the search empty it shows what is in the list so far.
 
 ## 18. Remote behaviour

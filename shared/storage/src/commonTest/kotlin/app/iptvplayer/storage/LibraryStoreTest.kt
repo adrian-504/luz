@@ -107,18 +107,33 @@ class LibraryStoreTest {
         writer.publish()
     }
 
-    private fun importLiveChannel() {
+    private fun importLiveChannel(vararg names: String = arrayOf("News")) {
         val writer = content.beginLiveSnapshot(playlist)
         writer.group(group("lg_news", ContentKind.LIVE))
-        writer.channel(
-            Channel(
-                ChannelId("ch_1"), playlist, listOf(GroupId("lg_news")), "News", null, null, null, null, emptyList(), emptyList(), null,
-                listOf(MediaSourceId("ms_ch_1")), null, emptyMap(), IdentityHints(null, null, "news"),
-            ),
-            source(ContentType.CHANNEL, "ch_1", XtreamStreamKind.LIVE),
-            null,
-        )
+        names.forEachIndexed { index, name ->
+            val id = "ch_${index + 1}"
+            writer.channel(
+                Channel(
+                    ChannelId(id), playlist, listOf(GroupId("lg_news")), name, null, null, null, null, emptyList(), emptyList(), null,
+                    listOf(MediaSourceId("ms_$id")), null, emptyMap(), IdentityHints(null, null, name.lowercase()),
+                ),
+                source(ContentType.CHANNEL, id, XtreamStreamKind.LIVE),
+                null,
+            )
+        }
         writer.publish()
+    }
+
+    /** Arabic search (ADR-0055): Arabic and Latin spellings find the same channel; a sound key never matches a word. */
+    @Test
+    fun arabicAndLatinSpellingsFindTheSameChannel() {
+        addSource()
+        importLiveChannel("Al Jadeed", "JDD Plus")
+        for (query in listOf("al jadeed", "aljadid", "jadid", "\u0627\u0644\u062C\u062F\u064A\u062F")) {
+            assertEquals(listOf("Al Jadeed"), content.searchChannels(playlist, query, 10).map { it.name }, "searching \"$query\"")
+        }
+        // "jadid" is a word with a sound key: it reaches Al Jadeed and the plain word "JDD" never answers to it.
+        assertEquals(listOf("Al Jadeed"), content.searchChannels(playlist, "jadid", 10).map { it.name }, "not the plain word")
     }
 
     @Test
@@ -283,6 +298,7 @@ class LibraryStoreTest {
         driver.execute(null, "DROP INDEX channel_member_order", 0)
         driver.execute(null, "DROP INDEX favorite_work", 0)
         driver.execute(null, "ALTER TABLE favorite DROP COLUMN work", 0)
+        undoRound4()
         driver.execute(null, "PRAGMA user_version=1", 0)
         driver.close()
 
@@ -290,7 +306,7 @@ class LibraryStoreTest {
         content = ContentStore(driver, clock)
         library = LibraryStore(content, clock)
         assertEquals(
-            16L,
+            17L,
             driver.executeQuery(null, "PRAGMA user_version", {
                 it.next()
                 app.cash.sqldelight.db.QueryResult.Value(it.getLong(0))
@@ -305,6 +321,55 @@ class LibraryStoreTest {
         )
         importMovies(movie("mv_1", "Alpha", listOf("mg_action"), 1))
         assertEquals("Alpha", library.movies(playlist).single().title, "the new tables work after the upgrade")
+    }
+
+    /** What a database had before round 4 (schema 17): no guide shift, no sport tables, no link index. */
+    private fun undoRound4() {
+        driver.execute(null, "DROP INDEX channel_epg_link_epg", 0)
+        driver.execute(null, "ALTER TABLE channel_epg_link DROP COLUMN shift_minutes", 0)
+        for (table in listOf(
+            "sport_follow",
+            "sport_team",
+            "sport_alias",
+            "sport_fixture",
+            "sport_standing",
+            "sport_reminder",
+            "sport_fetch",
+        )) {
+            driver.execute(null, "DROP TABLE $table", 0)
+        }
+    }
+
+    @Test
+    fun upgradeFrom16KeepsTitlesAndFoldsThemAfterwards() {
+        addSource()
+        importLiveChannel()
+        // A schema-16 index: the title only, no folded column.
+        driver.execute(null, "DROP TABLE title_search", 0)
+        driver.execute(
+            null,
+            "CREATE VIRTUAL TABLE title_search USING fts5(title, kind UNINDEXED, playlist_id UNINDEXED, snapshot UNINDEXED, " +
+                "content_id UNINDEXED, tokenize='unicode61 remove_diacritics 2')",
+            0,
+        )
+        driver.execute(
+            null,
+            "INSERT INTO title_search(title, kind, playlist_id, snapshot, content_id) " +
+                "SELECT name, 'CHANNEL', playlist_id, snapshot, id FROM channel",
+            0,
+        )
+        undoRound4()
+        driver.execute(null, "PRAGMA user_version=16", 0)
+        driver.close()
+
+        driver = openIptvDatabase(file.path)
+        content = ContentStore(driver, clock)
+        library = LibraryStore(content, clock)
+        assertEquals(17L, userVersion())
+        assertEquals(listOf("News"), content.searchChannels(playlist, "news", 10).map { it.name }, "found before folding")
+        assertEquals(1, content.backfillFolded())
+        assertEquals(0, content.backfillFolded(), "folding runs once")
+        assertEquals(listOf("News"), content.searchChannels(playlist, "news", 10).map { it.name }, "found after folding")
     }
 
     private fun userVersion(): Long = driver.executeQuery(null, "PRAGMA user_version", {
@@ -326,13 +391,14 @@ class LibraryStoreTest {
         for (table in listOf("channel_number", "known_group", "channel_playback", "user_epg_link", "watch_session")) {
             driver.execute(null, "DROP TABLE $table", 0)
         }
+        undoRound4()
         driver.execute(null, "PRAGMA user_version=15", 0)
         driver.close()
 
         driver = openIptvDatabase(file.path)
         content = ContentStore(driver, clock)
         library = LibraryStore(content, clock)
-        assertEquals(16L, userVersion())
+        assertEquals(17L, userVersion())
         assertTrue(content.channels(playlist).single().isFavorite, "channels and favourites survive the upgrade")
         for (table in listOf("channel_number", "known_group", "channel_playback", "user_epg_link", "watch_session")) {
             assertEquals(0L, rows(table), "$table exists and is empty")
@@ -502,6 +568,7 @@ class LibraryStoreTest {
         for (table in listOf("channel_number", "known_group", "channel_playback", "user_epg_link", "watch_session")) {
             driver.execute(null, "DROP TABLE $table", 0)
         }
+        undoRound4()
         driver.execute(null, "PRAGMA user_version=14", 0)
         driver.close()
 
