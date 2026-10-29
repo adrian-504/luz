@@ -190,6 +190,48 @@ class LibraryFlowTest {
         }
     }
 
+    /** Films and series on the phone (2c, Design 2.16): the TV's shelves and categories, and a poster grid page by page. */
+    @Test
+    fun aPairedPhoneBrowsesFilmsAndSeries() {
+        val companion = graph.companion
+        companion.setOn(true)
+        try {
+            val token = JSONObject(
+                companionCall("/api/pair", """{"code":"${companion.pairing.code()}","name":"Test phone"}""").second,
+            ).getString("token")
+            assertEquals(401, companionGet("/api/library?kind=movie", "wrong").first)
+
+            val films = JSONObject(companionGet("/api/library?kind=movie", token).second)
+            assertEquals("movie", films.getString("kind"))
+            assertTrue("the library holds films", films.getLong("total") > 0)
+            assertTrue("the TV's shelves", films.getJSONArray("shelves").length() > 0)
+            val categories = films.getJSONArray("categories")
+            assertTrue(categories.length() > 0)
+
+            val all = JSONObject(companionGet("/api/browse?kind=movie&filter=all&offset=0&limit=2", token).second)
+            assertTrue("a page holds at most the limit", all.getJSONArray("items").length() in 1..2)
+            assertEquals(films.getLong("total"), all.getLong("total"))
+            val first = all.getJSONArray("items").getJSONObject(0)
+            assertEquals("movie", first.getString("kind"))
+            assertTrue(first.has("art") && first.has("fraction"))
+
+            val category = categories.getJSONObject(0)
+            // Encoded as the phone's page encodes it (encodeURIComponent).
+            val filter = android.net.Uri.encode("category:${category.getString("id")}")
+            val answer = companionGet("/api/browse?kind=movie&filter=$filter&offset=0&limit=60", token)
+            assertEquals("category $category: ${answer.second}", 200, answer.first)
+            assertEquals(category.getString("title"), JSONObject(answer.second).getString("title"))
+            assertEquals(404, companionGet("/api/browse?kind=movie&filter=category%3Agone", token).first)
+            assertEquals(404, companionGet("/api/library?kind=book", token).first)
+
+            val series = JSONObject(companionGet("/api/library?kind=series", token).second)
+            assertTrue(series.getLong("total") > 0)
+        } finally {
+            companion.pairing.phones.value.forEach { companion.pairing.forget(it.id) }
+            companion.setOn(false)
+        }
+    }
+
     @Test
     fun searchFindsChannelsMoviesAndSeriesAsYouType() {
         val channel = runBlocking { graph.channels(playlist, null) }.first()

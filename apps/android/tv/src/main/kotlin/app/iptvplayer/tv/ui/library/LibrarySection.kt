@@ -45,7 +45,10 @@ import app.iptvplayer.domain.model.ImportStatus
 import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.storage.LibraryGroupRow
+import app.iptvplayer.storage.MovieRow
+import app.iptvplayer.storage.SeriesRow
 import app.iptvplayer.tv.R
+import app.iptvplayer.tv.app.AppGraph
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.live.EmptyState
@@ -303,27 +306,16 @@ private fun PosterGrid(
     val coroutines = rememberCoroutineScope()
     var items by remember(playlist, filter) { mutableStateOf<List<PosterItem>?>(null) }
     var exhausted by remember(playlist, filter) { mutableStateOf(false) }
-    val category = filter.removePrefix("category:").takeIf { filter.startsWith("category:") }
-    val genre = filter.removePrefix("genre:").takeIf { filter.startsWith("genre:") }
-    val decade = filter.removePrefix("decade:").takeIf { filter.startsWith("decade:") }?.toInt()
-    val mine = filter.removePrefix("mine:").takeIf { filter.startsWith("mine:") }
     var loading by remember { mutableStateOf(false) }
 
     suspend fun page(offset: Int): List<PosterItem> = if (unit == ImportUnit.MOVIES) {
-        when {
-            mine != null -> if (offset == 0) graph.moviesInUserGroup(playlist, mine, Int.MAX_VALUE) else emptyList()
-            genre != null -> graph.moviesOfGenre(playlist, genre, PAGE_SIZE, offset)
-            decade != null -> graph.moviesOfDecade(playlist, decade, PAGE_SIZE, offset)
-            else -> graph.movies(playlist, category, PAGE_SIZE, offset)
-        }.map {
+        browseMovies(graph, playlist, filter, PAGE_SIZE, offset).map {
             PosterItem(it.id, it.title, it.year?.toString(), it.poster, it.progress?.takeIf { p -> !p.completed }?.fraction, it.isFavorite)
         }
     } else {
-        when {
-            mine != null -> if (offset == 0) graph.seriesInUserGroup(playlist, mine, Int.MAX_VALUE) else emptyList()
-            genre != null -> graph.seriesOfGenre(playlist, genre, PAGE_SIZE, offset)
-            else -> graph.series(playlist, category, PAGE_SIZE, offset)
-        }.map { PosterItem(it.id, it.title, it.year?.toString(), it.poster, null, it.isFavorite) }
+        browseSeries(graph, playlist, filter, PAGE_SIZE, offset).map {
+            PosterItem(it.id, it.title, it.year?.toString(), it.poster, null, it.isFavorite)
+        }
     }
 
     LaunchedEffect(playlist, filter, revision) {
@@ -406,3 +398,32 @@ private val PREVIEW_DELAY = 900.milliseconds
 private const val PAGE_SIZE = 120
 private const val FOCUS_ATTEMPTS = 20
 private const val LOAD_AHEAD = 24
+
+/** One page of a grid's films: everything, a category, a genre, a decade or one of the viewer's lists (whole, on page 0). */
+internal suspend fun browseMovies(graph: AppGraph, playlist: PlaylistId, filter: String, limit: Int, offset: Int): List<MovieRow> {
+    val f = BrowseFilter(filter)
+    return when {
+        f.mine != null -> if (offset == 0) graph.moviesInUserGroup(playlist, f.mine, Int.MAX_VALUE) else emptyList()
+        f.genre != null -> graph.moviesOfGenre(playlist, f.genre, limit, offset)
+        f.decade != null -> graph.moviesOfDecade(playlist, f.decade, limit, offset)
+        else -> graph.movies(playlist, f.category, limit, offset)
+    }
+}
+
+/** One page of a grid's series, as [browseMovies]; series have no decades. */
+internal suspend fun browseSeries(graph: AppGraph, playlist: PlaylistId, filter: String, limit: Int, offset: Int): List<SeriesRow> {
+    val f = BrowseFilter(filter)
+    return when {
+        f.mine != null -> if (offset == 0) graph.seriesInUserGroup(playlist, f.mine, Int.MAX_VALUE) else emptyList()
+        f.genre != null -> graph.seriesOfGenre(playlist, f.genre, limit, offset)
+        else -> graph.series(playlist, f.category, limit, offset)
+    }
+}
+
+/** A grid's filter, "all", "category:<id>", "genre:<name>", "decade:<year>" or "mine:<list>", taken apart. */
+internal class BrowseFilter(filter: String) {
+    val category = filter.removePrefix("category:").takeIf { filter.startsWith("category:") }
+    val genre = filter.removePrefix("genre:").takeIf { filter.startsWith("genre:") }
+    val decade = filter.removePrefix("decade:").takeIf { filter.startsWith("decade:") }?.toIntOrNull()
+    val mine = filter.removePrefix("mine:").takeIf { filter.startsWith("mine:") }
+}

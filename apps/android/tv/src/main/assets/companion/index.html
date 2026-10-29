@@ -440,6 +440,26 @@
   .toast.act { pointer-events: auto; }
   .toast .undo { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; padding: 4px 0 4px 6px; margin: -4px 0; }
 
+  /* Films and series (round 2c) */
+  .browse-seg { padding: 4px 16px 0; }
+  .browse-seg .seg { max-width: 360px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 16px; }
+  .chips .chip { color: var(--text); }
+  .chip em { font-style: normal; color: var(--text-3); font-weight: 500; font-size: 13px; margin-left: 6px; }
+  .lib-page {
+    position: fixed; inset: 0; z-index: 25; overflow-y: auto; overscroll-behavior: contain; background: var(--room);
+    padding: calc(var(--top) + 10px) 0 calc(var(--tabs-h) + 84px);
+  }
+  .lib-page .page-top { padding: 0 16px 6px; }
+  .lib-page .back { color: var(--text-2); font-size: 16px; padding: 8px 12px 8px 0; display: inline-flex; align-items: center; gap: 2px; }
+  .lib-page .back svg { width: 20px; height: 20px; }
+  .lib-page h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin: 4px 0 0; overflow-wrap: anywhere; }
+  .lib-page .page-top p { margin: 2px 0 0; color: var(--text-3); font-size: 14px; }
+  .pgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 10px; padding: 10px 16px 0; align-items: start; }
+  .pgrid .poster { width: auto; min-width: 0; }
+  .pgrid .sk-post { aspect-ratio: 2 / 3; }
+  .pgrid .sk-line { height: 10px; width: 80%; margin-top: 9px; border-radius: 5px; }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition-duration: 0.01ms !important; animation: none !important; }
   }
@@ -518,8 +538,17 @@
 
   <main class="wrap">
     <section id="pane-browse" role="tabpanel" aria-labelledby="tab-browse">
+      <div class="browse-seg" id="browse-seg">
+        <div class="seg" role="group" aria-label="Show">
+          <button type="button" data-seg="home" aria-pressed="true">Home</button>
+          <button type="button" data-seg="movie" aria-pressed="false">Films</button>
+          <button type="button" data-seg="series" aria-pressed="false">Series</button>
+        </div>
+      </div>
       <div id="results" hidden></div>
       <div id="shelves"></div>
+      <div id="lib" hidden></div>
+      <div class="lib-page" id="lib-page" hidden></div>
     </section>
 
     <section id="pane-remote" role="tabpanel" aria-labelledby="tab-remote" hidden>
@@ -815,6 +844,7 @@
     events.onopen = () => {
       setStatus("on", "Connected");
       if (!home || Date.now() - homeLoadedAt > 60000) loadHome();
+      if (browseSeg !== "home") renderLib(browseSeg, true);
     };
     events.onerror = () => {
       setStatus("off", "Can't reach Luz");
@@ -917,7 +947,11 @@
     const t = el("div", "card-title", item.title); t.dir = "auto";
     b.appendChild(t);
     if (item.year) b.appendChild(el("div", "card-sub", String(item.year)));
-    b.addEventListener("click", () => item.kind === "series" ? openSeries(item.id) : openMovie(item.id));
+    b.addEventListener("click", () => {
+      if (b._held) { b._held = false; return; }
+      if (item.kind === "series") openSeries(item.id); else openMovie(item.id);
+    });
+    onHold(b, () => itemMenu({ kind: item.kind, id: item.id, title: item.title, art: item.art }));
     return b;
   }
 
@@ -1148,7 +1182,7 @@
     const q = $("q").value.trim();
     $("q-clear").hidden = !$("q").value;
     clearTimeout(searchTimer);
-    if (!q) { $("results").hidden = true; $("shelves").hidden = false; return; }
+    if (!q) { $("results").hidden = true; paintBrowse(false); return; }
     searchTimer = setTimeout(() => runSearch(q), 250);
   }
   async function runSearch(q) {
@@ -1172,7 +1206,7 @@
       box.appendChild(empty);
     }
     box.hidden = false;
-    $("shelves").hidden = true;
+    paintBrowse(true);
   }
   $("q").addEventListener("input", onSearch);
   $("q").addEventListener("keydown", (e) => { if (e.key === "Enter") $("q").blur(); });
@@ -1210,7 +1244,8 @@
   window.addEventListener("popstate", () => {
     if (skipPop > 0) { skipPop--; return; }
     if (menuOpen) { hideMenu(); return; }
-    if (openSheet) { hideSheet(openSheet); openSheet = null; listView = null; adding = null; $("scrim").classList.remove("show"); paintMini(); }
+    if (openSheet) { hideSheet(openSheet); openSheet = null; listView = null; adding = null; $("scrim").classList.remove("show"); paintMini(); return; }
+    if (libPage) closePageNow();
   });
   $("scrim").addEventListener("click", closeSheets);
   $("menu-scrim").addEventListener("click", () => closeMenu());
@@ -1305,6 +1340,7 @@
         if (!r.ok) throw new Error();
         toast(on ? "Added to My List" : "Removed from My List");
         homeLoadedAt = 0;
+        libCache = {};
       } catch (e) { on = !on; paint(); toast("Couldn't change My List. Try again.", true); }
     });
     return b;
@@ -1558,6 +1594,8 @@
         } catch (e) { /* The next change or reconnect tries again. */ }
       }
       if (listView && !adding) renderListPage(true);
+      libCache = {};
+      if (browseSeg !== "home" && !$("lib").hidden) renderLib(browseSeg, true);
       if (adding) refreshAdding();
     }, 300);
   }
@@ -2077,6 +2115,233 @@
     box.appendChild(menuLine("add", "New list…", null, () => newListMenu({ kind: item.kind, id: item.id })));
     body.appendChild(box);
   }
+
+  // ---------- Films and series (round 2c): the TV's own Films and Series sections, and pages of posters ----------
+  const SEG_KEY = "luz-companion-browse";
+  const PAGE_LIMIT = 60;
+  let browseSeg = "home";
+  let libCache = {};
+  let libPage = null;
+  let libSeq = 0;
+  try { const saved = localStorage.getItem(SEG_KEY); if (saved === "movie" || saved === "series") browseSeg = saved; } catch (e) {}
+
+  function number(n) { return Number(n || 0).toLocaleString(); }
+  function titlesCount(kind, n) {
+    if (kind === "series") return number(n) + " series";
+    return number(n) + (n === 1 ? " film" : " films");
+  }
+
+  // What Browse shows: the search results while typing, otherwise Home or the chosen library.
+  function paintBrowse(searching) {
+    $("browse-seg").hidden = searching;
+    $("shelves").hidden = searching || browseSeg !== "home";
+    $("lib").hidden = searching || browseSeg === "home";
+    document.querySelectorAll("#browse-seg [data-seg]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.seg === browseSeg ? "true" : "false"));
+  }
+  function chooseSeg(seg) {
+    if (seg === browseSeg) return;
+    browseSeg = seg;
+    try { localStorage.setItem(SEG_KEY, seg); } catch (e) {}
+    paintBrowse(!!$("q").value.trim());
+    window.scrollTo(0, 0);
+    if (seg !== "home") renderLib(seg, false);
+  }
+  document.querySelectorAll("#browse-seg [data-seg]").forEach((b) => b.addEventListener("click", () => chooseSeg(b.dataset.seg)));
+
+  function skeletonLib(box) {
+    box.replaceChildren();
+    const s1 = section(" ");
+    const row = el("div", "shelf");
+    for (let i = 0; i < 3; i++) { const sk = el("div", "skeleton"); sk.style.cssText = "width:112px;aspect-ratio:2/3"; row.appendChild(sk); }
+    s1.appendChild(row);
+    box.appendChild(s1);
+  }
+
+  // Films or Series: the shelves the TV built, in its order, then genres, decades and the provider's categories.
+  async function renderLib(kind, quietly) {
+    const box = $("lib");
+    const seq = ++libSeq;
+    let lib = libCache[kind];
+    if (!lib || Date.now() - lib.at > 60000) {
+      if (!quietly || !lib) skeletonLib(box);
+      try {
+        lib = { data: await get("/api/library", { kind }), at: Date.now() };
+        libCache[kind] = lib;
+      } catch (e) {
+        if (seq !== libSeq) return;
+        box.replaceChildren();
+        const empty = el("div", "empty");
+        empty.appendChild(el("p", null, "Couldn't get these. Check that the TV is on, then try again."));
+        const retry = el("button", "btn", "Try again");
+        retry.style.marginTop = "18px";
+        retry.addEventListener("click", () => renderLib(kind, false));
+        empty.appendChild(retry);
+        box.appendChild(empty);
+        return;
+      }
+    }
+    if (seq !== libSeq || browseSeg !== kind) return;
+    const d = lib.data;
+    box.replaceChildren();
+    (d.shelves || []).forEach((sh) => safely(() => {
+      if (!sh.items || !sh.items.length) return;
+      const s = section(sh.title);
+      s.appendChild(shelf(sh.items, sh.wide ? continueCard : posterCard));
+      box.appendChild(s);
+    }));
+    safely(() => {
+      if (!d.genres || !d.genres.length) return;
+      const s = section("Browse by genre");
+      s.appendChild(chips(d.genres, true, (g) => openLibPage(kind, "genre:" + g.id, g.title, g.count)));
+      box.appendChild(s);
+    });
+    safely(() => {
+      if (!d.decades || !d.decades.length) return;
+      const s = section("Browse by decade");
+      s.appendChild(chips(d.decades, false, (g) => openLibPage(kind, "decade:" + g.id, g.title, g.count)));
+      box.appendChild(s);
+    });
+    safely(() => {
+      const cats = d.categories || [];
+      const LIMIT = 10;
+      let more = null;
+      if (cats.length > LIMIT) more = el("button", null, "See all " + number(cats.length));
+      const s = section("Browse all categories", more);
+      const list = el("div", "list");
+      const all = kind === "series" ? "All series" : "All films";
+      list.appendChild(categoryRow(all, d.total, () => openLibPage(kind, "all", all, d.total)));
+      const add = (from, to) => cats.slice(from, to).forEach((c) => list.appendChild(categoryRow(c.title, c.count, () => openLibPage(kind, "category:" + c.id, c.title, c.count))));
+      add(0, LIMIT);
+      if (more) more.addEventListener("click", () => { add(LIMIT, cats.length); more.remove(); });
+      s.appendChild(list);
+      box.appendChild(s);
+    });
+    if (!d.total) {
+      box.replaceChildren();
+      const empty = el("div", "empty");
+      empty.appendChild(el("p", null, "Nothing here yet."));
+      box.appendChild(empty);
+    }
+  }
+
+  function chips(items, counts, open) {
+    const box = el("div", "chips");
+    items.forEach((g) => {
+      const b = el("button", "chip");
+      const t = el("span", null, g.title); t.dir = "auto";
+      b.appendChild(t);
+      if (counts && g.count !== null && g.count !== undefined) b.appendChild(el("em", null, number(g.count)));
+      b.addEventListener("click", () => open(g));
+      box.appendChild(b);
+    });
+    return box;
+  }
+
+  function categoryRow(title, count, open) {
+    const b = el("button", "row");
+    b.style.minHeight = "54px";
+    b.style.paddingLeft = "12px";
+    const main = el("div", "row-main");
+    const t = el("div", "row-name"); const sp = el("span", null, title); sp.dir = "auto"; t.appendChild(sp);
+    main.appendChild(t);
+    b.appendChild(main);
+    if (count !== null && count !== undefined) b.appendChild(el("span", "count", number(count)));
+    const end = el("span", "row-end"); end.appendChild(icon("right")); b.appendChild(end);
+    b.addEventListener("click", open);
+    return b;
+  }
+
+  // ----- A page of posters (2.15): 60 at a time, the next 60 asked for two screens before the end -----
+  function openLibPage(kind, filter, title, count) {
+    const page = $("lib-page");
+    const state = { kind, filter, offset: 0, total: count, loading: false, done: false };
+    libPage = state;
+    history.pushState({ page: true }, "");
+    page.replaceChildren();
+    const inner = el("div", "wrap");
+    const top = el("div", "page-top");
+    const back = el("button", "back");
+    back.appendChild(icon("left"));
+    back.appendChild(el("span", null, kind === "series" ? "Series" : "Films"));
+    back.addEventListener("click", () => history.back());
+    top.appendChild(back);
+    const h = el("h2", null, title); h.dir = "auto";
+    top.appendChild(h);
+    const sub = el("p", null, count !== null && count !== undefined ? titlesCount(kind, count) : "");
+    top.appendChild(sub);
+    inner.appendChild(top);
+    const grid = el("div", "pgrid");
+    inner.appendChild(grid);
+    const sentinel = el("div");
+    sentinel.style.height = "1px";
+    inner.appendChild(sentinel);
+    page.appendChild(inner);
+    page.hidden = false;
+    page.scrollTop = 0;
+    state.grid = grid; state.sub = sub; state.title = h;
+    state.observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) loadMore(state);
+    }, { root: page, rootMargin: "0px 0px 200% 0px" });
+    state.observer.observe(sentinel);
+    loadMore(state);
+  }
+
+  async function loadMore(state) {
+    if (state.loading || state.done || libPage !== state) return;
+    state.loading = true;
+    const shapes = [];
+    for (let i = 0; i < 6; i++) {
+      const sk = el("div", "poster");
+      sk.appendChild(el("div", "skeleton sk-post"));
+      sk.appendChild(el("div", "skeleton sk-line"));
+      state.grid.appendChild(sk);
+      shapes.push(sk);
+    }
+    let r = null;
+    try { r = await get("/api/browse", { kind: state.kind, filter: state.filter, offset: state.offset, limit: PAGE_LIMIT }); } catch (e) { r = e; }
+    shapes.forEach((sk) => sk.remove());
+    state.loading = false;
+    if (libPage !== state) return;
+    if (r instanceof Error) {
+      if (String(r.message).includes("404")) {
+        state.done = true;
+        state.grid.replaceWith(emptyNote("Nothing here yet."));
+        return;
+      }
+      state.done = true;
+      const again = emptyNote("Couldn't get these. Check that the TV is on, then try again.");
+      const retry = el("button", "btn", "Try again");
+      retry.style.marginTop = "18px";
+      retry.addEventListener("click", () => { again.remove(); state.done = false; loadMore(state); });
+      again.appendChild(retry);
+      state.grid.after(again);
+      return;
+    }
+    if (typeof r.total === "number") { state.total = r.total; state.sub.textContent = titlesCount(state.kind, r.total); }
+    if (r.title) state.title.textContent = r.title;
+    (r.items || []).forEach((p) => state.grid.appendChild(posterCard(p)));
+    state.offset += (r.items || []).length;
+    if (!r.items || !r.items.length || state.offset >= state.total) {
+      state.done = true;
+      if (!state.offset) state.grid.replaceWith(emptyNote("Nothing here yet."));
+    }
+  }
+
+  function emptyNote(text) {
+    const empty = el("div", "empty");
+    empty.appendChild(el("p", null, text));
+    return empty;
+  }
+
+  function closePageNow() {
+    if (!libPage) return;
+    if (libPage.observer) libPage.observer.disconnect();
+    libPage = null;
+    $("lib-page").hidden = true;
+    $("lib-page").replaceChildren();
+  }
+
+  paintBrowse(false);
 
   // ---------- What's playing ----------
   function showPlaying(p) {

@@ -926,7 +926,7 @@ internal fun RowScope.ChannelLeading(channel: ChannelRow, guide: NowNextRow?, no
             if (channel.isFavorite) {
                 // The amber star, the favourite's mark on the TV and the phone alike (Design 2b, 3).
                 Icon(
-                    LuzIcons.Star,
+                    LuzIcons.StarFilled,
                     contentDescription = stringResource(R.string.section_favorites),
                     tint = Tokens.accent,
                     modifier = Modifier.size(FAVORITE_MARK),

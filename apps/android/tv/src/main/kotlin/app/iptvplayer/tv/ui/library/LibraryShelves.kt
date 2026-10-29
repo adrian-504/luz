@@ -1,5 +1,6 @@
 package app.iptvplayer.tv.ui.library
 
+import android.content.res.Resources
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +45,7 @@ import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.storage.MovieRow
 import app.iptvplayer.storage.SeriesRow
 import app.iptvplayer.tv.R
+import app.iptvplayer.tv.app.AppGraph
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.ui.FocusMemory
 import app.iptvplayer.tv.ui.rememberedFocus
@@ -81,7 +83,7 @@ object Browse {
 }
 
 /** A title on a shelf, whichever kind it is. */
-private data class ShelfItem(
+internal data class ShelfItem(
     val id: String,
     val title: String,
     val caption: String?,
@@ -102,9 +104,9 @@ private object ShelfMemory {
 }
 
 /** A tile that opens a full grid: a genre, a decade, a category. */
-private data class BrowseTile(val key: String, val title: String, val count: Long?)
+internal data class BrowseTile(val key: String, val title: String, val count: Long?)
 
-private sealed interface Shelf {
+internal sealed interface Shelf {
     val key: String
     val title: String
 
@@ -147,199 +149,8 @@ fun LibraryShelves(
     val movies = unit == ImportUnit.MOVIES
 
     LaunchedEffect(playlist, unit, revision, watched, detailsStep, lists) {
-        fun movie(row: MovieRow) = ShelfItem(
-            row.id,
-            row.title,
-            row.year?.toString(),
-            row.poster,
-            row.backdrop,
-            row.plot,
-            listOfNotNull(row.year?.toString(), row.genres.firstOrNull(), row.rating?.let { "★ $it" }),
-            row.progress?.takeIf { !it.completed }?.fraction,
-            row.isFavorite,
-            row.year,
-            watched = row.progress?.completed == true,
-        )
-        fun series(row: SeriesRow) = ShelfItem(
-            row.id,
-            row.title,
-            row.year?.toString(),
-            row.poster,
-            row.backdrop,
-            row.plot,
-            listOfNotNull(row.year?.toString(), row.genres.firstOrNull(), row.rating?.let { "★ $it" }),
-            null,
-            row.isFavorite,
-            row.year,
-        )
-        fun titles(key: String, title: Int, items: List<ShelfItem>) = Shelf.Titles(key, resources.getString(title), items)
-        val built = mutableListOf<Shelf>()
-        fun add(shelf: Shelf) {
-            val empty = when (shelf) {
-                is Shelf.Titles -> shelf.items.isEmpty()
-                is Shelf.Tiles -> shelf.tiles.isEmpty()
-            }
-            if (empty) return
-            val personal = shelf.key == "continue" || shelf.key == "mine" || shelf.key.startsWith("group-")
-            val kept = withoutRepeats(built.filterIsInstance<Shelf.Titles>() + listOfNotNull(shelf as? Shelf.Titles), { !personal }) {
-                it.items.map { item -> item.id }
-            }
-            if (shelf is Shelf.Titles && kept.lastOrNull() != shelf) return
-            built += shelf
-        }
-        if (movies) {
-            add(
-                titles(
-                    "continue",
-                    R.string.home_continue,
-                    graph.continueCards(playlist, SHELF_LIMIT).filter { it.type == ContentType.MOVIE }.mapNotNull { card ->
-                        graph.movie(playlist, card.pageId)?.let(::movie)
-                    },
-                ),
-            )
-            add(
-                titles(
-                    "trending",
-                    R.string.home_trending_movies,
-                    graph.moviesOfList(playlist, ExternalList.TRENDING_MOVIES, SHELF_LIMIT).map(::movie),
-                ),
-            )
-            add(titles("recent", R.string.library_recently_added, graph.recentMovies(playlist, SHELF_LIMIT).map(::movie)))
-            add(
-                titles(
-                    "popular",
-                    R.string.home_popular_movies,
-                    graph.moviesOfList(
-                        playlist,
-                        ExternalList.POPULAR_MOVIES,
-                        SHELF_LIMIT,
-                    ).ifEmpty { graph.popularMovies(playlist, SHELF_LIMIT) }
-                        .map(::movie),
-                ),
-            )
-            graph.becauseYouWatched(playlist, SHELF_LIMIT)?.let { pick ->
-                add(Shelf.Titles("because", resources.getString(R.string.home_because, pick.seed.title), pick.movies.map(::movie)))
-            }
-            add(
-                titles(
-                    "top",
-                    R.string.home_top_movies,
-                    graph.moviesOfList(
-                        playlist,
-                        ExternalList.TOP_MOVIES,
-                        SHELF_LIMIT,
-                    ).ifEmpty { graph.topRatedMovies(playlist, SHELF_LIMIT) }
-                        .map(::movie),
-                ),
-            )
-            add(titles("mine", R.string.home_my_list, graph.favoriteMovies(playlist, SHELF_LIMIT).map(::movie)))
-            for (group in graph.userGroups(playlist).filter { it.movieCount > 0 }) {
-                add(Shelf.Titles("group-${group.id}", group.title, graph.moviesInUserGroup(playlist, group.id, SHELF_LIMIT).map(::movie)))
-            }
-        } else {
-            add(
-                titles(
-                    "continue",
-                    R.string.home_continue,
-                    graph.continueCards(playlist, SHELF_LIMIT).filter { it.type == ContentType.EPISODE }.mapNotNull { card ->
-                        graph.seriesById(playlist, card.pageId)?.let { row ->
-                            val place = listOfNotNull(card.subtitle, resources.getString(R.string.home_next_episode).takeIf { card.next })
-                            series(row).copy(caption = place.joinToString(" · ").ifEmpty { row.year?.toString() }, progress = card.fraction)
-                        }
-                    },
-                ),
-            )
-            add(
-                titles(
-                    "trending",
-                    R.string.home_trending_series,
-                    graph.seriesOfList(playlist, ExternalList.TRENDING_SERIES, SHELF_LIMIT).map(::series),
-                ),
-            )
-            add(titles("new", R.string.home_new_episodes, graph.newEpisodeSeries(playlist, SHELF_LIMIT).map(::series)))
-            add(
-                titles(
-                    "popular",
-                    R.string.home_popular_series,
-                    graph.seriesOfList(
-                        playlist,
-                        ExternalList.POPULAR_SERIES,
-                        SHELF_LIMIT,
-                    ).ifEmpty { graph.popularSeries(playlist, SHELF_LIMIT) }
-                        .map(::series),
-                ),
-            )
-            add(
-                titles(
-                    "top",
-                    R.string.home_top_series,
-                    graph.seriesOfList(
-                        playlist,
-                        ExternalList.TOP_SERIES,
-                        SHELF_LIMIT,
-                    ).ifEmpty { graph.topRatedSeries(playlist, SHELF_LIMIT) }
-                        .map(::series),
-                ),
-            )
-            add(titles("mine", R.string.home_my_list, graph.favoriteSeries(playlist, SHELF_LIMIT).map(::series)))
-            for (group in graph.userGroups(playlist).filter { it.seriesCount > 0 }) {
-                add(Shelf.Titles("group-${group.id}", group.title, graph.seriesInUserGroup(playlist, group.id, SHELF_LIMIT).map(::series)))
-            }
-        }
-        // Publish what is ready before the genre shelves, which take longer on a large library — unless a whole page from
-        // before is showing, which is better than a shorter one.
-        if (shelves == null) shelves = built.toList()
-
-        val genres = if (movies) graph.movieGenres(playlist, GENRE_TILES) else graph.seriesGenres(playlist, GENRE_TILES)
-        for ((genre, count) in genres.take(GENRE_SHELVES)) {
-            if (count < MIN_GENRE_TITLES) continue
-            val items = if (movies) {
-                graph.moviesOfGenre(playlist, genre, SHELF_LIMIT).map(::movie)
-            } else {
-                graph.seriesOfGenre(playlist, genre, SHELF_LIMIT).map(::series)
-            }
-            add(Shelf.Titles("genre-$genre", genre, items))
-        }
-        add(
-            Shelf.Tiles(
-                "genres",
-                resources.getString(R.string.library_by_genre),
-                genres.map { (name, count) -> BrowseTile(Browse.genre(name), name, count) },
-            ),
-        )
-        if (movies) {
-            val decades = graph.movieDecades(playlist).filter { (decade, _) -> decade in DECADES }
-            add(
-                Shelf.Tiles(
-                    "decades",
-                    resources.getString(R.string.library_by_decade),
-                    decades.map { (decade, count) ->
-                        BrowseTile(
-                            Browse.decade(decade),
-                            resources.getString(R.string.library_decade, decade),
-                            count,
-                        )
-                    },
-                ),
-            )
-        }
-        val categories = graph.libraryGroups(playlist, unit)
-        add(
-            Shelf.Tiles(
-                "categories",
-                resources.getString(R.string.library_all_categories),
-                listOf(
-                    BrowseTile(
-                        Browse.ALL,
-                        resources.getString(if (movies) R.string.library_all_movies else R.string.library_all_series),
-                        null,
-                    ),
-                ) +
-                    categories.map { BrowseTile(Browse.category(it.id), it.title, it.itemCount) },
-            ),
-        )
-        shelves = built.toList()
-        ShelfMemory.last[playlist to unit] = built.toList()
+        shelves = buildShelves(graph, resources, playlist, unit) { ready -> if (shelves == null) shelves = ready }
+        ShelfMemory.last[playlist to unit] = shelves.orEmpty()
     }
 
     var menuFor by remember { mutableStateOf<Pair<String, ShelfItem>?>(null) }
@@ -504,3 +315,211 @@ private const val SHELF_REFRESH_STEP = 10
 private val DECADES = 1900..2090
 private val TILE_WIDTH = 180.dp
 private val TILE_HEIGHT = 96.dp
+
+/**
+ * The shelves of Films or Series, built as the TV shows them and in its order (ADR-0035): what is personal and ranked
+ * first, then the largest genres, then tiles for genres, decades and the provider's categories. [early] receives what is
+ * ready before the genre shelves, which take longer on a large library. Shared with the phone companion (2c), so the
+ * phone's Films and Series pages are the TV's own.
+ */
+internal suspend fun buildShelves(
+    graph: AppGraph,
+    resources: Resources,
+    playlist: PlaylistId,
+    unit: ImportUnit,
+    early: (List<Shelf>) -> Unit = {},
+): List<Shelf> {
+    val movies = unit == ImportUnit.MOVIES
+    fun movie(row: MovieRow) = ShelfItem(
+        row.id,
+        row.title,
+        row.year?.toString(),
+        row.poster,
+        row.backdrop,
+        row.plot,
+        listOfNotNull(row.year?.toString(), row.genres.firstOrNull(), row.rating?.let { "★ $it" }),
+        row.progress?.takeIf { !it.completed }?.fraction,
+        row.isFavorite,
+        row.year,
+        watched = row.progress?.completed == true,
+    )
+    fun series(row: SeriesRow) = ShelfItem(
+        row.id,
+        row.title,
+        row.year?.toString(),
+        row.poster,
+        row.backdrop,
+        row.plot,
+        listOfNotNull(row.year?.toString(), row.genres.firstOrNull(), row.rating?.let { "★ $it" }),
+        null,
+        row.isFavorite,
+        row.year,
+    )
+    fun titles(key: String, title: Int, items: List<ShelfItem>) = Shelf.Titles(key, resources.getString(title), items)
+    val built = mutableListOf<Shelf>()
+    fun add(shelf: Shelf) {
+        val empty = when (shelf) {
+            is Shelf.Titles -> shelf.items.isEmpty()
+            is Shelf.Tiles -> shelf.tiles.isEmpty()
+        }
+        if (empty) return
+        val personal = shelf.key == "continue" || shelf.key == "mine" || shelf.key.startsWith("group-")
+        val kept = withoutRepeats(built.filterIsInstance<Shelf.Titles>() + listOfNotNull(shelf as? Shelf.Titles), { !personal }) {
+            it.items.map { item -> item.id }
+        }
+        if (shelf is Shelf.Titles && kept.lastOrNull() != shelf) return
+        built += shelf
+    }
+    if (movies) {
+        add(
+            titles(
+                "continue",
+                R.string.home_continue,
+                graph.continueCards(playlist, SHELF_LIMIT).filter { it.type == ContentType.MOVIE }.mapNotNull { card ->
+                    graph.movie(playlist, card.pageId)?.let(::movie)
+                },
+            ),
+        )
+        add(
+            titles(
+                "trending",
+                R.string.home_trending_movies,
+                graph.moviesOfList(playlist, ExternalList.TRENDING_MOVIES, SHELF_LIMIT).map(::movie),
+            ),
+        )
+        add(titles("recent", R.string.library_recently_added, graph.recentMovies(playlist, SHELF_LIMIT).map(::movie)))
+        add(
+            titles(
+                "popular",
+                R.string.home_popular_movies,
+                graph.moviesOfList(
+                    playlist,
+                    ExternalList.POPULAR_MOVIES,
+                    SHELF_LIMIT,
+                ).ifEmpty { graph.popularMovies(playlist, SHELF_LIMIT) }
+                    .map(::movie),
+            ),
+        )
+        graph.becauseYouWatched(playlist, SHELF_LIMIT)?.let { pick ->
+            add(Shelf.Titles("because", resources.getString(R.string.home_because, pick.seed.title), pick.movies.map(::movie)))
+        }
+        add(
+            titles(
+                "top",
+                R.string.home_top_movies,
+                graph.moviesOfList(
+                    playlist,
+                    ExternalList.TOP_MOVIES,
+                    SHELF_LIMIT,
+                ).ifEmpty { graph.topRatedMovies(playlist, SHELF_LIMIT) }
+                    .map(::movie),
+            ),
+        )
+        add(titles("mine", R.string.home_my_list, graph.favoriteMovies(playlist, SHELF_LIMIT).map(::movie)))
+        for (group in graph.userGroups(playlist).filter { it.movieCount > 0 }) {
+            add(Shelf.Titles("group-${group.id}", group.title, graph.moviesInUserGroup(playlist, group.id, SHELF_LIMIT).map(::movie)))
+        }
+    } else {
+        add(
+            titles(
+                "continue",
+                R.string.home_continue,
+                graph.continueCards(playlist, SHELF_LIMIT).filter { it.type == ContentType.EPISODE }.mapNotNull { card ->
+                    graph.seriesById(playlist, card.pageId)?.let { row ->
+                        val place = listOfNotNull(card.subtitle, resources.getString(R.string.home_next_episode).takeIf { card.next })
+                        series(row).copy(caption = place.joinToString(" · ").ifEmpty { row.year?.toString() }, progress = card.fraction)
+                    }
+                },
+            ),
+        )
+        add(
+            titles(
+                "trending",
+                R.string.home_trending_series,
+                graph.seriesOfList(playlist, ExternalList.TRENDING_SERIES, SHELF_LIMIT).map(::series),
+            ),
+        )
+        add(titles("new", R.string.home_new_episodes, graph.newEpisodeSeries(playlist, SHELF_LIMIT).map(::series)))
+        add(
+            titles(
+                "popular",
+                R.string.home_popular_series,
+                graph.seriesOfList(
+                    playlist,
+                    ExternalList.POPULAR_SERIES,
+                    SHELF_LIMIT,
+                ).ifEmpty { graph.popularSeries(playlist, SHELF_LIMIT) }
+                    .map(::series),
+            ),
+        )
+        add(
+            titles(
+                "top",
+                R.string.home_top_series,
+                graph.seriesOfList(
+                    playlist,
+                    ExternalList.TOP_SERIES,
+                    SHELF_LIMIT,
+                ).ifEmpty { graph.topRatedSeries(playlist, SHELF_LIMIT) }
+                    .map(::series),
+            ),
+        )
+        add(titles("mine", R.string.home_my_list, graph.favoriteSeries(playlist, SHELF_LIMIT).map(::series)))
+        for (group in graph.userGroups(playlist).filter { it.seriesCount > 0 }) {
+            add(Shelf.Titles("group-${group.id}", group.title, graph.seriesInUserGroup(playlist, group.id, SHELF_LIMIT).map(::series)))
+        }
+    }
+    // Publish what is ready before the genre shelves, which take longer on a large library — unless a whole page from
+    // before is showing, which is better than a shorter one.
+    early(built.toList())
+
+    val genres = if (movies) graph.movieGenres(playlist, GENRE_TILES) else graph.seriesGenres(playlist, GENRE_TILES)
+    for ((genre, count) in genres.take(GENRE_SHELVES)) {
+        if (count < MIN_GENRE_TITLES) continue
+        val items = if (movies) {
+            graph.moviesOfGenre(playlist, genre, SHELF_LIMIT).map(::movie)
+        } else {
+            graph.seriesOfGenre(playlist, genre, SHELF_LIMIT).map(::series)
+        }
+        add(Shelf.Titles("genre-$genre", genre, items))
+    }
+    add(
+        Shelf.Tiles(
+            "genres",
+            resources.getString(R.string.library_by_genre),
+            genres.map { (name, count) -> BrowseTile(Browse.genre(name), name, count) },
+        ),
+    )
+    if (movies) {
+        val decades = graph.movieDecades(playlist).filter { (decade, _) -> decade in DECADES }
+        add(
+            Shelf.Tiles(
+                "decades",
+                resources.getString(R.string.library_by_decade),
+                decades.map { (decade, count) ->
+                    BrowseTile(
+                        Browse.decade(decade),
+                        resources.getString(R.string.library_decade, decade),
+                        count,
+                    )
+                },
+            ),
+        )
+    }
+    val categories = graph.libraryGroups(playlist, unit)
+    add(
+        Shelf.Tiles(
+            "categories",
+            resources.getString(R.string.library_all_categories),
+            listOf(
+                BrowseTile(
+                    Browse.ALL,
+                    resources.getString(if (movies) R.string.library_all_movies else R.string.library_all_series),
+                    null,
+                ),
+            ) +
+                categories.map { BrowseTile(Browse.category(it.id), it.title, it.itemCount) },
+        ),
+    )
+    return built.toList()
+}

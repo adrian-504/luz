@@ -5,13 +5,22 @@ import android.graphics.Bitmap
 import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.model.ContentType
+import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.storage.ChannelRow
 import app.iptvplayer.storage.GroupRow
 import app.iptvplayer.storage.MovieRow
 import app.iptvplayer.storage.NowNextRow
 import app.iptvplayer.storage.SeriesRow
+import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.AppGraph
+import app.iptvplayer.tv.app.ContinueCard
+import app.iptvplayer.tv.ui.library.BrowseFilter
+import app.iptvplayer.tv.ui.library.Shelf
+import app.iptvplayer.tv.ui.library.ShelfItem
+import app.iptvplayer.tv.ui.library.browseMovies
+import app.iptvplayer.tv.ui.library.browseSeries
+import app.iptvplayer.tv.ui.library.buildShelves
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
@@ -45,19 +54,7 @@ class CompanionLibrary(private val context: Context, private val graph: AppGraph
         val p = playlist() ?: return JSONObject().put("source", false)
         val favourites = graph.favoriteChannels(p)
         val channels = favourites.ifEmpty { graph.mostWatchedChannels(p, CHANNELS) }
-        val continuing = graph.continueCards(p, ROW).map { card ->
-            JSONObject()
-                .put("kind", if (card.type == ContentType.MOVIE) "movie" else "episode")
-                .put("id", card.id)
-                .put("page", card.pageId)
-                .put("title", card.title)
-                .put("subtitle", card.subtitle ?: JSONObject.NULL)
-                .put("fraction", card.fraction ?: JSONObject.NULL)
-                .put("remainingMin", card.remaining?.inWholeMinutes ?: JSONObject.NULL)
-                .put("art", ref(if (card.type == ContentType.MOVIE) MOVIE else SERIES, card.pageId, card.poster))
-                .put("wide", ref(if (card.type == ContentType.MOVIE) MOVIE_WIDE else SERIES_WIDE, card.pageId, card.backdrop))
-                .put("needsEpisodes", card.needsEpisodes)
-        }
+        val continuing = graph.continueCards(p, ROW).map(::continueCard)
         return JSONObject()
             .put("source", true)
             .put("continue", JSONArray(continuing))
@@ -81,6 +78,107 @@ class CompanionLibrary(private val context: Context, private val graph: AppGraph
             .put("myList", JSONArray(graph.favoriteMovies(p, ROW).map(::poster) + graph.favoriteSeries(p, ROW).map(::poster)))
             .put("added", JSONArray(graph.recentMovies(p, ROW).map(::poster)))
             .put("newEpisodes", JSONArray(graph.newEpisodeSeries(p, ROW).map(::poster)))
+    }
+
+    private fun continueCard(card: ContinueCard): JSONObject = JSONObject()
+        .put("kind", if (card.type == ContentType.MOVIE) "movie" else "episode")
+        .put("id", card.id)
+        .put("page", card.pageId)
+        .put("title", card.title)
+        .put("subtitle", card.subtitle ?: JSONObject.NULL)
+        .put("fraction", card.fraction ?: JSONObject.NULL)
+        .put("remainingMin", card.remaining?.inWholeMinutes ?: JSONObject.NULL)
+        .put("art", ref(if (card.type == ContentType.MOVIE) MOVIE else SERIES, card.pageId, card.poster))
+        .put("wide", ref(if (card.type == ContentType.MOVIE) MOVIE_WIDE else SERIES_WIDE, card.pageId, card.backdrop))
+        .put("needsEpisodes", card.needsEpisodes)
+
+    /**
+     * Films or Series on the phone (2c, Design 2.16): the TV's own shelves in its order, at most [SHELF_ITEMS] titles each
+     * ("continue" with the continue fields), its genres, decades and the provider's categories with their counts, and how
+     * many titles the library holds. Null for a kind that is neither.
+     */
+    suspend fun library(kind: String): JSONObject? {
+        val unit = unitOf(kind) ?: return null
+        val p = playlist() ?: return JSONObject().put("source", false)
+        val movies = unit == ImportUnit.MOVIES
+        val shelves = buildShelves(graph, context.resources, p, unit)
+        val titles = shelves.filterIsInstance<Shelf.Titles>().map { shelf ->
+            val items = if (shelf.key == CONTINUE) {
+                graph.continueCards(p, SHELF_ITEMS)
+                    .filter { it.type == if (movies) ContentType.MOVIE else ContentType.EPISODE }
+                    .map(::continueCard)
+            } else {
+                shelf.items.take(SHELF_ITEMS).map { item -> shelfPoster(kind, item) }
+            }
+            JSONObject().put("key", shelf.key).put("title", shelf.title).put("wide", shelf.key == CONTINUE).put("items", JSONArray(items))
+        }
+        fun tiles(key: String, prefix: String) = JSONArray(
+            shelves.filterIsInstance<Shelf.Tiles>().firstOrNull { it.key == key }?.tiles.orEmpty()
+                .filter { it.key.startsWith(prefix) }
+                .map { tile ->
+                    JSONObject()
+                        .put("id", tile.key.removePrefix(prefix))
+                        .put("title", tile.title)
+                        .put("count", tile.count ?: JSONObject.NULL)
+                },
+        )
+        val groups = graph.libraryGroups(p, unit)
+        return JSONObject()
+            .put("source", true)
+            .put("kind", kind)
+            .put("total", groups.sumOf { it.itemCount })
+            .put("shelves", JSONArray(titles))
+            .put("genres", tiles("genres", "genre:"))
+            .put("decades", tiles("decades", "decade:"))
+            .put("categories", JSONArray(groups.map { JSONObject().put("id", it.id).put("title", it.title).put("count", it.itemCount) }))
+    }
+
+    /**
+     * One page of a poster grid (2c): [filter] is "all", "genre:<name>", "decade:<year>" or "category:<id>", in the TV
+     * grid's order. Null when the kind is neither or the filter names something that is gone.
+     */
+    suspend fun browse(kind: String, filter: String, offset: Int, limit: Int): JSONObject? {
+        val unit = unitOf(kind) ?: return null
+        val p = playlist() ?: return null
+        val movies = unit == ImportUnit.MOVIES
+        val f = BrowseFilter(filter)
+        val page = limit.coerceIn(1, MAX_PAGE)
+        val from = offset.coerceAtLeast(0)
+        val (title, total) = when {
+            filter == ALL -> context.getString(if (movies) R.string.library_all_movies else R.string.library_all_series) to
+                graph.libraryGroups(p, unit).sumOf { it.itemCount }
+            f.category != null -> graph.libraryGroups(p, unit).firstOrNull { it.id == f.category }?.let { it.title to it.itemCount }
+                ?: return null
+            f.genre != null -> {
+                val genres = if (movies) graph.movieGenres(p, Int.MAX_VALUE) else graph.seriesGenres(p, Int.MAX_VALUE)
+                genres.firstOrNull { it.first == f.genre }?.let { it.first to it.second } ?: return null
+            }
+            f.decade != null && movies ->
+                graph.movieDecades(p).firstOrNull { it.first == f.decade }
+                    ?.let { context.getString(R.string.library_decade, it.first) to it.second }
+                    ?: return null
+            else -> return null
+        }
+        val items = if (movies) {
+            browseMovies(graph, p, filter, page, from).map(::poster)
+        } else {
+            browseSeries(graph, p, filter, page, from).map(::poster)
+        }
+        return JSONObject().put("title", title).put("total", total).put("items", JSONArray(items))
+    }
+
+    private fun shelfPoster(kind: String, item: ShelfItem): JSONObject = JSONObject()
+        .put("kind", kind)
+        .put("id", item.id)
+        .put("title", item.title)
+        .put("year", item.year ?: JSONObject.NULL)
+        .put("art", ref(if (kind == "movie") MOVIE else SERIES, item.id, item.poster))
+        .put("fraction", item.progress ?: JSONObject.NULL)
+
+    private fun unitOf(kind: String): ImportUnit? = when (kind) {
+        "movie" -> ImportUnit.MOVIES
+        "series" -> ImportUnit.SERIES
+        else -> null
     }
 
     suspend fun group(id: String): JSONObject? {
@@ -421,6 +519,10 @@ class CompanionLibrary(private val context: Context, private val graph: AppGraph
     private fun ref(kind: String, id: String, template: UrlTemplate?): Any = if (template == null) JSONObject.NULL else art(kind, id)
 
     companion object {
+        private const val SHELF_ITEMS = 20
+        private const val MAX_PAGE = 120
+        private const val CONTINUE = "continue"
+        private const val ALL = "all"
         const val MOVIE = "m"
         const val MOVIE_WIDE = "mw"
         const val SERIES = "s"

@@ -122,6 +122,14 @@ class CompanionServer(
                             "/api/item" -> library.item(query["kind"].orEmpty(), query["id"].orEmpty())
                             "/api/movie" -> library.movie(query["id"].orEmpty())
                             "/api/series" -> library.series(query["id"].orEmpty())
+                            // Films and series on the phone (2c, Design 2.16).
+                            "/api/library" -> library.library(query["kind"].orEmpty())
+                            "/api/browse" -> library.browse(
+                                query["kind"].orEmpty(),
+                                query["filter"]?.ifEmpty { null } ?: "all",
+                                query["offset"]?.toIntOrNull() ?: 0,
+                                query["limit"]?.toIntOrNull() ?: BROWSE_PAGE,
+                            )
                             else -> null
                         }
                     }.getOrNull()
@@ -476,6 +484,8 @@ class CompanionServer(
     }
 
     private companion object {
+        /** A poster page on the phone: Design 2.16 asks for sixty at a time. */
+        const val BROWSE_PAGE = 60
         const val BACKLOG = 16
         const val MAX_CONNECTIONS = 16
         const val MAX_PICTURES = 4

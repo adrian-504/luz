@@ -1,7 +1,9 @@
 package app.iptvplayer.tv.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,12 +40,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
@@ -61,6 +68,7 @@ import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.ActionButton
 import app.iptvplayer.tv.ui.FocusMemory
+import app.iptvplayer.tv.ui.TvTextField
 import app.iptvplayer.tv.ui.library.HOME_ROW_TITLES
 import app.iptvplayer.tv.ui.library.PhoneLine
 import app.iptvplayer.tv.ui.library.withNewRows
@@ -73,6 +81,7 @@ import app.iptvplayer.tv.ui.theme.LuzIcons
 import app.iptvplayer.tv.ui.theme.LuzMenu
 import app.iptvplayer.tv.ui.theme.LuzMenuItem
 import app.iptvplayer.tv.ui.theme.LuzPrompt
+import app.iptvplayer.tv.ui.theme.LuzPromptTags
 import app.iptvplayer.tv.ui.theme.LuzRow
 import app.iptvplayer.tv.ui.theme.NoteText
 import app.iptvplayer.tv.ui.theme.Tokens
@@ -203,7 +212,7 @@ fun SettingsSection(
             ) {
                 add(SettingsEntry(SettingsTags.DETAILS, R.string.settings_details, R.string.settings_details_summary, LuzIcons.Movies))
             }
-            add(SettingsEntry(SettingsTags.SPORT, R.string.settings_sport, R.string.settings_sport_summary, LuzIcons.Star))
+            add(SettingsEntry(SettingsTags.SPORT, R.string.settings_sport, R.string.settings_sport_summary, LuzIcons.Sport))
             add(SettingsEntry(SettingsTags.TMDB, R.string.settings_tmdb, R.string.settings_tmdb_summary, LuzIcons.Star))
             add(SettingsEntry(SettingsTags.COMPANION, R.string.settings_companion, R.string.settings_companion_summary, LuzIcons.Phone))
             add(SettingsEntry(SettingsTags.ABOUT, R.string.settings_about, R.string.settings_about_summary, LuzIcons.Info))
@@ -442,20 +451,36 @@ private fun SportPane(focus: FocusMemory, onFindTeam: () -> Unit) {
         current.error != null -> stringResource(R.string.sport_key_failed)
         else -> stringResource(R.string.sport_key_ok)
     }
-    Text(line, style = MaterialTheme.typography.titleSmall, color = Tokens.textPrimary, modifier = Modifier.testTag(SettingsTags.SPORT))
-    Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3)) {
-        ActionButton(
-            stringResource(if (current.hasToken) R.string.sport_key_replace else R.string.sport_key_enter),
-            { entering = true },
-            Modifier.rememberedFocus(focus, SettingsTags.SPORT_KEY),
-            primary = !current.hasToken,
+    // A status, not a heading (Design): quiet, so the white button under it stays the one white thing.
+    Text(line, style = MaterialTheme.typography.bodyMedium, color = Tokens.textSecondary, modifier = Modifier.testTag(SettingsTags.SPORT))
+    if (entering) {
+        SportKeyBox(
+            onSave = { key ->
+                entering = false
+                checking = true
+                refused = null
+                scope.launch {
+                    refused = graph.setSportToken(key)
+                    checking = false
+                }
+            },
+            onDismiss = { entering = false },
         )
-        if (current.hasToken) {
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3)) {
             ActionButton(
-                stringResource(R.string.sport_key_remove),
-                { scope.launch { graph.removeSportToken() } },
-                Modifier.rememberedFocus(focus, SettingsTags.SPORT_REMOVE),
+                stringResource(if (current.hasToken) R.string.sport_key_replace else R.string.sport_key_enter),
+                { entering = true },
+                Modifier.rememberedFocus(focus, SettingsTags.SPORT_KEY),
+                primary = !current.hasToken,
             )
+            if (current.hasToken) {
+                ActionButton(
+                    stringResource(R.string.sport_key_remove),
+                    { scope.launch { graph.removeSportToken() } },
+                    Modifier.rememberedFocus(focus, SettingsTags.SPORT_REMOVE),
+                )
+            }
         }
     }
     if (current.follows.isEmpty()) {
@@ -483,7 +508,7 @@ private fun SportPane(focus: FocusMemory, onFindTeam: () -> Unit) {
                     )
                     // The favourite's mark: one sign for "I keep this", everywhere (Design 4.8).
                     Icon(
-                        LuzIcons.Star,
+                        LuzIcons.StarFilled,
                         contentDescription = null,
                         tint = Tokens.accent,
                         modifier = Modifier.padding(start = Tokens.space2).size(FOLLOW_MARK),
@@ -495,23 +520,46 @@ private fun SportPane(focus: FocusMemory, onFindTeam: () -> Unit) {
         }
     }
     Text(stringResource(R.string.settings_sport_coverage), style = MaterialTheme.typography.bodySmall, color = Tokens.textTertiary)
-    if (entering) {
-        LuzPrompt(
-            title = stringResource(R.string.sport_key_enter),
-            initial = "",
+}
+
+/**
+ * The key box, opened in place of the key buttons (Design): what to type, the field with the remote already in it, the
+ * phone offered underneath (a long key is painful on the remote), and Save. Back closes it.
+ */
+@Composable
+private fun SportKeyBox(onSave: (String) -> Unit, onDismiss: () -> Unit) {
+    var text by remember { mutableStateOf("") }
+    val field = remember { FocusRequester() }
+    val inView = remember { BringIntoViewRequester() }
+    BackHandler(onBack = onDismiss)
+    LaunchedEffect(Unit) {
+        inView.bringIntoView()
+        runCatching { field.requestFocus() }
+    }
+    Column(
+        Modifier
+            .bringIntoViewRequester(inView)
+            .clip(RoundedCornerShape(Tokens.radiusLarge))
+            .background(Tokens.panel)
+            .border(1.dp, Tokens.hairline, RoundedCornerShape(Tokens.radiusLarge))
+            .padding(Tokens.space5)
+            .testTag(LuzPromptTags.PROMPT),
+        verticalArrangement = Arrangement.spacedBy(Tokens.space3),
+    ) {
+        Text(stringResource(R.string.sport_key_message), style = MaterialTheme.typography.bodyMedium, color = Tokens.textSecondary)
+        TvTextField(
             label = stringResource(R.string.sport_key_label),
-            message = stringResource(R.string.sport_key_message),
-            belowField = { PhoneLine() },
-            onConfirm = { key ->
-                checking = true
-                refused = null
-                scope.launch {
-                    refused = graph.setSportToken(key)
-                    checking = false
-                }
-            },
-            onClear = null,
-            onDismiss = { entering = false },
+            value = text,
+            onValueChange = { text = it },
+            imeAction = ImeAction.Done,
+            modifier = Modifier.fillMaxWidth().focusRequester(field).testTag(LuzPromptTags.FIELD),
+        )
+        PhoneLine()
+        ActionButton(
+            stringResource(R.string.prompt_save),
+            { onSave(text) },
+            Modifier.testTag(LuzPromptTags.CONFIRM),
+            primary = true,
         )
     }
 }

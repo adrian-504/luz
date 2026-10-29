@@ -245,6 +245,45 @@ object LuzIcons {
         close()
     }
 
+    /** The star filled: a favourite or a followed team, the mark of something kept ("on" is amber and filled). */
+    val StarFilled = filled("star-filled") {
+        moveTo(12f, 3.5f)
+        lineTo(14.6f, 9f)
+        lineTo(20.5f, 9.6f)
+        lineTo(16f, 13.6f)
+        lineTo(17.3f, 19.5f)
+        lineTo(12f, 16.5f)
+        lineTo(6.7f, 19.5f)
+        lineTo(8f, 13.6f)
+        lineTo(3.5f, 9.6f)
+        lineTo(9.4f, 9f)
+        close()
+    }
+
+    /** A ball: Sport in Settings (ADR-0057). */
+    val Sport = icon("sport") {
+        moveTo(20f, 12f)
+        arcTo(8f, 8f, 0f, true, true, 4f, 12f)
+        arcTo(8f, 8f, 0f, true, true, 20f, 12f)
+        close()
+        moveTo(12f, 8.5f)
+        lineTo(15.3f, 10.9f)
+        lineTo(14f, 14.8f)
+        lineTo(10f, 14.8f)
+        lineTo(8.7f, 10.9f)
+        close()
+        moveTo(12f, 8.5f)
+        lineTo(12f, 4f)
+        moveTo(15.3f, 10.9f)
+        lineTo(19.6f, 9.5f)
+        moveTo(14f, 14.8f)
+        lineTo(16.7f, 18.5f)
+        moveTo(10f, 14.8f)
+        lineTo(7.3f, 18.5f)
+        moveTo(8.7f, 10.9f)
+        lineTo(4.4f, 9.5f)
+    }
+
     /** A bell: a match with a reminder (4.16). */
     val Bell = icon("bell") {
         moveTo(6f, 16.5f)

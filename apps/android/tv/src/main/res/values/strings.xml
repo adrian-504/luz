@@ -23,7 +23,7 @@
     <string name="section_home">Home</string>
     <string name="section_live_tv">Live TV</string>
     <string name="section_guide">Guide</string>
-    <string name="section_movies">Movies</string>
+    <string name="section_movies">Films</string>
     <string name="section_series">Series</string>
     <string name="section_favorites">Favourites</string>
     <string name="section_search">Search</string>
@@ -191,8 +191,8 @@
     <string name="guide_link_field">Guide link (XMLTV, .xml or .xml.gz)</string>
     <string name="guide_link_save">Save and download the guide</string>
     <string name="guide_link_clear">Use the provider\'s guide again</string>
-    <string name="library_no_source">No source yet. Add your provider to see movies and series.</string>
-    <string name="library_all_movies">All movies</string>
+    <string name="library_no_source">No source yet. Add your provider to see films and series.</string>
+    <string name="library_all_movies">All films</string>
     <string name="library_all_series">All series</string>
     <string name="library_importing">Still importing. Titles appear here when they are ready.</string>
     <string name="library_failed">The provider did not send this list. Try Refresh in Playlists.</string>
@@ -258,14 +258,14 @@
     <string name="home_kind_movie">Film</string>
     <string name="home_kind_series">Series</string>
     <string name="home_continue">Continue watching</string>
-    <string name="home_recent_movies">Recently added movies</string>
+    <string name="home_recent_movies">Recently added films</string>
     <string name="home_your_channels">Your channels</string>
     <string name="home_trending_movies">Trending films</string>
-    <string name="home_trending_series">Trending shows</string>
+    <string name="home_trending_series">Trending series</string>
     <string name="home_popular_movies">Popular films</string>
-    <string name="home_popular_series">Popular shows</string>
+    <string name="home_popular_series">Popular series</string>
     <string name="home_top_movies">Highest rated films</string>
-    <string name="home_top_series">Highest rated shows</string>
+    <string name="home_top_series">Highest rated series</string>
     <string name="home_new_episodes">New episodes</string>
     <string name="home_because">Because you watched %1$s</string>
     <string name="explore_trending">Trending in your library</string>
@@ -273,7 +273,7 @@
     <string name="explore_top">Highest rated films</string>
     <string name="explore_ninety">Around 90 minutes</string>
     <string name="explore_decade">Films from the %1$ds</string>
-    <string name="explore_top_shows">Highest rated shows</string>
+    <string name="explore_top_shows">Highest rated series</string>
     <string name="home_genre">Because you watch %1$s</string>
     <string name="home_genre_setting">Because you watch… (your favourite genre)</string>
     <string name="home_coming_up">Coming up on your channels</string>
@@ -308,7 +308,7 @@
     <string name="search_hint">Type with the letters above. Results appear as you type.</string>
     <string name="search_nothing">Nothing matches “%1$s”.</string>
     <string name="search_channels">Channels</string>
-    <string name="search_movies">Movies</string>
+    <string name="search_movies">Films</string>
     <string name="search_series">Series</string>
     <string name="menu_watch">Watch</string>
     <string name="menu_add_favorite">Add to favourites</string>
@@ -320,7 +320,7 @@
     <string name="info_close">Close</string>
     <string name="settings_providers">Providers</string>
     <string name="settings_providers_summary">Your providers and logins</string>
-    <string name="settings_details">Film &amp; show details</string>
+    <string name="settings_details">Film and series details</string>
     <string name="settings_details_summary">What your provider sends</string>
     <string name="details_help">Luz asks your provider for each film\'s page slowly in the background, and pauses while you watch. This shows what the pages fetched so far contain.</string>
     <string name="details_fetch_now">Fetch missing details now</string>
@@ -332,8 +332,8 @@
         <item quantity="other">%1$d film pages fetched</item>
     </plurals>
     <plurals name="details_series_fetched">
-        <item quantity="one">%1$d show with details</item>
-        <item quantity="other">%1$d shows with details</item>
+        <item quantity="one">%1$d series with details</item>
+        <item quantity="other">%1$d series with details</item>
     </plurals>
     <string name="settings_tmdb">TMDB</string>
     <string name="settings_tmdb_summary">Trending and ratings, with your own key</string>
@@ -368,7 +368,7 @@
     <string name="tmdb_help">With a free key from The Movie Database (themoviedb.org → Settings → API), Luz adds what is trending this week and uses TMDB\'s popularity and ratings for the Popular and Highest rated rows. Luz reads TMDB\'s public lists about once a day.</string>
     <string name="tmdb_artwork_on">Title artwork and photos: On</string>
     <string name="tmdb_artwork_off">Title artwork and photos: Off</string>
-    <string name="tmdb_artwork_help">When on, the films, shows and people you open are looked up at TMDB, once each, for their title artwork, cast photos and biographies. Nothing else about your library or what you watch is sent.</string>
+    <string name="tmdb_artwork_help">When on, the films, series and people you open are looked up at TMDB, once each, for their title artwork, cast photos and biographies. Nothing else about your library or what you watch is sent.</string>
     <string name="tmdb_no_key">No key yet: rows use your provider\'s ratings.</string>
     <string name="tmdb_checking">Checking your key with TMDB…</string>
     <string name="tmdb_refused">TMDB did not accept that key. Check it and try again.</string>
