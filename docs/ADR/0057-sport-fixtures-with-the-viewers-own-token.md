@@ -53,5 +53,9 @@ lists.
 - `HttpFetcher.get` gained `sensitiveHeaders`, passed to the transport's existing redacted headers.
 - "In your guide" (4.3) is built: OK on a programme on now tunes its channel. **Open:** OK on a later programme opens the
   Guide at the present time; it should jump to that hour with the programme focused.
+- Match day (s1, Design 4.5): a one-card "Your match today" row leads Home; the stage shows the league, the teams, the
+  amber countdown (then "Live now") and the two team plates where the picture goes. Keys (Design's ruling): the stage
+  holds nothing the remote reaches, as on every other card; OK on the match card opens "In your guide", holding OK gives
+  Remind me and Follow. Home's first-row time on the Bbox is NOT YET MEASURED (go/no-go: no more than 50 ms slower).
 - Screens (follow, Matches and "In your guide" shelves, reminders, Sport now, match-day Home, the table, the phone's
   calendar) follow in this round, each under its own go/no-go in the round 4 brief.

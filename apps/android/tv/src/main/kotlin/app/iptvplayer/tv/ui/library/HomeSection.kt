@@ -467,6 +467,10 @@ fun HomeSection(
             title = card.title,
             facts = if (row.id == HomeTags.MATCH_DAY) emptyList() else listOf(match.fixture.competitionName),
             kickoff = match.fixture.kickoff.takeIf { row.id == HomeTags.MATCH_DAY },
+            teams = listOf(
+                StageTeam((match.home?.tla ?: match.fixture.homeName).take(TLA_LETTERS).uppercase(), match.home?.crestUrl),
+                StageTeam((match.away?.tla ?: match.fixture.awayName).take(TLA_LETTERS).uppercase(), match.away?.crestUrl),
+            ),
         )
     } ?: card.now?.let { now -> channelStage(card, now, resources) } ?: StageInfo(
         eyebrow = if (greetNow(row)) "$greeting · ${row.title}" else row.title,
@@ -745,3 +749,6 @@ private const val DETAIL_REFRESH_STEP = 10
 private object HomeGreeting {
     var done = false
 }
+
+/** A team's letters on the stage when there is no crest: its three-letter code, or its name's first three. */
+private const val TLA_LETTERS = 3

@@ -71,7 +71,12 @@ data class StageInfo(
     val isChannel: Boolean = false,
     /** Match day (s1): the kick-off, counted down in amber once a minute, then "Live now" with the red mark. */
     val kickoff: kotlin.time.Instant? = null,
+    /** A match: each team's letters and crest, drawn where the picture goes (Design 4.5). */
+    val teams: List<StageTeam> = emptyList(),
 )
+
+/** A team on the stage: its three letters, shown until (or instead of) its crest. */
+data class StageTeam(val letters: String, val crestUrl: String?)
 
 /**
  * The top of Home, Movies and Series: one picture and a few words about whatever the remote rests on, with the shelves
@@ -110,6 +115,11 @@ private fun StageScene(info: StageInfo, resolver: ((UrlTemplate) -> String?)?) {
     val ground = Tokens.bgBase
     Box(Modifier.fillMaxSize()) {
         when {
+            // Words left on dark, crests where the picture goes (4.5).
+            info.teams.isNotEmpty() -> Row(
+                Modifier.align(Alignment.CenterEnd).padding(end = Tokens.space16),
+                horizontalArrangement = Arrangement.spacedBy(TEAM_GAP),
+            ) { info.teams.forEach { StageTeamPlate(it) } }
             info.art != null -> ArtworkImage(
                 info.art,
                 resolver,
@@ -292,3 +302,20 @@ private fun Countdown(kickoff: kotlin.time.Instant) {
 private const val MINUTE_MS = 60_000L
 private const val MINUTES_PER_HOUR = 60
 private val LIVE_DOT = 8.dp
+
+/** A team's plate on the stage: its letters, with the crest over them once it loads. */
+@Composable
+private fun StageTeamPlate(team: StageTeam) {
+    Box(
+        Modifier.size(TEAM_PLATE).clip(RoundedCornerShape(Tokens.radiusMedium)).background(Tokens.raised),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(team.letters, style = MaterialTheme.typography.headlineMedium, color = Tokens.textSecondary)
+        team.crestUrl?.let { crest ->
+            coil3.compose.AsyncImage(crest, contentDescription = null, modifier = Modifier.fillMaxSize().padding(Tokens.space4))
+        }
+    }
+}
+
+private val TEAM_PLATE = 112.dp
+private val TEAM_GAP = 16.dp
