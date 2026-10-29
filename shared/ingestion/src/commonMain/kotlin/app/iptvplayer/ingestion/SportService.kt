@@ -148,6 +148,25 @@ public class SportService(
         return true
     }
 
+    /**
+     * Reads [competition]'s table when it was last read in an earlier six-hour slot (a league opened without being
+     * followed, from a match's menu). True when it was read; nothing without a token or while something plays.
+     */
+    public suspend fun table(competition: String): Boolean {
+        val token = token() ?: return false
+        val fetched = sport.standingFetchedAt(competition)
+        if (fetched != null && slot(fetched) == slot(clock.now())) return false
+        if (playing()) return false
+        val (table, error) = spaced { football.standings(token, competition) }
+        if (error != null) return false
+        sport.saveStanding(
+            competition,
+            table.map { StandingRow(it.position, it.team.id.toString(), it.team.name, it.played, it.points, it.goalDiff) },
+        )
+        table.forEach { row -> if (sport.team(row.team.id.toString()) == null) sport.saveTeam(row.team.toTeam()) }
+        return true
+    }
+
     public fun unfollow(kind: FollowKind, ref: String) {
         sport.unfollow(kind, ref)
     }

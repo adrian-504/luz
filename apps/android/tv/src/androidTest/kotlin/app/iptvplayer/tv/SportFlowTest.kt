@@ -27,6 +27,7 @@ import app.iptvplayer.tv.ui.settings.SettingsTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
 import app.iptvplayer.tv.ui.sport.KickOffTags
+import app.iptvplayer.tv.ui.sport.LeagueTableTags
 import app.iptvplayer.tv.ui.sport.MatchGuideTags
 import app.iptvplayer.tv.ui.theme.LuzPromptTags
 import kotlinx.coroutines.runBlocking
@@ -299,5 +300,24 @@ class SportFlowTest {
             }
         }
         shot("r4-strip-sport")
+    }
+
+    /** A followed league's table (4.7), from Settings → Sport: opened on the viewer's team, which is raised. */
+    @Test
+    fun aFollowedLeaguesTableOpensOnTheViewersTeam() {
+        assertNull(runBlocking { graph.setSportToken(TestPanel.FOOTBALL_TOKEN) })
+        graph.follow(FollowKind.TEAM, "9066", "Sample United")
+        graph.follow(FollowKind.COMPETITION, "EXL", "Example League")
+        rule.waitUntil(60_000) { runBlocking { graph.leagueTable("EXL") }.rows.size == 3 }
+        openSection(Section.SETTINGS)
+        awaitFocus(SettingsTags.entry(SettingsTags.PROVIDERS))
+        repeat(8) { if (focusedTag() != SettingsTags.entry(SettingsTags.SPORT)) press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(SettingsTags.followed("EXL"))).fetchSemanticsNodes().isNotEmpty() }
+        shot("r4-settings-sport-league")
+        rule.onNodeWithTag(SettingsTags.followed("EXL")).performClick()
+        rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(LeagueTableTags.SCREEN)).fetchSemanticsNodes().isNotEmpty() }
+        awaitFocus(LeagueTableTags.row("9066"))
+        shot("r4-league-table")
     }
 }

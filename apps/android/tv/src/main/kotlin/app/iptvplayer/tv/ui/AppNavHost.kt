@@ -55,6 +55,7 @@ import app.iptvplayer.tv.ui.player.PlayerScreen
 import app.iptvplayer.tv.ui.shell.MainShell
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.sport.KickOffReminders
+import app.iptvplayer.tv.ui.sport.LeagueTableScreen
 import app.iptvplayer.tv.ui.sport.MatchGuideScreen
 import app.iptvplayer.tv.ui.theme.Tokens
 import kotlinx.coroutines.launch
@@ -73,6 +74,9 @@ object Routes {
     const val CONTENT = "content/{playlist}/{type}/{id}?fromStart={fromStart}"
     const val PERSON = "person/{playlist}/{name}"
     const val MATCH = "match/{playlist}/{fixture}"
+    const val TABLE = "table/{competition}"
+
+    fun table(competition: String) = "table/${Uri.encode(competition)}"
 
     fun match(playlist: PlaylistId, fixture: String) = "match/${Uri.encode(playlist.value)}/${Uri.encode(fixture)}"
 
@@ -196,7 +200,15 @@ fun AppNavHost() {
                     onPlayContent = { playlist, type, id -> navController.navigate(Routes.content(playlist, type, id, fromStart = false)) },
                     onOpenPerson = { playlist, name -> navController.navigate(Routes.person(playlist, name)) },
                     onOpenMatch = { playlist, fixture -> navController.navigate(Routes.match(playlist, fixture)) },
+                    onOpenTable = { competition -> navController.navigate(Routes.table(competition)) },
                 )
+            }
+            composable(
+                Routes.TABLE,
+                enterTransition = { pageEnter() },
+                popExitTransition = { pageExit() },
+            ) { entry ->
+                LeagueTableScreen(Uri.decode(entry.arguments?.getString("competition").orEmpty()))
             }
             composable(
                 Routes.MATCH,

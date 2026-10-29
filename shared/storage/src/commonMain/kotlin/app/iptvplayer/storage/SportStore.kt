@@ -198,6 +198,10 @@ public class SportStore(private val content: ContentStore, private val clock: Cl
         StandingRow(it.position.toInt(), it.team_ref, it.team_name, it.played.toInt(), it.points.toInt(), it.goal_diff.toInt())
     }
 
+    /** When [competition]'s table was last read; null when it never was. */
+    public fun standingFetchedAt(competition: String): Instant? =
+        queries.standingFetchedAt(competition).executeAsOneOrNull()?.fetched_at?.let { Instant.fromEpochMilliseconds(it) }
+
     public fun remind(fixtureId: String, on: Boolean) {
         if (on) queries.addReminder(fixtureId, clock.now().toEpochMilliseconds()) else queries.removeReminder(fixtureId)
     }

@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -196,7 +197,15 @@ internal fun TeamPlate(team: SportTeam?, name: String, size: Dp) {
         Modifier.size(size).clip(RoundedCornerShape(Tokens.radiusSmall)).background(Tokens.raised),
         contentAlignment = Alignment.Center,
     ) {
-        Text((team?.tla ?: name).take(3).uppercase(), style = MaterialTheme.typography.labelMedium, color = Tokens.textSecondary)
+        // Letters sized to the plate: one line always, on the 24 dp plate of a table row as on the page's 48 dp one.
+        Text(
+            (team?.tla ?: name).take(3).uppercase(),
+            style = MaterialTheme.typography.labelMedium,
+            fontSize = if (size < LARGE_PLATE) SMALL_LETTERS else MaterialTheme.typography.labelMedium.fontSize,
+            color = Tokens.textSecondary,
+            maxLines = 1,
+            softWrap = false,
+        )
         team?.crestUrl?.let { crest ->
             AsyncImage(crest, contentDescription = null, modifier = Modifier.fillMaxSize().padding(Tokens.space1))
         }
@@ -222,5 +231,7 @@ private fun programmeWhen(programme: MatchProgramme): String = stringResource(
 private val PAGE_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE d MMMM")
 private val WEEKDAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE")
 private val BIG_CREST = 48.dp
+private val LARGE_PLATE = 40.dp
+private val SMALL_LETTERS = 8.sp
 private val LOGO_WIDTH = 64.dp
 private val LOGO_HEIGHT = 36.dp

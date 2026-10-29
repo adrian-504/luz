@@ -96,6 +96,7 @@ fun SearchSection(
     onOpenPerson: (PlaylistId, String) -> Unit,
     onAddSource: () -> Unit,
     onOpenMatch: (PlaylistId, String) -> Unit = { _, _ -> },
+    onOpenTable: (String) -> Unit = {},
 ) {
     val graph = LocalAppGraph.current
     val revision by graph.revision.collectAsState()
@@ -284,7 +285,7 @@ fun SearchSection(
             }
         }
     }
-    menuFor?.let { match -> MatchMenu(match) { menuFor = null } }
+    menuFor?.let { match -> MatchMenu(match, onOpenTable) { menuFor = null } }
 }
 
 private const val MIN_MATCH_QUERY = 3

@@ -95,6 +95,8 @@ fun MainShell(
     onOpenPerson: (PlaylistId, String) -> Unit = { _, _ -> },
     /** "In your guide" for a match (4.16). */
     onOpenMatch: (PlaylistId, String) -> Unit = { _, _ -> },
+    /** A league's table (4.7). */
+    onOpenTable: (String) -> Unit = {},
 ) {
     var homeFirstKey by remember { mutableStateOf<String?>(null) }
     var libraryFirstKey by remember { mutableStateOf<String?>(null) }
@@ -184,6 +186,7 @@ fun MainShell(
                         onOpenPerson = onOpenPerson,
                         onAddSource = onAddSource,
                         onOpenMatch = onOpenMatch,
+                        onOpenTable = onOpenTable,
                     )
                     Section.SETTINGS -> SettingsSection(
                         focus,
@@ -192,6 +195,7 @@ fun MainShell(
                         onPlayDeveloperStream,
                         onSourceAdded,
                         onFindTeam = { selected = Section.SEARCH },
+                        onOpenTable = onOpenTable,
                     )
                     Section.MOVIES -> LibrarySection(
                         focus,

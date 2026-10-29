@@ -183,3 +183,6 @@ DELETE FROM sport_team_competition;
 
 clearReminders:
 DELETE FROM sport_reminder;
+
+standingFetchedAt:
+SELECT MAX(fetched_at) AS fetched_at FROM sport_standing WHERE competition = ?;

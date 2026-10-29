@@ -59,6 +59,7 @@ import app.iptvplayer.domain.model.ImportUnit
 import app.iptvplayer.ingestion.AddSourceResult
 import app.iptvplayer.storage.ArrangedGroup
 import app.iptvplayer.storage.DetailCoverage
+import app.iptvplayer.storage.FollowKind
 import app.iptvplayer.tv.BuildConfig
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.AppGraph
@@ -154,6 +155,7 @@ fun SettingsSection(
     onPlayDeveloperStream: (String) -> Unit,
     onSourceAdded: () -> Unit,
     onFindTeam: () -> Unit,
+    onOpenTable: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val graph = LocalAppGraph.current
@@ -316,7 +318,7 @@ fun SettingsSection(
                     SettingsTags.ABOUT -> About()
                     SettingsTags.DETAILS -> playlist?.let { DetailCoveragePane(focus, it) }
                     SettingsTags.TMDB -> TmdbPane(focus)
-                    SettingsTags.SPORT -> SportPane(focus, onFindTeam)
+                    SettingsTags.SPORT -> SportPane(focus, onFindTeam, onOpenTable)
                     SettingsTags.COMPANION -> CompanionPane(focus)
                     SettingsTags.DEVELOPER -> DeveloperStreamsPane(focus, onPlayDeveloperStream, onSourceAdded)
                     else -> {
@@ -430,7 +432,7 @@ private fun DetailCoveragePane(focus: FocusMemory, playlist: PlaylistId) {
  * about the leagues the fixtures source does not cover. The key itself is never shown.
  */
 @Composable
-private fun SportPane(focus: FocusMemory, onFindTeam: () -> Unit) {
+private fun SportPane(focus: FocusMemory, onFindTeam: () -> Unit, onOpenTable: (String) -> Unit) {
     val graph = LocalAppGraph.current
     val scope = rememberCoroutineScope()
     val revision by graph.sportRevision.collectAsState()
@@ -493,8 +495,12 @@ private fun SportPane(focus: FocusMemory, onFindTeam: () -> Unit) {
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.space1)) {
             current.follows.forEach { followed ->
+                // A team: OK unfollows (asks nothing). A league: OK opens its table, holding OK unfollows (Design 4.8).
+                val league = followed.kind == FollowKind.COMPETITION
+                val unfollow: () -> Unit = { scope.launch { graph.unfollow(followed.kind, followed.ref) } }
                 LuzRow(
-                    onClick = { scope.launch { graph.unfollow(followed.kind, followed.ref) } },
+                    onClick = if (league) ({ onOpenTable(followed.ref) }) else unfollow,
+                    onLongClick = if (league) unfollow else null,
                     modifier = Modifier.rememberedFocus(focus, SettingsTags.followed(followed.ref)),
                 ) {
                     Text(
@@ -512,7 +518,11 @@ private fun SportPane(focus: FocusMemory, onFindTeam: () -> Unit) {
                         modifier = Modifier.padding(start = Tokens.space2).size(FOLLOW_MARK),
                     )
                     Spacer(Modifier.weight(1f))
-                    Text(stringResource(R.string.unfollow), style = MaterialTheme.typography.labelMedium, color = Tokens.textSecondary)
+                    Text(
+                        stringResource(if (league) R.string.settings_sport_table else R.string.unfollow),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Tokens.textSecondary,
+                    )
                 }
             }
         }

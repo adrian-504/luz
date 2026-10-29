@@ -339,6 +339,20 @@
     <string name="settings_tmdb_summary">Trending and ratings, with your own key</string>
     <!-- Sport (ADR-0057, Design 4.1 and 4.8). -->
     <string name="search_matches">Matches</string>
+    <string name="league_table">%1$s table</string>
+    <string name="settings_sport_table">Table</string>
+    <plurals name="table_after">
+        <item quantity="one">After %1$d match · updated %2$s</item>
+        <item quantity="other">After %1$d matches · updated %2$s</item>
+    </plurals>
+    <string name="table_head_pos">#</string>
+    <string name="table_head_team">Team</string>
+    <string name="table_head_p">P</string>
+    <string name="table_head_gd">GD</string>
+    <string name="table_head_pts">Pts</string>
+    <string name="table_head_p_said">Played</string>
+    <string name="table_head_gd_said">Goal difference</string>
+    <string name="table_head_pts_said">Points</string>
     <string name="home_sport_now">Sport now</string>
     <string name="matchday_live">Live now</string>
     <string name="matchday_row">Your match today</string>

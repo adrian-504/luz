@@ -63,6 +63,7 @@ import app.iptvplayer.storage.SourceRecord
 import app.iptvplayer.storage.SportCompetition
 import app.iptvplayer.storage.SportStore
 import app.iptvplayer.storage.SportTeam
+import app.iptvplayer.storage.StandingRow
 import app.iptvplayer.storage.TitleDetailRow
 import app.iptvplayer.storage.UnitStateRecord
 import app.iptvplayer.storage.db.IptvDatabase
@@ -102,6 +103,16 @@ data class MatchCard(val fixture: Fixture, val home: SportTeam?, val away: Sport
 
 /** One of the guide's programmes for a match (4.16), on the viewer's channel it was found on: the guide's words, unchanged. */
 data class MatchProgramme(val channel: ChannelRow, val title: String, val start: Instant, val end: Instant)
+
+/** A league's table as the table page shows it (4.7): its rows, when read, and which teams the viewer follows. */
+data class LeagueTable(
+    val competition: String,
+    val name: String,
+    val rows: List<StandingRow>,
+    val fetchedAt: Instant?,
+    val mine: Set<String>,
+    val teams: Map<String, SportTeam>,
+)
 
 /** "Because you watched …": the film it started from and what shares its director, cast or genres. */
 data class Recommendation(val seed: MovieRow, val movies: List<MovieRow>)
@@ -854,6 +865,24 @@ class AppGraph(context: Context) {
     suspend fun remind(fixtureId: String, on: Boolean) {
         io { sportStore.remind(fixtureId, on) }
         mutableSportRevision.update { it + 1 }
+    }
+
+    /** [competition]'s table as stored, with the teams' letters and crests and which of them the viewer follows. */
+    suspend fun leagueTable(competition: String): LeagueTable = io {
+        val rows = sportStore.standing(competition)
+        val name = sportStore.competitions().firstOrNull { it.code == competition }?.name
+            ?: sportStore.follows().firstOrNull { it.kind == FollowKind.COMPETITION && it.ref == competition }?.name
+            ?: competition
+        val mine = sportStore.follows().filter { it.kind == FollowKind.TEAM }.map { it.ref }.toSet()
+        val teams = rows.mapNotNull { row -> sportStore.team(row.teamRef)?.let { row.teamRef to it } }.toMap()
+        LeagueTable(competition, name, rows, sportStore.standingFetchedAt(competition), mine, teams)
+    }
+
+    /** Reads [competition]'s table again when it is old (a league opened without being followed), in the background. */
+    fun refreshTable(competition: String) {
+        scope.launch(Dispatchers.IO) {
+            if (runCatching { sport.table(competition) }.getOrDefault(false)) mutableSportRevision.update { it + 1 }
+        }
     }
 
     /** The competitions [teamRef] plays in that can be followed. */

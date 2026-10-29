@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
  * and the competition not followed yet. Following is one press and asks nothing.
  */
 @Composable
-fun MatchMenu(match: MatchCard, onDismiss: () -> Unit) {
+fun MatchMenu(match: MatchCard, onOpenTable: (String) -> Unit, onDismiss: () -> Unit) {
     val graph = LocalAppGraph.current
     val scope = rememberCoroutineScope()
     val fixture = match.fixture
@@ -35,6 +35,7 @@ fun MatchMenu(match: MatchCard, onDismiss: () -> Unit) {
     val followHome = stringResource(R.string.follow_team, fixture.homeName)
     val followAway = stringResource(R.string.follow_team, fixture.awayName)
     val followLeague = stringResource(R.string.follow_team, fixture.competitionName)
+    val table = stringResource(R.string.league_table, fixture.competitionName)
     fun follow(kind: FollowKind, ref: String, name: String) {
         graph.follow(kind, ref, name)
         onDismiss()
@@ -51,6 +52,12 @@ fun MatchMenu(match: MatchCard, onDismiss: () -> Unit) {
         if (!now.league) {
             add(LuzMenuItem("follow-league", followLeague) { follow(FollowKind.COMPETITION, fixture.competition, fixture.competitionName) })
         }
+        add(
+            LuzMenuItem("table", table) {
+                onDismiss()
+                onOpenTable(fixture.competition)
+            },
+        )
     }
     LuzMenu(
         title = stringResource(R.string.match_teams, fixture.homeName, fixture.awayName),
