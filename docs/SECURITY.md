@@ -127,8 +127,10 @@ on port 8765. It answers only requests whose `Host` is the TV's own private addr
 serves one page with no outside requests, and needs a paired token for everything else. Pairing codes are 8 characters,
 one-time, valid five minutes, replaced after 10 wrong tries; tokens are 32 random bytes, stored only as SHA-256 hashes,
 listed and forgettable in Settings; a forgotten phone's live connection ends at once. Limits: 8 KB of headers, 16 KB of
-body, 500 characters of typed text, 8 connections, 10-second reads. A password field's contents are never sent to the
-phone. The traffic is cleartext HTTP inside the home network (no trusted certificate is possible for a LAN address);
+body, 500 characters of typed text, 16 connections (four of them at most for pictures, 8 seconds each), 10-second
+reads. A password field's contents are never sent to the phone. Pictures reach the phone only through the TV
+(`/api/art`), named by kind and id, never by address, so a provider link carrying the login never leaves the TV; the
+phone can open things only while Luz is on screen. The traffic is cleartext HTTP inside the home network (no trusted certificate is possible for a LAN address);
 the setting says so. Keys from the phone are played only into Luz's own window.
 
 ## 6. Resource limits (initial values; tuned by stress tests)

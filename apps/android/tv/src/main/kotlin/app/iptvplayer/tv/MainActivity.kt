@@ -46,4 +46,14 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onStart() {
+        super.onStart()
+        CompanionHub.setOnScreen(true)
+    }
+
+    override fun onStop() {
+        CompanionHub.setOnScreen(false)
+        super.onStop()
+    }
 }

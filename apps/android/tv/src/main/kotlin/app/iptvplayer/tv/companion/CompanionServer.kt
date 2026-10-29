@@ -1,6 +1,8 @@
 package app.iptvplayer.tv.companion
 
 import android.view.KeyEvent
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.IOException
@@ -12,11 +14,12 @@ import java.net.Socket
 import java.net.SocketException
 import java.net.URLDecoder
 import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /**
  * The phone companion's server (ADR-0050): the page, pairing, the field under the remote as Server-Sent Events, and
- * typing and key presses from the phone. HTTP/1.1, one request per connection, with hard limits on size, time and
+ * typing, key presses and what to play from the phone, and the viewer's library to browse (CompanionLibrary). HTTP/1.1, one request per connection, with hard limits on size, time and
  * connections. It answers only requests addressed to [hosts] (the TV's home-network address, or the TV itself), which
  * keeps a web page elsewhere from reaching it through a renamed address.
  */
@@ -25,6 +28,7 @@ class CompanionServer(
     private val hosts: () -> Set<String>,
     private val page: () -> ByteArray,
     private val pairing: CompanionPairing,
+    private val library: CompanionLibrary,
     /** Runs a change to the screen on the main thread. */
     private val onMain: (() -> Unit) -> Unit,
 ) : AutoCloseable {
@@ -33,6 +37,10 @@ class CompanionServer(
         bind(InetSocketAddress(port), BACKLOG)
     }
     private val connections = Semaphore(MAX_CONNECTIONS)
+
+    // Pictures are many and can be slow (the provider's server): they share a few slots of their own, so a page full of
+    // posters never keeps the phone from playing something or typing.
+    private val pictures = Semaphore(MAX_PICTURES)
 
     val port: Int get() = socket.localPort
 
@@ -84,8 +92,37 @@ class CompanionServer(
         }.toMap()
         when {
             method == "GET" && (path == "/" || path == "/index.html") -> respond(out, 200, HTML, page())
-            method == "GET" && path == "/api/events" ->
-                if (pairing.allows(query["token"])) streamEvents(out, query.getValue("token")) else respond(out, 401, JSON, ERROR_UNPAIRED)
+            method == "GET" && path.startsWith("/api/") && !pairing.allows(query["token"]) -> respond(out, 401, JSON, ERROR_UNPAIRED)
+            method == "GET" && path == "/api/events" -> streamEvents(out, query.getValue("token"))
+            method == "GET" && path == "/api/art" -> {
+                if (!pictures.tryAcquire(PICTURE_WAIT_MS, TimeUnit.MILLISECONDS)) return respond(out, 503, TEXT, "Busy".toByteArray())
+                val picture = try {
+                    runBlocking {
+                        withTimeoutOrNull(
+                            PICTURE_TIMEOUT_MS,
+                        ) { runCatching { library.picture(query["ref"].orEmpty()) }.getOrNull() }
+                    }
+                } finally {
+                    pictures.release()
+                } ?: return respond(out, 404, TEXT, "No picture".toByteArray())
+                // Pictures change rarely: the phone may keep them for a day, privately.
+                respond(out, 200, picture.type, picture.bytes, cache = "private, max-age=86400")
+            }
+            method == "GET" && path.startsWith("/api/") -> {
+                val answer = runBlocking {
+                    runCatching {
+                        when (path) {
+                            "/api/home" -> library.home()
+                            "/api/channels" -> library.group(query["group"].orEmpty())
+                            "/api/search" -> library.search(query["q"].orEmpty())
+                            "/api/movie" -> library.movie(query["id"].orEmpty())
+                            "/api/series" -> library.series(query["id"].orEmpty())
+                            else -> null
+                        }
+                    }.getOrNull()
+                } ?: return respond(out, 404, JSON, ERROR_NOT_FOUND)
+                respond(out, 200, JSON, answer.toString().toByteArray())
+            }
             method == "POST" && path.startsWith("/api/") -> {
                 val length = headers["content-length"]?.toIntOrNull() ?: return respond(out, 411, TEXT, "Length required".toByteArray())
                 if (length !in 0..MAX_BODY) return respond(out, 413, TEXT, "Too large".toByteArray())
@@ -122,11 +159,36 @@ class CompanionServer(
                 val field = CompanionHub.field.value
                 if (field != null && field.id == body.optLong("field")) onMain { field.onDone() }
             }
+            "/api/play" -> {
+                val request = runBlocking {
+                    runCatching {
+                        library.request(
+                            body.optString("kind"),
+                            body.optString("id"),
+                            body.optString("scope").ifEmpty { null },
+                            body.optBoolean("fromStart"),
+                        )
+                    }.getOrNull()
+                } ?: return respond(out, 404, JSON, ERROR_NOT_FOUND)
+                if (!CompanionHub.open(request)) return respond(out, 409, JSON, """{"error":"luz-hidden"}""".toByteArray())
+            }
+            "/api/mylist" -> {
+                val done = runBlocking {
+                    runCatching {
+                        library.setMyList(
+                            body.optString("kind"),
+                            body.optString("id"),
+                            body.optBoolean("on"),
+                        )
+                    }.getOrDefault(false)
+                }
+                if (!done) return respond(out, 404, JSON, ERROR_NOT_FOUND)
+            }
             "/api/key" -> {
                 val code = KEYS[body.optString("key")] ?: return respond(out, 400, JSON, """{"error":"unknown-key"}""".toByteArray())
                 CompanionHub.press(code)
             }
-            else -> return respond(out, 404, JSON, """{"error":"not-found"}""".toByteArray())
+            else -> return respond(out, 404, JSON, ERROR_NOT_FOUND)
         }
         respond(out, 200, JSON, """{"ok":true}""".toByteArray())
     }
@@ -142,6 +204,7 @@ class CompanionServer(
         out.flush()
         var sentField: String? = null
         var sentPlaying: String? = null
+        var sentScreen: Boolean? = null
         var lastWriteMs = 0L
         // Ends when the server stops or the viewer forgets this phone in Settings.
         while (!socket.isClosed && pairing.allows(token)) {
@@ -156,6 +219,12 @@ class CompanionServer(
             if (playing != sentPlaying) {
                 send(out, "playing", playing)
                 sentPlaying = playing
+                lastWriteMs = now
+            }
+            val screen = CompanionHub.onScreen.value
+            if (screen != sentScreen) {
+                send(out, "screen", JSONObject().put("on", screen).toString())
+                sentScreen = screen
                 lastWriteMs = now
             }
             if (now - lastWriteMs > HEARTBEAT_MS) {
@@ -229,11 +298,11 @@ class CompanionServer(
         return buffer
     }
 
-    private fun respond(out: OutputStream, status: Int, type: String, body: ByteArray) {
+    private fun respond(out: OutputStream, status: Int, type: String, body: ByteArray, cache: String = "no-store") {
         out.write(
             (
                 "HTTP/1.1 $status ${REASONS[status] ?: "Error"}\r\nContent-Type: $type\r\nContent-Length: ${body.size}\r\n" +
-                    "Cache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\n" +
+                    "Cache-Control: $cache\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\n" +
                     "Connection: close\r\n\r\n"
                 ).toByteArray(),
         )
@@ -243,7 +312,10 @@ class CompanionServer(
 
     private companion object {
         const val BACKLOG = 16
-        const val MAX_CONNECTIONS = 8
+        const val MAX_CONNECTIONS = 16
+        const val MAX_PICTURES = 4
+        const val PICTURE_WAIT_MS = 5_000L
+        const val PICTURE_TIMEOUT_MS = 8_000L
         const val READ_TIMEOUT_MS = 10_000
         const val MAX_HEAD = 8 * 1024
         const val MAX_BODY = 16 * 1024
@@ -254,10 +326,12 @@ class CompanionServer(
         const val TEXT = "text/plain; charset=utf-8"
         const val HTML = "text/html; charset=utf-8"
         const val JSON = "application/json; charset=utf-8"
+        val ERROR_NOT_FOUND = """{"error":"not-found"}""".toByteArray()
         val ERROR_UNPAIRED = """{"error":"not-paired"}""".toByteArray()
         val REASONS = mapOf(
             200 to "OK", 400 to "Bad Request", 401 to "Unauthorized", 403 to "Forbidden", 404 to "Not Found",
-            409 to "Conflict", 411 to "Length Required", 413 to "Payload Too Large", 421 to "Misdirected Request",
+            409 to "Conflict", 503 to "Service Unavailable", 411 to "Length Required", 413 to "Payload Too Large",
+            421 to "Misdirected Request",
             431 to "Request Header Fields Too Large",
         )
         val KEYS = mapOf(

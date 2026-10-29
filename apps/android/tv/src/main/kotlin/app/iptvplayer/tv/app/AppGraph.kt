@@ -51,6 +51,7 @@ import app.iptvplayer.storage.SourceRecord
 import app.iptvplayer.storage.TitleDetailRow
 import app.iptvplayer.storage.UnitStateRecord
 import app.iptvplayer.storage.db.IptvDatabase
+import app.iptvplayer.tv.companion.CompanionLibrary
 import app.iptvplayer.tv.companion.PhoneCompanion
 import app.iptvplayer.tv.developer.DeveloperStreams
 import kotlinx.coroutines.CoroutineScope
@@ -205,7 +206,7 @@ class AppGraph(context: Context) {
     private val preferences by lazy { appContext.getSharedPreferences("ui", Context.MODE_PRIVATE) }
 
     /** The phone companion (ADR-0050): off until the viewer switches it on in Settings. */
-    val companion by lazy { PhoneCompanion(appContext, preferences) }
+    val companion by lazy { PhoneCompanion(appContext, preferences, CompanionLibrary(appContext, this)) }
 
     suspend fun currentSource(): SourceRecord? = io {
         val all = content.sources()
@@ -225,6 +226,9 @@ class AppGraph(context: Context) {
     suspend fun groups(playlistId: PlaylistId): List<GroupRow> = io { content.groups(playlistId) }
 
     suspend fun channels(playlistId: PlaylistId, groupId: String?): List<ChannelRow> = io { content.channels(playlistId, groupId) }
+
+    suspend fun channelLogo(playlistId: PlaylistId, channelId: ChannelId): UrlTemplate? =
+        io { content.channelsByIds(playlistId, listOf(channelId.value)).firstOrNull()?.logo }
 
     suspend fun favoriteChannels(playlistId: PlaylistId): List<ChannelRow> = io { content.favoriteChannels(playlistId) }
 

@@ -26,6 +26,8 @@ import app.iptvplayer.domain.id.ChannelId
 import app.iptvplayer.domain.id.PlaylistId
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.tv.app.LocalAppGraph
+import app.iptvplayer.tv.companion.CompanionHub
+import app.iptvplayer.tv.companion.CompanionRequest
 import app.iptvplayer.tv.developer.DeveloperStreams
 import app.iptvplayer.tv.ui.library.ContentPlayerRoute
 import app.iptvplayer.tv.ui.library.MovieDetailScreen
@@ -89,6 +91,19 @@ object Routes {
 fun AppNavHost() {
     val navController = rememberNavController()
     val graph = LocalAppGraph.current
+    // What the phone companion opens (ADR-0050): played or shown over the main screens, replacing a player already open,
+    // so Back always returns to where the viewer browses.
+    LaunchedEffect(navController) {
+        CompanionHub.requests.collect { request ->
+            val route = when (request) {
+                is CompanionRequest.Channel -> Routes.channel(request.playlist, ChannelScope.of(request.scope), request.channel)
+                is CompanionRequest.Play -> Routes.content(request.playlist, request.type, request.id, request.fromStart)
+                is CompanionRequest.Movie -> Routes.movie(request.playlist, request.id)
+                is CompanionRequest.Series -> Routes.series(request.playlist, request.id)
+            }
+            navController.navigate(route) { popUpTo(Routes.MAIN) }
+        }
+    }
     NavHost(
         navController = navController,
         startDestination = Routes.START,

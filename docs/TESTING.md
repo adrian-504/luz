@@ -118,6 +118,14 @@ foreground app. Close the operator's live TV and avoid the screensaver during lo
 change device settings). On a French-locale device AGP may report connected tasks as failed while the XML results pass:
 read `build/outputs/androidTest-results`.
 
+### 4.4 The phone companion (ADR-0050)
+
+Device tests reach the companion's server over a plain socket on the emulator (`CompanionCall.kt`: `companionCall` for
+POSTs and GETs, `companionGet` adds the phone's token). To look at the phone page against a running TV: seed the
+emulator with `SeedLargePlaylistTest -e seedTestProvider 1`, turn the companion on in Settings → Phone companion, run
+`adb forward tcp:8765 tcp:8765`, and open `http://localhost:8765` in a browser on the Mac (the server accepts `localhost`
+as its own address). The pairing code is on the TV's Settings screen.
+
 ## 5. Device matrix (initial proposal, finalized per platform phase)
 
 **Devices used so far:** Google TV emulator API 34 (arm64, on the development Mac); owner's **Bbox TV** (Technicolor

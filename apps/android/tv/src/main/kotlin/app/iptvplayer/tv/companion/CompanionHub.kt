@@ -1,11 +1,25 @@
 package app.iptvplayer.tv.companion
 
+import app.iptvplayer.domain.id.ChannelId
+import app.iptvplayer.domain.id.PlaylistId
+import app.iptvplayer.domain.model.ContentType
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import java.util.concurrent.atomic.AtomicLong
+
+/** Something the phone asked the TV to open (ADR-0050, step 3): a channel, a film or episode to play, or a page. */
+sealed interface CompanionRequest {
+    data class Channel(val playlist: PlaylistId, val scope: String, val channel: ChannelId) : CompanionRequest
+
+    data class Play(val playlist: PlaylistId, val type: ContentType, val id: String, val fromStart: Boolean) : CompanionRequest
+
+    data class Movie(val playlist: PlaylistId, val id: String) : CompanionRequest
+
+    data class Series(val playlist: PlaylistId, val id: String) : CompanionRequest
+}
 
 /**
  * A text field on the TV that the phone companion can type into (ADR-0050): what it is called, what it holds and how to
@@ -59,6 +73,16 @@ object CompanionHub {
     /** Android key codes the phone pressed, for the activity to play into Luz. */
     val keys: SharedFlow<Int> = mutableKeys
 
+    private val mutableRequests = MutableSharedFlow<CompanionRequest>(extraBufferCapacity = KEY_BUFFER)
+
+    /** What the phone asked to open, for the navigation to carry out. */
+    val requests: SharedFlow<CompanionRequest> = mutableRequests
+
+    private val mutableOnScreen = MutableStateFlow(false)
+
+    /** Whether Luz is on the TV's screen: the phone can only open things while it is (Android keeps apps out of the front). */
+    val onScreen: StateFlow<Boolean> = mutableOnScreen
+
     fun nextId(): Long = ids.incrementAndGet()
 
     fun show(field: CompanionField) {
@@ -75,6 +99,13 @@ object CompanionHub {
     }
 
     fun press(keyCode: Int): Boolean = mutableKeys.tryEmit(keyCode)
+
+    fun setOnScreen(shown: Boolean) {
+        mutableOnScreen.value = shown
+    }
+
+    /** False when Luz is not on screen, so the phone can say so instead of the TV opening something out of sight. */
+    fun open(request: CompanionRequest): Boolean = mutableOnScreen.value && mutableRequests.tryEmit(request)
 
     private const val KEY_BUFFER = 16
 }

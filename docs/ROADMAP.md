@@ -543,7 +543,8 @@ backup, the finishing layer, faster channel changes, and release.
 |---|---|---|
 | Phone companion, step 1 | Pair a phone by QR code; type into any text field from it; a remote pad (ADR-0050) | **Built 2026-10-28** — device test `aPairedPhoneTypesIntoSearchAndMovesTheRemote` on the emulator; the page tried from a browser through the emulator (typing, Arabic, the pad). NOT YET VERIFIED from a real phone or on the owner's Bbox |
 | Phone companion, step 2 | What is playing on the phone (channel, programme and its progress, or the film's time) with Play/Pause, ±30 s, Ch −/+ and Last | **Built 2026-10-28** — device test `aPairedPhoneSeesTheChannelAndChangesIt`; tried from a browser through the emulator. NOT YET VERIFIED from a real phone or on the owner's Bbox |
-| Phone companion, steps 3–4 | Browse on the phone, play on the TV; provider setup from the phone | Not started |
+| Phone companion, step 3 | Browse on the phone (channels with what is on, categories, Continue watching, My List, search, film and series pages with pictures), play on the TV | **Built 2026-10-29** — device test `aPairedPhoneFindsAChannelAndPlaysItOnTheTv` passed on the emulator 2026-10-28; `aPhoneCannotOpenAnythingWhileLuzIsHidden` not yet run; the page tried only against a stand-in server. NOT YET VERIFIED on a TV or from a real phone |
+| Phone companion, step 4 | Provider setup from the phone (owner chose plain over home Wi-Fi, never stored) | Not started |
 
 Skip intro and credits (TheIntroDB) is not in the plan until its terms are read.
 

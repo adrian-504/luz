@@ -1,5 +1,6 @@
 package app.iptvplayer.tv
 
+import android.net.Uri
 import android.view.KeyEvent
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -7,6 +8,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.iptvplayer.ingestion.AddSourceResult
@@ -99,6 +101,69 @@ class LivePlayerTest {
             assertTrue(CompanionHub.playing.value!!.live)
             assertEquals(200, companionCall("/api/key", """{"token":"$token","key":"channel-up"}""").first)
             rule.waitUntil(10_000) { CompanionHub.playing.value?.title == channels[1].label }
+        } finally {
+            companion.pairing.phones.value.forEach { companion.pairing.forget(it.id) }
+            companion.setOn(false)
+        }
+    }
+
+    /** Browsing on the phone (ADR-0050, step 3): the phone finds a channel, sees what is on, and plays it on the TV. */
+    @Test
+    fun aPairedPhoneFindsAChannelAndPlaysItOnTheTv() {
+        val companion = graph.companion
+        companion.setOn(true)
+        try {
+            awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
+            val target = runBlocking { graph.channels(playlist, null) }[2]
+            val token = JSONObject(
+                companionCall("/api/pair", """{"code":"${companion.pairing.code()}","name":"Test phone"}""").second,
+            ).getString("token")
+            assertEquals(401, companionGet("/api/home", "wrong").first)
+
+            val home = JSONObject(companionGet("/api/home", token).second)
+            assertTrue(home.getBoolean("source"))
+            assertTrue(home.getJSONArray("groups").length() > 0)
+            val found = JSONObject(
+                companionGet(Uri.Builder().path("/api/search").appendQueryParameter("q", target.label).build().toString(), token).second,
+            ).getJSONArray("channels")
+            val hit = (0 until found.length()).map(found::getJSONObject).first { it.getString("id") == target.id.value }
+            assertEquals(target.label, hit.getString("name"))
+
+            val (status, _) = companionCall("/api/play", """{"token":"$token","kind":"channel","id":"${target.id.value}","scope":"all"}""")
+            assertEquals(200, status)
+            awaitExists(PlayerTags.TITLE, target.label, timeout = 20_000)
+            // Something that is not there is refused, and nothing opens.
+            assertEquals(404, companionCall("/api/play", """{"token":"$token","kind":"movie","id":"no-such-film"}""").first)
+        } finally {
+            companion.pairing.phones.value.forEach { companion.pairing.forget(it.id) }
+            companion.setOn(false)
+        }
+    }
+
+    /** Nothing opens out of sight (ADR-0050, step 3): while Luz is not on the TV's screen, the phone is told so. */
+    @Test
+    fun aPhoneCannotOpenAnythingWhileLuzIsHidden() {
+        val companion = graph.companion
+        companion.setOn(true)
+        try {
+            awaitFocus(LiveTags.GROUP_ALL, timeout = 20_000)
+            val target = runBlocking { graph.channels(playlist, null) }.first()
+            val token = JSONObject(
+                companionCall("/api/pair", """{"code":"${companion.pairing.code()}","name":"Test phone"}""").second,
+            ).getString("token")
+            // Stopped, as when the viewer presses Home and the TV shows another app.
+            rule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+            rule.waitUntil(5_000) { !CompanionHub.onScreen.value }
+            val (status, body) = companionCall(
+                "/api/play",
+                """{"token":"$token","kind":"channel","id":"${target.id.value}","scope":"all"}""",
+            )
+            assertEquals(409, status)
+            assertTrue(body.contains("luz-hidden"))
+
+            rule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+            // Back on screen, Live TV is where it was: nothing was opened while it was away.
+            awaitFocus(LiveTags.GROUP_ALL, timeout = 10_000)
         } finally {
             companion.pairing.phones.value.forEach { companion.pairing.forget(it.id) }
             companion.setOn(false)

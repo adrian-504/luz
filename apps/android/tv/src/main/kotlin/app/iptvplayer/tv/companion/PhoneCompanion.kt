@@ -18,7 +18,7 @@ data class CompanionStatus(val on: Boolean, val address: String?, val failed: Bo
  * The phone companion as the rest of the app sees it (ADR-0050): switched on and off in Settings, remembered across
  * restarts, and serving while Luz runs. Off until the viewer switches it on.
  */
-class PhoneCompanion(private val context: Context, private val preferences: SharedPreferences) {
+class PhoneCompanion(private val context: Context, private val preferences: SharedPreferences, private val library: CompanionLibrary) {
     val pairing = CompanionPairing(preferences, System::currentTimeMillis)
     private val main = Handler(Looper.getMainLooper())
     private var server: CompanionServer? = null
@@ -45,7 +45,7 @@ class PhoneCompanion(private val context: Context, private val preferences: Shar
     private fun start() {
         if (server == null) {
             server = try {
-                CompanionServer(PORT, ::hosts, ::page, pairing) { change -> main.post(change) }
+                CompanionServer(PORT, ::hosts, ::page, pairing, library) { change -> main.post(change) }
             } catch (_: IOException) {
                 null
             }
