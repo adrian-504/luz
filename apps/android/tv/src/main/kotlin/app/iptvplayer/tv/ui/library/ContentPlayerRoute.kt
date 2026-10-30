@@ -24,7 +24,7 @@ import app.iptvplayer.storage.EpisodeRow
 import app.iptvplayer.tv.R
 import app.iptvplayer.tv.app.LocalAppGraph
 import app.iptvplayer.tv.companion.CompanionLibrary
-import app.iptvplayer.tv.ui.player.EpisodesSheet
+import app.iptvplayer.tv.ui.player.EpisodeChoices
 import app.iptvplayer.tv.ui.player.PlayerScreen
 import kotlinx.coroutines.launch
 
@@ -155,13 +155,11 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
                 id = it.id
             }
         },
-        episodesSheet = if (type == ContentType.EPISODE && allEpisodes.isNotEmpty()) {
-            { onClose ->
-                EpisodesSheet(allEpisodes, id, resolver, onPlay = { chosen ->
-                    // From its saved place; a watched one from the start (Design 5.4).
-                    startFromBeginning = allEpisodes.firstOrNull { it.id == chosen }?.progress?.completed == true
-                    id = chosen
-                }, onClose = onClose)
+        episodes = if (type == ContentType.EPISODE && allEpisodes.isNotEmpty()) {
+            EpisodeChoices(allEpisodes, id) { chosen ->
+                // From its saved place; a watched one from the start (Design 5.4).
+                startFromBeginning = allEpisodes.firstOrNull { it.id == chosen }?.progress?.completed == true
+                id = chosen
             }
         } else {
             null

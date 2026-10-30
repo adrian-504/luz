@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,6 +44,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -122,9 +124,7 @@ object PlayerTags {
     const val PROGRESS = "player-progress"
     const val SEEK_HUD = "player-seek-hud"
     const val PEEK = "player-peek"
-    const val AUDIO = "player-audio"
-    const val SUBTITLES = "player-subtitles"
-    const val TRACK_PANEL = "player-track-panel"
+    const val TRACKS = "player-tracks"
     const val SUBTITLES_OFF = "player-subtitles-off"
     const val SUBTITLE_TEXT = "player-subtitle-text"
 
@@ -156,8 +156,9 @@ object PlayerTags {
  *   left, and a row of symbols; for a channel the live bar (logo, number, name, what is on and next) above the same row.
  * - **Left / Right**: a film skips 10 s, faster the longer the key is held; a channel switches to the previous or next.
  *   On the focused progress bar they scrub, and the picture jumps when the remote rests or on OK.
- * - **Down** brings the panel down from the top: Info (the description, and Advanced for the technical detail),
- *   Subtitles and Audio. **Up** on a channel lays the channel list over the left of the picture.
+ * - **Down** on a series raises the sheet over the lower third on Episodes; its other tabs, Audio and subtitles and Info
+ *   (the description, and Advanced for the technical detail), open from the buttons of the same names. **Up** on a
+ *   channel lays the channel list over the left of the picture.
  * - As an episode ends, "Up next" counts down to the next one.
  * - Buffering is a small turning arc in the corner; an error says what went wrong and offers what can be done.
  *
@@ -184,8 +185,8 @@ fun PlayerScreen(
     /** Label and action of the next episode, offered as the current one ends. */
     nextLabel: String? = null,
     onNext: (() -> Unit)? = null,
-    /** A series: the Episodes sheet Down raises (Design 5.4, 5.21), drawn by the caller; it calls back to close. */
-    episodesSheet: (@Composable (onClose: () -> Unit) -> Unit)? = null,
+    /** A series: the episodes the sheet's Episodes tab holds, raised by Down (Design 5.4, 5.21). */
+    episodes: EpisodeChoices? = null,
     /** What a film or episode is about, for the Info panel. */
     description: String? = null,
     /** The picture the phone companion shows beside what is playing: a reference (`CompanionLibrary.art`), never an address. */
@@ -251,10 +252,11 @@ fun PlayerScreen(
     val tracks by controller.tracks.collectAsState()
     val speed by controller.playbackSpeed.collectAsState()
     val cues by controller.subtitleCues.collectAsState()
-    var panel by remember { mutableStateOf<PanelTab?>(null) }
+    // The sheet (Design 5.4, 5.5): open on [panel]; [sheetTab] keeps the last tab while it slides away.
+    var panel by remember { mutableStateOf<SheetTab?>(null) }
+    var sheetTab by remember { mutableStateOf(SheetTab.INFO) }
     var channelList by remember { mutableStateOf(false) }
     var strip by remember { mutableStateOf(false) }
-    var sheet by remember { mutableStateOf(false) }
     // Up or Down on a film's bare picture: the title and bar for 3 s, without pausing or taking focus (Design 5.2).
     var peekShownAt by remember { mutableLongStateOf(0L) }
     LaunchedEffect(peekShownAt) {
@@ -369,8 +371,9 @@ fun PlayerScreen(
         runCatching { rootFocus.requestFocus() }
         overlayVisible = false
     }
-    fun openPanel(tab: PanelTab, opener: FocusRequester?) {
+    fun openPanel(tab: SheetTab, opener: FocusRequester?) {
         openerFocus.value = opener
+        sheetTab = tab
         panel = tab
     }
     fun closePanel() {
@@ -499,7 +502,7 @@ fun PlayerScreen(
                 }
                 if (event.type != ComposeKeyEventType.KeyDown) return@onPreviewKeyEvent false
                 lastInputAt = System.nanoTime()
-                val bare = !overlayVisible && panel == null && !channelList && !strip && !sheet && !diagnosticsVisible && !isError
+                val bare = !overlayVisible && panel == null && !channelList && !strip && !diagnosticsVisible && !isError
                 when (keyCode) {
                     KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                         if (snapshot.state == PlaybackState.PAUSED) controller.play() else controller.pause()
@@ -553,13 +556,13 @@ fun PlayerScreen(
                         when {
                             isLive && loadStrip != null -> strip = true
                             // A series: the sheet on Episodes (5.21). A film: the peek (5.2).
-                            episodesSheet != null -> sheet = true
+                            episodes != null -> openPanel(SheetTab.EPISODES, null)
                             isVod -> peekShownAt = System.nanoTime()
-                            else -> openPanel(PanelTab.INFO, null)
+                            else -> openPanel(SheetTab.INFO, null)
                         }
                     }
                     // Not under the strip: OK there belongs to the card under the remote.
-                    in SELECT_KEYS -> if (!overlayVisible && !isError && panel == null && !channelList && !strip && !sheet) {
+                    in SELECT_KEYS -> if (!overlayVisible && !isError && panel == null && !channelList && !strip) {
                         // On the pause card OK carries on; anywhere else it brings the controls up.
                         if (isVod && snapshot.state == PlaybackState.PAUSED) controller.play() else overlayVisible = true
                         swallowSelectUp = true
@@ -616,7 +619,7 @@ fun PlayerScreen(
             }
         }
 
-        if (peekShownAt != 0L && seekShownAt == 0L && !overlayVisible && !sheet && durationMs > 0) {
+        if (peekShownAt != 0L && seekShownAt == 0L && !overlayVisible && panel == null && durationMs > 0) {
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -628,20 +631,6 @@ fun PlayerScreen(
             ) {
                 Text(title, style = MaterialTheme.typography.headlineSmall, color = Tokens.textPrimary, maxLines = 1)
                 ScrubBar(positionMs, durationMs, null, focused = false)
-            }
-        }
-
-        episodesSheet?.let { content ->
-            AnimatedVisibility(
-                visible = sheet,
-                enter = slideInVertically(luzTween(Tokens.MOTION_STANDARD_MS)) { it } + fadeIn(luzTween(Tokens.MOTION_STANDARD_MS)),
-                exit = slideOutVertically(luzTween(Tokens.MOTION_FOCUS_MS)) { it } + fadeOut(luzTween(Tokens.MOTION_FOCUS_MS)),
-                modifier = Modifier.align(Alignment.BottomCenter),
-            ) {
-                content {
-                    sheet = false
-                    runCatching { rootFocus.requestFocus() }
-                }
             }
         }
 
@@ -714,6 +703,8 @@ fun PlayerScreen(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
+                    // Under the sheet the controls give way, kept in place so Back returns to the button that opened it.
+                    .alpha(if (panel != null) 0f else 1f)
                     // The controls rise out of the picture on a gradient rather than sitting on a band across it.
                     .background(OVERLAY_GRADIENT)
                     .padding(start = Tokens.space16, end = Tokens.space16, top = Tokens.space16 + Tokens.space8, bottom = Tokens.space8)
@@ -796,10 +787,6 @@ fun PlayerScreen(
                     onToggleFavorite = onToggleFavorite,
                     onLastChannel = onLastChannel,
                     onChannelList = if (channels != null) ({ channelList = true }) else null,
-                    hasSubtitles = tracks.subtitles.isNotEmpty(),
-                    hasAudioChoice = tracks.audio.size > 1,
-                    speed = speed,
-                    onSpeed = { controller.setPlaybackSpeed(nextSpeed(speed)) },
                     onPanel = ::openPanel,
                 )
             }
@@ -821,20 +808,34 @@ fun PlayerScreen(
             }
         }
 
-        panel?.let { tab ->
-            PlayerPanel(
-                tab = tab,
+        // Episodes for a series; Audio and subtitles when there is a choice to make (a film always has its speed); Info.
+        val sheetTabs = listOfNotNull(
+            SheetTab.EPISODES.takeIf { episodes != null },
+            SheetTab.TRACKS.takeIf { isVod || tracks.subtitles.isNotEmpty() || tracks.audio.size > 1 },
+            SheetTab.INFO,
+        )
+        AnimatedVisibility(
+            visible = panel != null,
+            enter = slideInVertically(luzTween(Tokens.MOTION_STANDARD_MS)) { it } + fadeIn(luzTween(Tokens.MOTION_STANDARD_MS)),
+            exit = slideOutVertically(luzTween(Tokens.MOTION_FOCUS_MS)) { it } + fadeOut(luzTween(Tokens.MOTION_FOCUS_MS)),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            PlayerSheet(
+                tab = sheetTab,
+                tabs = sheetTabs,
+                onTab = {
+                    sheetTab = it
+                    panel = it
+                },
+                episodes = episodes,
                 tracks = tracks,
-                onTab = { panel = it },
-                onSelectAudio = { id ->
-                    controller.setAudioTrack(id)
-                    closePanel()
-                },
-                onSelectSubtitle = { id ->
-                    controller.setSubtitleTrack(id)
-                    closePanel()
-                },
-                modifier = Modifier.align(Alignment.TopCenter),
+                speed = speed.takeIf { isVod },
+                resolver = resolver,
+                onSelectAudio = controller::setAudioTrack,
+                onSelectSubtitle = controller::setSubtitleTrack,
+                onSpeed = { controller.setPlaybackSpeed(nextSpeed(speed)) },
+                onClose = ::closePanel,
+                isOpen = { panel != null },
             ) {
                 InfoContent(
                     title = title,
@@ -890,9 +891,10 @@ fun PlayerScreen(
 }
 
 /**
- * The row of symbols under the progress bar (item 22). Play or pause comes first and takes focus; the rest depend on what
- * is playing: skipping for films, the next episode when there is one, favourite, the previous channel and the channel list
- * for television, and Subtitles, Audio and Info, which open the panel on that tab.
+ * The row of symbols under the progress bar, in three groups 24 dp apart so each says what it is for (Design 5.1).
+ * Playing: Back 10, Play/Pause (larger, and focused first), Forward 10 for a film or an episode. This episode or this
+ * channel: Next episode; or favourite, the previous channel and the channel list. Sound and information: Audio and
+ * subtitles (films and episodes; on live TV it is a tab under Info) and Info, which open the sheet on that tab.
  */
 @Composable
 private fun ControlRow(
@@ -906,92 +908,99 @@ private fun ControlRow(
     onToggleFavorite: (() -> Unit)?,
     onLastChannel: (() -> Unit)?,
     onChannelList: (() -> Unit)?,
-    hasSubtitles: Boolean,
-    hasAudioChoice: Boolean,
-    speed: Float,
-    onSpeed: () -> Unit,
-    onPanel: (PanelTab, FocusRequester?) -> Unit,
+    onPanel: (SheetTab, FocusRequester?) -> Unit,
 ) {
-    val subtitlesFocus = remember { FocusRequester() }
-    val audioFocus = remember { FocusRequester() }
+    val tracksFocus = remember { FocusRequester() }
     val infoFocus = remember { FocusRequester() }
-    Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), verticalAlignment = Alignment.CenterVertically) {
-        LuzIconButton(
-            if (paused) LuzIcons.Play else LuzIcons.Pause,
-            stringResource(if (paused) R.string.player_play else R.string.player_pause),
-            onPlayPause,
-            Modifier.focusRequester(playPauseFocus).testTag(PlayerTags.PLAY_PAUSE),
-        )
-        if (isVod) {
+    Row(horizontalArrangement = Arrangement.spacedBy(GROUP_GAP), verticalAlignment = Alignment.CenterVertically) {
+        ControlGroup {
+            if (isVod) {
+                LuzIconButton(
+                    LuzIcons.Back10,
+                    stringResource(R.string.player_back_10),
+                    { onSkip(-SEEK_STEP) },
+                    Modifier.testTag(PlayerTags.BACK_10),
+                    badge = "10",
+                )
+            }
             LuzIconButton(
-                LuzIcons.Back10,
-                stringResource(R.string.player_back_10),
-                { onSkip(-SEEK_STEP) },
-                Modifier.testTag(PlayerTags.BACK_10),
-                badge = "10",
+                if (paused) LuzIcons.Play else LuzIcons.Pause,
+                stringResource(if (paused) R.string.player_play else R.string.player_pause),
+                onPlayPause,
+                Modifier.focusRequester(playPauseFocus).testTag(PlayerTags.PLAY_PAUSE),
+                size = PLAY_PAUSE_SIZE,
             )
+            if (isVod) {
+                LuzIconButton(
+                    LuzIcons.Forward10,
+                    stringResource(R.string.player_forward_10),
+                    { onSkip(SEEK_STEP) },
+                    Modifier.testTag(PlayerTags.FORWARD_10),
+                    badge = "10",
+                )
+            }
+        }
+        // This episode, or this channel. A film or a series goes on My List from its page, not mid-play.
+        val favourite = onToggleFavorite.takeIf { !isVod }
+        if (onNext != null || favourite != null || onLastChannel != null || onChannelList != null) {
+            ControlGroup {
+                if (onNext != null) {
+                    LuzIconButton(
+                        LuzIcons.NextEpisode,
+                        stringResource(R.string.player_up_next),
+                        onNext,
+                        Modifier.testTag(PlayerTags.NEXT_CHANNEL),
+                    )
+                }
+                if (favourite != null) {
+                    LuzIconButton(
+                        if (isFavorite == true) LuzIcons.Check else LuzIcons.Favorites,
+                        stringResource(if (isFavorite == true) R.string.player_unfavorite else R.string.player_favorite),
+                        favourite,
+                        Modifier.testTag(PlayerTags.FAVORITE),
+                    )
+                }
+                if (onLastChannel != null) {
+                    LuzIconButton(
+                        LuzIcons.LastChannel,
+                        stringResource(R.string.player_last_channel),
+                        onLastChannel,
+                        Modifier.testTag(PlayerTags.LAST_CHANNEL),
+                    )
+                }
+                if (onChannelList != null) {
+                    LuzIconButton(
+                        LuzIcons.ChannelList,
+                        stringResource(R.string.player_channel_list),
+                        onChannelList,
+                        Modifier.testTag(PlayerTags.CHANNEL_LIST_BUTTON),
+                    )
+                }
+            }
+        }
+        ControlGroup {
+            if (isVod) {
+                LuzIconButton(
+                    LuzIcons.Subtitles,
+                    stringResource(R.string.player_tracks),
+                    { onPanel(SheetTab.TRACKS, tracksFocus) },
+                    Modifier.focusRequester(tracksFocus).testTag(PlayerTags.TRACKS),
+                )
+            }
             LuzIconButton(
-                LuzIcons.Forward10,
-                stringResource(R.string.player_forward_10),
-                { onSkip(SEEK_STEP) },
-                Modifier.testTag(PlayerTags.FORWARD_10),
-                badge = "10",
+                LuzIcons.Info,
+                stringResource(R.string.player_info),
+                { onPanel(SheetTab.INFO, infoFocus) },
+                Modifier.focusRequester(infoFocus).testTag(PlayerTags.INFO),
             )
         }
-        if (onNext != null) {
-            LuzIconButton(LuzIcons.NextEpisode, stringResource(R.string.player_up_next), onNext, Modifier.testTag(PlayerTags.NEXT_CHANNEL))
-        }
-        if (onToggleFavorite != null) {
-            LuzIconButton(
-                if (isFavorite == true) LuzIcons.Check else LuzIcons.Favorites,
-                stringResource(if (isFavorite == true) R.string.player_unfavorite else R.string.player_favorite),
-                onToggleFavorite,
-                Modifier.testTag(PlayerTags.FAVORITE),
-            )
-        }
-        if (onLastChannel != null) {
-            LuzIconButton(
-                LuzIcons.LastChannel,
-                stringResource(R.string.player_last_channel),
-                onLastChannel,
-                Modifier.testTag(PlayerTags.LAST_CHANNEL),
-            )
-        }
-        if (onChannelList != null) {
-            LuzIconButton(
-                LuzIcons.ChannelList,
-                stringResource(R.string.player_channel_list),
-                onChannelList,
-                Modifier.testTag(PlayerTags.CHANNEL_LIST_BUTTON),
-            )
-        }
-        // Films play at the speed the viewer picks; each press moves to the next one and back to normal after the last.
-        if (isVod) {
-            LuzButton(speedLabel(speed), onSpeed, Modifier.testTag(PlayerTags.SPEED))
-        }
-        if (hasSubtitles) {
-            LuzIconButton(
-                LuzIcons.Subtitles,
-                stringResource(R.string.player_subtitles),
-                { onPanel(PanelTab.SUBTITLES, subtitlesFocus) },
-                Modifier.focusRequester(subtitlesFocus).testTag(PlayerTags.SUBTITLES),
-            )
-        }
-        if (hasAudioChoice) {
-            LuzIconButton(
-                LuzIcons.Audio,
-                stringResource(R.string.player_audio),
-                { onPanel(PanelTab.AUDIO, audioFocus) },
-                Modifier.focusRequester(audioFocus).testTag(PlayerTags.AUDIO),
-            )
-        }
-        LuzIconButton(
-            LuzIcons.Info,
-            stringResource(R.string.player_info),
-            { onPanel(PanelTab.INFO, infoFocus) },
-            Modifier.focusRequester(infoFocus).testTag(PlayerTags.INFO),
-        )
     }
+}
+
+/** One group of controls: its buttons close together. */
+@Composable
+private fun ControlGroup(content: @Composable RowScope.() -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Tokens.space3), verticalAlignment = Alignment.CenterVertically, content = content)
 }
 
 /** The Info tab: what is playing and what it is about, then Advanced for the technical detail. */
@@ -1348,6 +1357,8 @@ private fun stepLabel(step: Duration): String {
 private val SEEK_STEP = 10.seconds
 private const val SKIP_COMMIT_MS = 400L
 private const val PEEK_MS = 3_000L
+private val GROUP_GAP = 24.dp
+private val PLAY_PAUSE_SIZE = 56.dp
 private val SKIP_TIME_TEXT = 30.sp
 private const val SECONDS_PER_MINUTE = 60L
 private const val MINUS = "\u2212"
@@ -1401,5 +1412,5 @@ private val SPEEDS = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
 private fun nextSpeed(current: Float): Float = SPEEDS[(SPEEDS.indexOfFirst { it == current } + 1) % SPEEDS.size]
 
 /** "1×", "1.25×": the speed as it is said. */
-private fun speedLabel(speed: Float): String =
+internal fun speedLabel(speed: Float): String =
     (if (speed % 1f == 0f) speed.toInt().toString() else speed.toString().trimEnd('0')) + "\u00D7"

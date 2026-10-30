@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -71,6 +72,8 @@ fun ArtworkImage(
     inset: Dp = LOGO_INSET,
     /** For a logo: the channel's name, drawn as a monogram when there is no logo or it does not load (ADR-0040). */
     name: String? = null,
+    /** What a picture loads onto; a caller drawing its own stand-in underneath passes [Color.Transparent]. */
+    pictureGround: Color = Tokens.bgSurface2,
 ) {
     val context = LocalContext.current
     val url = remember(template, resolver) { template?.let { resolver?.invoke(it) } }
@@ -81,7 +84,7 @@ fun ArtworkImage(
     // otherwise; a picture fills the plate instead of sitting on it.
     val look = if (fit && loaded && template != null) LogoLooks.of(template.template) else null
     // A picture needs no plate, only a dark ground to load onto.
-    val ground = if (fit) Modifier.background(logoPlate(look)) else Modifier.background(Tokens.bgSurface2)
+    val ground = if (fit) Modifier.background(logoPlate(look)) else Modifier.background(pictureGround)
     Box(modifier = modifier.then(ground)) {
         if (template == null || failed || (resolver != null && url == null)) {
             when {

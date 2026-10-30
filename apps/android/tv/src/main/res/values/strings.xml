@@ -63,6 +63,9 @@
     <string name="player_subtitles">Subtitles</string>
     <string name="player_subtitles_off">Off</string>
     <string name="player_info">Info</string>
+    <string name="player_tracks">Audio and subtitles</string>
+    <string name="player_tracks_help">Size and style follow your TV\'s caption settings. Settings → Player to change the size.</string>
+    <string name="player_speed">Speed</string>
     <string name="player_advanced">Advanced</string>
     <string name="player_details">Details</string>
     <string name="player_back_10">Back 10 seconds</string>

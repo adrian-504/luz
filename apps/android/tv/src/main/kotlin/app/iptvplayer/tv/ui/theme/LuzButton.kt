@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
@@ -85,12 +86,20 @@ fun LuzButton(
  * the "10" of a ten-second skip, which would otherwise look the same going back as going forward.
  */
 @Composable
-fun LuzIconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, badge: String? = null) {
+fun LuzIconButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    badge: String? = null,
+    /** 44 dp; the player's Play/Pause is 56 dp, the one large control (Design 5.1). */
+    size: Dp = ICON_BUTTON_SIZE,
+) {
     var focused by remember { mutableStateOf(false) }
     Box(
         modifier = modifier
             .luzLift(focused, CircleShape)
-            .size(ICON_BUTTON_SIZE)
+            .size(size)
             .clip(CircleShape)
             .background(if (focused) Color.White else Tokens.raised)
             .then(if (focused) Modifier else Modifier.border(Tokens.focusRingWidth, Tokens.hairline, CircleShape))
@@ -117,5 +126,5 @@ fun LuzIconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifie
 
 private const val PRIMARY_RESTING_ALPHA = 0.26f
 private val ICON_SIZE = 18.dp
-private val ICON_BUTTON_SIZE = 40.dp
+private val ICON_BUTTON_SIZE = 44.dp
 private val BADGE_SIZE = 7.sp

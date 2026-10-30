@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.iptvplayer.tv.ui.onboarding.OnboardingTags
+import app.iptvplayer.tv.ui.player.PlayerSheetTags
 import app.iptvplayer.tv.ui.player.PlayerTags
 import app.iptvplayer.tv.ui.settings.SettingsTags
 import app.iptvplayer.tv.ui.shell.Section
@@ -53,6 +54,8 @@ class PlayerNavigationTest {
             .onFailure { throw AssertionError("expected '$text' in $tag", it) }
     }
 
+    private fun awaitExists(tag: String) = rule.waitUntil(5_000) { hasNode(tag) }
+
     private fun awaitGone(tag: String) = rule.waitUntil(5_000) {
         rule.onAllNodes(androidx.compose.ui.test.hasTestTag(tag)).fetchSemanticsNodes().isEmpty()
     }
@@ -88,12 +91,19 @@ class PlayerNavigationTest {
         openDeveloperStream("hls-vod")
         awaitText(PlayerTags.STATE, string(R.string.player_state_playing))
         awaitFocus(PlayerTags.PLAY_PAUSE)
-        repeat(8) { if (focusedTag() != PlayerTags.SPEED) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        rule.waitForIdle()
+        screenshot("r5-film-controls")
+        // The speed is in the sheet's Audio and subtitles tab (Design 5.5), the last column.
+        repeat(8) { if (focusedTag() != PlayerTags.TRACKS) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        awaitFocus(PlayerTags.TRACKS)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitExists(PlayerSheetTags.SHEET)
+        repeat(4) { if (focusedTag() != PlayerTags.SPEED) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
         awaitFocus(PlayerTags.SPEED)
         rule.onNodeWithTag(PlayerTags.SPEED).assertTextContains("1\u00D7")
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitSpeed("1.25\u00D7")
-        // 1.5, 2, 0.75 and back to normal: five presses in all.
+        // 1.5, 2, 0.75 and back to normal: five presses in all; the sheet stays up throughout.
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitSpeed("1.5\u00D7")
         press(KeyEvent.KEYCODE_DPAD_CENTER)
@@ -102,6 +112,7 @@ class PlayerNavigationTest {
         awaitSpeed("0.75\u00D7")
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitSpeed("1\u00D7")
+        awaitFocus(PlayerTags.SPEED)
     }
 
     private fun awaitSpeed(label: String) {
@@ -186,7 +197,7 @@ class PlayerNavigationTest {
         rule.waitUntil(5_000) {
             rule.onAllNodes(androidx.compose.ui.test.hasTestTag(PlayerTags.DIAGNOSTICS_PANEL)).fetchSemanticsNodes().isNotEmpty()
         }
-        awaitGone(PlayerTags.TRACK_PANEL)
+        awaitGone(PlayerSheetTags.SHEET)
         press(KeyEvent.KEYCODE_BACK)
         awaitGone(PlayerTags.DIAGNOSTICS_PANEL)
         press(KeyEvent.KEYCODE_BACK)
@@ -209,43 +220,50 @@ class PlayerNavigationTest {
     fun subtitlesAndAudioLanguageAreChosenFromTheOverlay() {
         openDeveloperStream("tracks")
         awaitFocus(PlayerTags.PLAY_PAUSE)
-        rule.waitUntil(10_000) { hasNode(PlayerTags.SUBTITLES) && hasNode(PlayerTags.AUDIO) }
 
-        // Subtitles: the panel opens on its tab with the current choice, "Off", focused; the English track is under it.
-        repeat(6) { if (focusedTag() != PlayerTags.SUBTITLES) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
-        awaitFocus(PlayerTags.SUBTITLES)
-        press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitFocus(PlayerTags.SUBTITLES_OFF)
-        press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitGone(PlayerTags.TRACK_PANEL)
-        awaitFocus(PlayerTags.SUBTITLES)
-        rule.waitUntil(5_000) { !hasNode(PlayerTags.SUBTITLE_TEXT) }
-
+        // Audio and subtitles (Design 5.5): one button opens the sheet on that tab, the remote on the current subtitle
+        // choice, "Off"; the English track is under it. A choice applies at once and the sheet stays.
+        repeat(6) { if (focusedTag() != PlayerTags.TRACKS) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        awaitFocus(PlayerTags.TRACKS)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitFocus(PlayerTags.SUBTITLES_OFF)
         press(KeyEvent.KEYCODE_DPAD_DOWN)
-        awaitFocusWhere("the English subtitle option") { it.startsWith("player-track-") }
+        val english = awaitFocusWhere("the English subtitle option") { it.startsWith("player-track-") }
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitGone(PlayerTags.TRACK_PANEL)
         rule.waitUntil(5_000) { hasNode(PlayerTags.SUBTITLE_TEXT) }
-
-        // Audio: the default track has focus; choosing the second one keeps it selected when the menu reopens.
-        press(KeyEvent.KEYCODE_DPAD_RIGHT)
-        awaitFocus(PlayerTags.AUDIO)
+        awaitExists(PlayerSheetTags.SHEET)
+        awaitFocus(english)
+        rule.waitForIdle()
+        screenshot("r5-tracks-sheet")
+        press(KeyEvent.KEYCODE_DPAD_UP)
+        awaitFocus(PlayerTags.SUBTITLES_OFF)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.waitUntil(5_000) { !hasNode(PlayerTags.SUBTITLE_TEXT) }
+
+        // Audio, the column to the left: the default track is first; choosing the second keeps it chosen when the sheet
+        // opens again.
+        press(KeyEvent.KEYCODE_DPAD_LEFT)
         val first = awaitFocusWhere("the selected audio option") { it.startsWith("player-track-") }
         press(KeyEvent.KEYCODE_DPAD_DOWN)
         val second = awaitFocusWhere("the second audio option") { it.startsWith("player-track-") && it != first }
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitGone(PlayerTags.TRACK_PANEL)
-        awaitFocus(PlayerTags.AUDIO)
+        // Up from the top of a column reaches the tabs.
+        press(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_UP)
+        awaitFocus(PlayerTags.tab("TRACKS"))
+
+        // Back closes the sheet, back onto the button that opened it; it opens again with the second track chosen.
+        press(KeyEvent.KEYCODE_BACK)
+        awaitGone(PlayerSheetTags.SHEET)
+        awaitFocus(PlayerTags.TRACKS)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(PlayerTags.SUBTITLES_OFF)
+        press(KeyEvent.KEYCODE_DPAD_LEFT)
         awaitFocus(second)
 
-        // Back closes the menu, then the overlay, then leaves the player.
+        // Back closes the sheet, then the overlay, then leaves the player.
         press(KeyEvent.KEYCODE_BACK)
-        awaitGone(PlayerTags.TRACK_PANEL)
-        awaitFocus(PlayerTags.AUDIO)
+        awaitGone(PlayerSheetTags.SHEET)
+        awaitFocus(PlayerTags.TRACKS)
         press(KeyEvent.KEYCODE_BACK)
         awaitGone(PlayerTags.OVERLAY)
         press(KeyEvent.KEYCODE_BACK)

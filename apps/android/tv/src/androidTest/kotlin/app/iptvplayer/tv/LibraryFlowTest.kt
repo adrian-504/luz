@@ -28,7 +28,7 @@ import app.iptvplayer.tv.ui.library.HomeTags
 import app.iptvplayer.tv.ui.library.LibraryTags
 import app.iptvplayer.tv.ui.library.PersonTags
 import app.iptvplayer.tv.ui.library.SearchTags
-import app.iptvplayer.tv.ui.player.EpisodesSheetTags
+import app.iptvplayer.tv.ui.player.PlayerSheetTags
 import app.iptvplayer.tv.ui.player.PlayerTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
@@ -450,14 +450,19 @@ class LibraryFlowTest {
 
         press(KeyEvent.KEYCODE_BACK)
         press(KeyEvent.KEYCODE_DPAD_DOWN)
-        rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(EpisodesSheetTags.SHEET)).fetchSemanticsNodes().isNotEmpty() }
-        awaitFocus(EpisodesSheetTags.episode(first.id))
+        rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(PlayerSheetTags.SHEET)).fetchSemanticsNodes().isNotEmpty() }
+        awaitFocus(PlayerSheetTags.episode(first.id))
         rule.waitForIdle()
         screenshot("r5-episodes-sheet")
+        // Up reaches the season tabs, Down comes back.
+        press(KeyEvent.KEYCODE_DPAD_UP)
+        awaitFocus(PlayerSheetTags.season(1))
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        awaitFocus(PlayerSheetTags.episode(first.id))
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
-        awaitFocus(EpisodesSheetTags.episode(second.id))
+        awaitFocus(PlayerSheetTags.episode(second.id))
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(EpisodesSheetTags.SHEET)).fetchSemanticsNodes().isEmpty() }
+        rule.waitUntil(10_000) { rule.onAllNodes(hasTestTag(PlayerSheetTags.SHEET)).fetchSemanticsNodes().isEmpty() }
         rule.waitUntil(20_000) { CompanionHub.playing.value?.subtitle?.startsWith("S1 E2") == true }
     }
 

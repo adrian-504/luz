@@ -172,19 +172,6 @@ object LuzIcons {
         moveTo(18.5f, 6f)
         lineTo(18.5f, 18f)
     }
-    val Audio = icon("audio") {
-        moveTo(4f, 9.5f)
-        lineTo(7.5f, 9.5f)
-        lineTo(12f, 5.5f)
-        lineTo(12f, 18.5f)
-        lineTo(7.5f, 14.5f)
-        lineTo(4f, 14.5f)
-        close()
-        moveTo(15.5f, 9f)
-        curveTo(16.5f, 10f, 16.5f, 14f, 15.5f, 15f)
-        moveTo(18.5f, 6.5f)
-        curveTo(21f, 9f, 21f, 15f, 18.5f, 17.5f)
-    }
     val Subtitles = icon("subtitles") {
         roundRect(3f, 5.5f, 21f, 18.5f, 3f)
         moveTo(7f, 11f)

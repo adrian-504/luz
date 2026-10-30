@@ -29,6 +29,7 @@ import app.iptvplayer.tv.ui.live.LivePreviewTags
 import app.iptvplayer.tv.ui.live.LiveTags
 import app.iptvplayer.tv.ui.player.LAST_CHANNEL_SCOPE
 import app.iptvplayer.tv.ui.player.LIVE_BAR_SECONDS
+import app.iptvplayer.tv.ui.player.PlayerSheetTags
 import app.iptvplayer.tv.ui.player.PlayerTags
 import app.iptvplayer.tv.ui.player.StripTags
 import app.iptvplayer.tv.ui.theme.LuzPromptTags
@@ -609,11 +610,11 @@ class LivePlayerTest {
         repeat(8) { if (focusedTag() != PlayerTags.INFO) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
         awaitFocus(PlayerTags.INFO)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        awaitExists(PlayerTags.TRACK_PANEL)
+        awaitExists(PlayerSheetTags.SHEET)
         awaitFocus(PlayerTags.tab("INFO"))
         shot("live-info-panel")
         press(KeyEvent.KEYCODE_BACK)
-        awaitGone(PlayerTags.TRACK_PANEL)
+        awaitGone(PlayerSheetTags.SHEET)
     }
 
     /** Puts the picture alone on screen while a channel plays, as when the viewer has put the controls away. */
