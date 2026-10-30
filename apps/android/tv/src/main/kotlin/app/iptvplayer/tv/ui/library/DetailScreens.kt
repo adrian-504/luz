@@ -675,7 +675,10 @@ private fun NotFound() {
 @Composable
 internal fun durationText(duration: Duration): String {
     val minutes = duration.inWholeMinutes.toInt()
-    return if (minutes >= 60) {
+    // "1 h 52 min", "2 h", "48 min" (Design, round 5).
+    return if (minutes >= 60 && minutes % 60 == 0) {
+        stringResource(R.string.detail_duration_whole_hours, minutes / 60)
+    } else if (minutes >= 60) {
         stringResource(R.string.detail_duration_hours, minutes / 60, minutes % 60)
     } else {
         stringResource(R.string.detail_duration_minutes, minutes)

@@ -255,14 +255,16 @@ fun streamBadges(d: PlaybackDiagnostics): List<String> {
 
 /**
  * The film's progress across the whole width (item 22): the time played under its left end and the time left under its
- * right, as the reference app writes them. While the viewer scrubs ([scrubMs]), a second marker shows where the picture
- * will jump to, and the times follow it.
+ * right with the time it will end at (Design 5.1). While the viewer scrubs ([scrubMs]), a second marker shows where the
+ * picture will jump to, and the times follow it. Before the length is known ([durationMs] 0) the bar is empty and only
+ * the time played shows.
  */
 @Composable
 fun ScrubBar(positionMs: Long, durationMs: Long, scrubMs: Long?, focused: Boolean, modifier: Modifier = Modifier) {
     val shownMs = scrubMs ?: positionMs
-    val played = (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
-    val target = (shownMs.toFloat() / durationMs).coerceIn(0f, 1f)
+    val known = durationMs > 0
+    val played = if (known) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+    val target = if (known) (shownMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     val barHeight = if (focused) BAR_FOCUSED else BAR
     Column(
         modifier = modifier.fillMaxWidth().testTag(PlayerTags.PROGRESS).semantics(mergeDescendants = true) {},
@@ -294,11 +296,14 @@ fun ScrubBar(positionMs: Long, durationMs: Long, scrubMs: Long?, focused: Boolea
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(clock(shownMs), style = MaterialTheme.typography.labelLarge, color = Tokens.textPrimary)
-            Text(
-                "−" + clock((durationMs - shownMs).coerceAtLeast(0)),
-                style = MaterialTheme.typography.labelLarge,
-                color = Tokens.textSecondary,
-            )
+            if (known) {
+                val left = (durationMs - shownMs).coerceAtLeast(0)
+                Text(
+                    stringResource(R.string.player_remaining, clock(left), shortTime(Clock.System.now() + left.milliseconds)),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Tokens.textSecondary,
+                )
+            }
         }
     }
 }

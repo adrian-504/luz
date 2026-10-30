@@ -19,6 +19,7 @@ import app.iptvplayer.domain.library.TitleCleaner
 import app.iptvplayer.domain.live.ViewingSession
 import app.iptvplayer.domain.model.ContentType
 import app.iptvplayer.domain.playback.PlaybackState
+import app.iptvplayer.domain.security.UrlTemplate
 import app.iptvplayer.platform.playback.PlaybackRequest
 import app.iptvplayer.storage.EpisodeRow
 import app.iptvplayer.tv.R
@@ -27,6 +28,7 @@ import app.iptvplayer.tv.companion.CompanionLibrary
 import app.iptvplayer.tv.ui.player.EpisodeChoices
 import app.iptvplayer.tv.ui.player.PlayerScreen
 import kotlinx.coroutines.launch
+import kotlin.time.Duration
 
 /**
  * Plays a movie or episode (FR-PLAY-001, FR-WATCH-001): resumes from the saved position unless [fromStart], saves progress
@@ -50,6 +52,8 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
     var unavailable by remember { mutableStateOf(false) }
     var title by remember { mutableStateOf("") }
     var subtitle by remember { mutableStateOf<String?>(null) }
+    var picture by remember { mutableStateOf<UrlTemplate?>(null) }
+    var filmFacts by remember { mutableStateOf<Pair<Int?, Duration?>?>(null) }
     var episode by remember { mutableStateOf<EpisodeRow?>(null) }
     var next by remember { mutableStateOf<EpisodeRow?>(null) }
     // Every episode of the series, for the Episodes sheet (5.21); read with the episode.
@@ -82,6 +86,8 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
         if (type == ContentType.MOVIE) {
             val movie = graph.movie(playlistId, id)
             title = movie?.title.orEmpty()
+            filmFacts = movie?.let { it.year to it.duration }
+            picture = movie?.backdrop
             description = movie?.plot
             badges = movie?.let { badgesOf(it.quality, it.tags, it.language) }.orEmpty()
             // The phone shows the wide picture when there is one (Design 2.2).
@@ -107,6 +113,7 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
                 art[current.episodeNumber]?.name?.let { subtitle = "$place · $it" }
             }
             description = current?.plot ?: series?.plot
+            picture = series?.backdrop ?: current?.still
             badges = series?.let { badgesOf(it.quality, it.tags, it.language) }.orEmpty()
             companionArt = when {
                 series?.backdrop != null -> CompanionLibrary.art(CompanionLibrary.SERIES_WIDE, series.id)
@@ -127,11 +134,17 @@ fun ContentPlayerRoute(playlistId: PlaylistId, type: ContentType, startId: Strin
     }
 
     val following = next
+    // A film's facts line under its title (Design 5.1): "2025 · 1 h 52 min", or whichever of the two it has.
+    val filmLine = filmFacts?.let { (year, length) ->
+        listOfNotNull(year?.toString(), length?.let { durationText(it) }).joinToString(" · ").ifEmpty { null }
+    }
     val resolver = rememberArtworkResolver(playlistId)
     PlayerScreen(
         request = request,
         title = title,
-        subtitle = subtitle,
+        subtitle = if (type == ContentType.MOVIE) filmLine else subtitle,
+        isContent = true,
+        picture = picture,
         unavailable = unavailable,
         onProgress = { position, duration, ended ->
             val first = newSession

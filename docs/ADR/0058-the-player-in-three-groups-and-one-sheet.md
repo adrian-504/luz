@@ -1,8 +1,8 @@
-# ADR-0058: The player in three groups, and one lower-third sheet for episodes, tracks and information
+# ADR-0058: The player in three groups, one lower-third sheet, and the start and stop stage
 
 - **Status:** Accepted (built 2026-10-30, emulator tests pass; NOT YET seen on the owner's Bbox)
 - **Date:** 2026-10-30
-- **Spec:** owner's plan, round 5 (*Round 5 - Films and series.md*: D4, x19, 5.1, 5.4, 5.5, 5.21); Design chat's answers of
+- **Spec:** owner's plan, round 5 (*Round 5 - Films and series.md*: D4, x19, 5.1, 5.3, 5.4, 5.5, 5.21); Design chat's answers of
   30 Oct (the row as approved in 5.1, speed in the sheet); supersedes the top panel of items 24 and 29 (ADR-0036 keeps
   Advanced behind Info)
 
@@ -29,6 +29,16 @@ subtitles together ("French audio, English subtitles"), which took two trips thr
   visit; entering a column lands on its ticked choice. Back, or 10 s without a press, closes the sheet and returns to the
   button that opened it.
 - While the sheet is up the controls fade out but stay in place (alpha), so focus can return to the opener.
+- **Above the buttons** (5.1): the title, a facts line (a film's year and length, "1 h 52 min"; an episode's "S2 E3 ·
+  name"), the bar (played part white; the knob only under the remote or while skipping) and "0:00 … −41:20 · ends at
+  22:21". Before the length is known the bar is empty and only the time played shows. Lengths read "1 h 52 min", "2 h"
+  and "48 min" everywhere (the title page changed from "1h 52m").
+- **The stage** (5.3): a film or an episode from the library starts on its own wide picture under a 60 % dark layer
+  (the room colour without one), with the title, its line and "Starting…" in the controls' place, no spinner; after 8 s
+  "Still starting… your provider is slow to answer."; the real picture replaces it with a 240 ms fade. At the end, when
+  nothing is offered next (a film, or Up next dismissed), the same layout stops with Play again (focused) and, for an
+  episode with one after it, Next episode. Stalls later in playback keep "Loading…" and the small spinner; live TV and
+  test streams keep their own start.
 
 ## Consequences
 

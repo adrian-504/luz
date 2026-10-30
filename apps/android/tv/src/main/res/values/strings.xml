@@ -66,6 +66,10 @@
     <string name="player_tracks">Audio and subtitles</string>
     <string name="player_tracks_help">Size and style follow your TV\'s caption settings. Settings → Player to change the size.</string>
     <string name="player_speed">Speed</string>
+    <string name="player_still_starting">Still starting… your provider is slow to answer.</string>
+    <string name="player_play_again">Play again</string>
+    <string name="player_episode_next">Next episode</string>
+    <string name="player_remaining">−%1$s · ends at %2$s</string>
     <string name="player_advanced">Advanced</string>
     <string name="player_details">Details</string>
     <string name="player_back_10">Back 10 seconds</string>
@@ -218,7 +222,8 @@
     <string name="detail_add_favorite">Add to favourites</string>
     <string name="detail_remove_favorite">Remove from favourites</string>
     <string name="detail_not_found">This title is no longer in the source.</string>
-    <string name="detail_duration_hours">%1$dh %2$02dm</string>
+    <string name="detail_duration_hours">%1$d h %2$d min</string>
+    <string name="detail_duration_whole_hours">%1$d h</string>
     <string name="detail_duration_minutes">%1$d min</string>
     <string name="detail_trailer">Trailer</string>
     <string name="detail_trailer_unavailable">Trailer — no app on this TV can play it</string>

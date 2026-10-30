@@ -91,8 +91,6 @@ class PlayerNavigationTest {
         openDeveloperStream("hls-vod")
         awaitText(PlayerTags.STATE, string(R.string.player_state_playing))
         awaitFocus(PlayerTags.PLAY_PAUSE)
-        rule.waitForIdle()
-        screenshot("r5-film-controls")
         // The speed is in the sheet's Audio and subtitles tab (Design 5.5), the last column.
         repeat(8) { if (focusedTag() != PlayerTags.TRACKS) press(KeyEvent.KEYCODE_DPAD_RIGHT) }
         awaitFocus(PlayerTags.TRACKS)

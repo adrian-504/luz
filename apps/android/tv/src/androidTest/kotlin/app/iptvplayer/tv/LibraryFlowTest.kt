@@ -4,6 +4,7 @@ import android.view.KeyEvent
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isFocused
@@ -30,6 +31,7 @@ import app.iptvplayer.tv.ui.library.PersonTags
 import app.iptvplayer.tv.ui.library.SearchTags
 import app.iptvplayer.tv.ui.player.PlayerSheetTags
 import app.iptvplayer.tv.ui.player.PlayerTags
+import app.iptvplayer.tv.ui.player.StageTags
 import app.iptvplayer.tv.ui.shell.Section
 import app.iptvplayer.tv.ui.shell.ShellTags
 import app.iptvplayer.tv.ui.theme.LuzMenuTags
@@ -107,7 +109,11 @@ class LibraryFlowTest {
                 ).fetchSemanticsNodes().isNotEmpty() ||
                     rule.onAllNodes(hasTestTag(tag).and(hasText(text, substring = true))).fetchSemanticsNodes().isNotEmpty()
             }
-        }.onFailure { throw AssertionError("expected '$text' in $tag; focused: ${focusedTag()}", it) }
+        }.onFailure {
+            val shown = rule.onAllNodes(hasTestTag(tag), useUnmergedTree = true).fetchSemanticsNodes()
+                .flatMap { node -> node.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text } }
+            throw AssertionError("expected '$text' in $tag, which reads $shown; focused: ${focusedTag()}", it)
+        }
     }
 
     private fun keyboardShown(): Boolean {
@@ -118,6 +124,8 @@ class LibraryFlowTest {
         }
         return shown
     }
+
+    private fun hasNode(tag: String) = rule.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isNotEmpty()
 
     private fun awaitPlaying() = awaitText(PlayerTags.STATE, rule.activity.getString(R.string.player_state_playing))
 
@@ -391,8 +399,12 @@ class LibraryFlowTest {
 
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitPlaying()
-        // The bar shows the time played and the time left (ADR-0036).
+        // The bar shows the time played, the time left and when it ends (ADR-0036, Design 5.1).
         awaitText(PlayerTags.PROGRESS, "−0:")
+        val endsAt = rule.activity.getString(R.string.player_remaining, "X", "Y").substringAfter("X").substringBefore("Y")
+        awaitText(PlayerTags.PROGRESS, endsAt)
+        rule.waitForIdle()
+        screenshot("r5-film-controls")
         // Hide the overlay, then skip 20 s forward with Right (movies seek instead of switching channels).
         press(KeyEvent.KEYCODE_BACK)
         press(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_RIGHT)
@@ -425,6 +437,40 @@ class LibraryFlowTest {
         awaitFocus(HomeTags.item(HomeTags.CONTINUE, movie.id), timeout = 20_000)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitPlaying()
+    }
+
+    /** A film starts on its stage and, at its end, stops there with Play again (Design 5.3). */
+    @Test
+    fun aFilmStartsOnItsStageAndStopsThereWithPlayAgain() {
+        val movie = runBlocking { graph.movies(playlist, null, 10, 0) }.first { it.title == "Test Movie One" }
+        openSection(Section.MOVIES, entry = null)
+        openFullGrid()
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        awaitFocus(LibraryTags.item(movie.id))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitFocus(DetailTags.PLAY)
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        // Starting is often too quick to catch on the emulator: photographed when seen, never relied on.
+        val seen = runCatching { rule.waitUntil(3_000) { hasNode(StageTags.STARTING) } }.isSuccess
+        if (seen) screenshot("r5-starting")
+        awaitPlaying()
+        rule.waitUntil(5_000) { !hasNode(StageTags.STAGE) }
+
+        // To the end: the stage comes back, stopped, with Play again under the remote.
+        press(KeyEvent.KEYCODE_BACK)
+        press(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD)
+        awaitFocus(StageTags.PLAY_AGAIN, timeout = 20_000)
+        assertTrue(
+            rule.onAllNodes(hasTestTag(StageTags.STAGE).and(hasAnyDescendant(hasText(movie.title)))).fetchSemanticsNodes().isNotEmpty(),
+        )
+        rule.waitForIdle()
+        screenshot("r5-stopped")
+        // A film has nothing after it.
+        assertTrue(!hasNode(StageTags.NEXT))
+
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        awaitPlaying()
+        rule.waitUntil(5_000) { !hasNode(StageTags.STAGE) }
     }
 
     /** Down during an episode (5.21): the sheet opens on Episodes on the playing one; OK on another plays it. */

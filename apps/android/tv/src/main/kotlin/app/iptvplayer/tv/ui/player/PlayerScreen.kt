@@ -42,6 +42,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -185,6 +186,12 @@ fun PlayerScreen(
     /** Label and action of the next episode, offered as the current one ends. */
     nextLabel: String? = null,
     onNext: (() -> Unit)? = null,
+    /**
+     * A film or an episode from the library: known as one before its stream is, so it starts and stops on the stage
+     * (Design 5.3) over its own wide [picture].
+     */
+    isContent: Boolean = false,
+    picture: UrlTemplate? = null,
     /** A series: the episodes the sheet's Episodes tab holds, raised by Down (Design 5.4, 5.21). */
     episodes: EpisodeChoices? = null,
     /** What a film or episode is about, for the Info panel. */
@@ -294,6 +301,21 @@ fun PlayerScreen(
     }
     val isError = (snapshot.state == PlaybackState.ERROR && !fallingBack) || unavailable
     val isVod = request?.mode == PlaybackMode.VOD
+    // The stage (5.3): from the first moment until the picture first plays, and again once it has ended and nothing is
+    // offered next. Stalls later in playback keep the small "Loading…" and its spinner.
+    var started by remember(request) { mutableStateOf(false) }
+    LaunchedEffect(snapshot.state) {
+        if (snapshot.state == PlaybackState.PLAYING || snapshot.state == PlaybackState.PAUSED) started = true
+    }
+    val starting = isContent && !started && !isError
+    var slow by remember(request) { mutableStateOf(false) }
+    LaunchedEffect(starting, request) {
+        if (starting) {
+            delay(STILL_STARTING_MS)
+            slow = true
+        }
+    }
+    val playAgainFocus = remember { FocusRequester() }
     val isLive = onZap != null
     // The phone companion's "now playing" card (ADR-0050): words, times, the tracks by the names the panel shows, and a
     // picture's reference, read again every second.
@@ -394,6 +416,15 @@ fun PlayerScreen(
     val remainingMs = durationMs - positionMs
     val nextCardVisible = isVod && onNext != null && nextLabel != null && !nextDismissed && !isError &&
         (ended || (durationMs > NEXT_LEAD_MS * 2 && remainingMs in 1..NEXT_LEAD_MS && snapshot.state == PlaybackState.PLAYING))
+    // Only for the stream on screen: while the next one loads ([request] null) the last one's end is not a stop.
+    val stopped = isContent && isVod && ended && !nextCardVisible && !isError
+    LaunchedEffect(stopped) {
+        if (stopped) {
+            hideOverlay()
+            withFrameNanos { }
+            runCatching { playAgainFocus.requestFocus() }
+        }
+    }
 
     BackHandler(enabled = panel != null || channelList || diagnosticsVisible || nextCardVisible || (overlayVisible && !isError)) {
         when {
@@ -502,7 +533,7 @@ fun PlayerScreen(
                 }
                 if (event.type != ComposeKeyEventType.KeyDown) return@onPreviewKeyEvent false
                 lastInputAt = System.nanoTime()
-                val bare = !overlayVisible && panel == null && !channelList && !strip && !diagnosticsVisible && !isError
+                val bare = !overlayVisible && panel == null && !channelList && !strip && !diagnosticsVisible && !isError && !stopped
                 when (keyCode) {
                     KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                         if (snapshot.state == PlaybackState.PAUSED) controller.play() else controller.pause()
@@ -561,8 +592,8 @@ fun PlayerScreen(
                             else -> openPanel(SheetTab.INFO, null)
                         }
                     }
-                    // Not under the strip: OK there belongs to the card under the remote.
-                    in SELECT_KEYS -> if (!overlayVisible && !isError && panel == null && !channelList && !strip) {
+                    // Not under the strip or on the stopped stage: OK there belongs to the button under the remote.
+                    in SELECT_KEYS -> if (!overlayVisible && !isError && panel == null && !channelList && !strip && !stopped) {
                         // On the pause card OK carries on; anywhere else it brings the controls up.
                         if (isVod && snapshot.state == PlaybackState.PAUSED) controller.play() else overlayVisible = true
                         swallowSelectUp = true
@@ -588,7 +619,7 @@ fun PlayerScreen(
         Box(modifier = Modifier.fillMaxSize().testTag(PlayerTags.ROOT).focusRequester(rootFocus).focusable())
 
         val waiting = snapshot.state == PlaybackState.BUFFERING || snapshot.state == PlaybackState.PREPARING
-        if (!isError) {
+        if (!isError && !starting) {
             BufferingIndicator(
                 waiting,
                 Modifier.align(Alignment.TopEnd).padding(horizontal = Tokens.safeHorizontal, vertical = Tokens.safeVertical),
@@ -704,7 +735,7 @@ fun PlayerScreen(
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
                     // Under the sheet the controls give way, kept in place so Back returns to the button that opened it.
-                    .alpha(if (panel != null) 0f else 1f)
+                    .alpha(if (panel != null || starting) 0f else 1f)
                     // The controls rise out of the picture on a gradient rather than sitting on a band across it.
                     .background(OVERLAY_GRADIENT)
                     .padding(start = Tokens.space16, end = Tokens.space16, top = Tokens.space16 + Tokens.space8, bottom = Tokens.space8)
@@ -735,7 +766,8 @@ fun PlayerScreen(
                         }
                     }
                 }
-                if (isVod && durationMs > 0) {
+                // The bar shows from the start; until the length is known it is empty, with the time played (5.1).
+                if (isVod) {
                     var barFocused by remember { mutableStateOf(false) }
                     ScrubBar(
                         positionMs,
@@ -746,6 +778,8 @@ fun PlayerScreen(
                             .onFocusChanged { barFocused = it.isFocused }
                             .onPreviewKeyEvent { event ->
                                 if (!barFocused || event.type != ComposeKeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                // Nothing to scrub across before the length is known.
+                                if (durationMs <= 0) return@onPreviewKeyEvent false
                                 when (event.nativeKeyEvent.keyCode) {
                                     KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                                         val forward = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
@@ -790,6 +824,29 @@ fun PlayerScreen(
                     onPanel = ::openPanel,
                 )
             }
+        }
+
+        AnimatedVisibility(
+            visible = starting || stopped,
+            enter = fadeIn(luzTween(Tokens.MOTION_STANDARD_MS)),
+            exit = fadeOut(luzTween(Tokens.MOTION_STANDARD_MS)),
+        ) {
+            PlayerStage(
+                picture = picture,
+                resolver = resolver,
+                title = title,
+                line = subtitle,
+                stopped = stopped,
+                slow = slow,
+                playAgainFocus = playAgainFocus,
+                onPlayAgain = {
+                    controller.seekTo(Duration.ZERO)
+                    controller.play()
+                    // From the start, as any start: the controls come up for a moment.
+                    overlayVisible = true
+                },
+                onNext = onNext,
+            )
         }
 
         if (nextCardVisible) {
@@ -947,7 +1004,7 @@ private fun ControlRow(
                 if (onNext != null) {
                     LuzIconButton(
                         LuzIcons.NextEpisode,
-                        stringResource(R.string.player_up_next),
+                        stringResource(R.string.player_episode_next),
                         onNext,
                         Modifier.testTag(PlayerTags.NEXT_CHANNEL),
                     )
@@ -1357,6 +1414,7 @@ private fun stepLabel(step: Duration): String {
 private val SEEK_STEP = 10.seconds
 private const val SKIP_COMMIT_MS = 400L
 private const val PEEK_MS = 3_000L
+private const val STILL_STARTING_MS = 8_000L
 private val GROUP_GAP = 24.dp
 private val PLAY_PAUSE_SIZE = 56.dp
 private val SKIP_TIME_TEXT = 30.sp
